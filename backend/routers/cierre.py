@@ -229,6 +229,23 @@ async def acta_resumen(
         if row_cob and row_cob['count_coberturas']:
             resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_cob['count_coberturas']
 
+        # Llamados de un día no laborable (se validan aparte de su jornada especial, 05-11-2026): cada uno no rechazado
+        # es una jornada más del resumen
+        q_llamados = f"""
+            SELECT COUNT(je.id) as count_llamados
+            FROM jornadas_especiales je
+            JOIN empleados e ON je.empleado_id = e.id
+            JOIN asistencias a ON je.empleado_id = a.empleado_id AND je.fecha = a.fecha
+            {joins_area_asis}
+            WHERE je.fecha BETWEEN ? AND ?
+              AND COALESCE(je.llamado_minutos, 0) > 0
+              AND COALESCE(je.llamado_estado, 'PENDIENTE') != 'RECHAZADA'
+            {filtro_area}
+        """
+        row_llam = await db.fetch_one(q_llamados, base_params)
+        if row_llam and row_llam['count_llamados']:
+            resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_llam['count_llamados']
+
         # ── 2. Listado de empleados del periodo ───────────────────────────────
         query_empleados = f"""
             SELECT DISTINCT

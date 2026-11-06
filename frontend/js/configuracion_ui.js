@@ -162,6 +162,7 @@ const COLOR_OPTIONS = [
     { value: 'color-amarillo', label: 'Amarillo',      preview: '#f59e0b' },
     { value: 'color-naranja',  label: 'Naranja',       preview: '#f97316' },
     { value: 'color-purpura',  label: 'Púrpura',       preview: '#8b5cf6' },
+    { value: 'color-violeta',  label: 'Violeta intenso', preview: '#7c3aed' },
     { value: 'color-rosa',     label: 'Rosa',           preview: '#f472b6' },
     { value: 'color-cian',     label: 'Cian',           preview: '#22d3ee' },
     { value: 'color-lima',     label: 'Lima',           preview: '#a3e635' },

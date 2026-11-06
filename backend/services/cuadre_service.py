@@ -165,6 +165,13 @@ def plegar_libro(dias: List[Dict[str, Any]], es_bolsa: bool = False, tolerancia_
                 he_trabajadas += m
                 he_aprobadas += m
                 he_jornadas_especiales += m
+            # Llamado de un día no laborable aprobado como horas extra (se valida aparte de la jornada, 05-11-2026)
+            llam = ja.get('llamado') or {}
+            if llam.get('estado') == 'HORAS_EXTRAS':
+                m = _f(llam.get('minutos_autorizados')) or _f(llam.get('minutos'))
+                he_trabajadas += m
+                he_aprobadas += m
+                he_jornadas_especiales += m
             continue
 
         cond = int(_f(di.get('deuda_condonada')))

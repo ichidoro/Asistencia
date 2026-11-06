@@ -39,6 +39,7 @@
 .badge-status.color-glitter-oro    { --st-bg: #fff6d6; --st-fg: #8a6200; }
 .badge-status.color-negro          { --st-bg: #eceef3; --st-fg: #101a3d; }
 .badge-status.color-purpura        { --st-bg: #efe9fb; --st-fg: #6a3eaf; }
+.badge-status.color-violeta        { --st-bg: #7c3aed; --st-fg: #ffffff; }
 /* Estados con clase propia (van después: mandan sobre el color base) */
 .badge-status.badge-he             { --st-bg: #eaeefb; --st-fg: #1b2f8f; }
 .badge-status.badge-pen            { --st-bg: #eef0f5; --st-fg: #69738f; }

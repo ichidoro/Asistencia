@@ -7957,6 +7957,23 @@ function _analiticaCellBadge(di) {
                 let title_esp = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Adicional Pendiente de Aprobación';
                 primaryBadge = `<div class="badge-status ${class_esp}" style="${stdBadgeStyle}" title="${title_esp}"><span>${icon_esp}${label_esp}</span></div>`;
             }
+            // Llamado de emergencia (o +2) en un día no laborable: su propio estado, debajo de la jornada especial, y se valida
+            // aparte (orden del dueño, 05-11-2026). Sigla, color e ícono salen de Configuración → Estados. Rechazado no se muestra.
+            const llam = ja.llamado;
+            if (llam && llam.estado !== 'RECHAZADA') {
+                const eme = estadosCache['LLAMADO_EMERGENCIA'] || {};
+                const esAdic = llam.tipo === 'ADICIONAL';
+                const sigla = esAdic ? '+2' : (eme.short_label || 'EME');
+                const suf = llam.estado === 'HORAS_EXTRAS' ? ' HE' : (llam.estado === 'EXTRA' ? ' EXT' : '');
+                const claseL = _getEstadoColor('LLAMADO_EMERGENCIA') || 'color-violeta';
+                const icoL = suf ? '' : '<i class="bi ' + (eme.icono_bi || 'bi-telephone-inbound-fill') + ' me-1"></i>';
+                const queL = esAdic ? 'Segunda jornada (+2)' : 'Llamado de emergencia';
+                const decL = llam.estado === 'HORAS_EXTRAS' ? 'validado como horas extra al 50 %'
+                    : (llam.estado === 'EXTRA' ? 'validado como jornada EXTRA' : 'por validar');
+                const titL = queL + ' ' + (llam.hora_entrada || '--:--') + ' a ' + (llam.hora_salida || '--:--') + ' · ' + _fmtMin(llam.minutos) + ' · ' + decL;
+                primaryBadge = '<div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">' + primaryBadge
+                    + '<div class="badge-status ' + claseL + '" style="' + stdBadgeStyle + '" title="' + titL + '"><span>' + icoL + sigla + suf + '</span></div></div>';
+            }
         } else {
             const class_izq = pillClass;
             const label_izq = label;
@@ -8119,7 +8136,8 @@ function _analiticaCellBadge(di) {
         resultHtml = primaryBadge;
     }
 
-    const tieneEmergencia = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:');
+    // En un día no laborable el llamado ya tiene su propio estado en la celda (EME): el rayo queda solo para los días hábiles
+    const tieneEmergencia = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:') && !(di.jornada_adicional && di.jornada_adicional.llamado);
     const tieneAlertaSistema = di.observaciones && di.observaciones.includes('[ALERTA SISTEMA');
     const tieneHE_Pendientes = !di._esBolsa && di.minutos_extra_bruto > 0 && di.estado_he === 'PENDIENTE';
 
@@ -8127,7 +8145,7 @@ function _analiticaCellBadge(di) {
         let wrapperHtml = `<div style="position:relative; display:inline-block; width:100%;">
             ${resultHtml}`;
         if (tieneEmergencia) {
-            wrapperHtml += `<div title="Llamado de Emergencia (Aprobado Directo)" style="position:absolute; top:-6px; left:-6px; font-size:0.75rem; color:#8b5cf6; z-index:10; filter:drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi bi-lightning-charge-fill"></i></div>`;
+            wrapperHtml += `<div title="Llamado de emergencia: sus minutos suman a las horas extra del día" style="position:absolute; top:-6px; left:-6px; font-size:0.75rem; color:#8b5cf6; z-index:10; filter:drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi bi-lightning-charge-fill"></i></div>`;
         }
         if (tieneAlertaSistema) {
             wrapperHtml += `<div title="Alerta de Sistema (Ver Tooltip)" style="position:absolute; top:-4px; right:-2px; width:12px; height:12px; background-color:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; border:2px solid white; z-index:10;"></div>`;

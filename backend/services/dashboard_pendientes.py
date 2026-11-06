@@ -100,11 +100,16 @@ _SQL_HE_PENDIENTES = f"""
 
 # Una jornada especial queda decidida al validarla (EXTRA), aprobarla como hora extra
 # (HORAS_EXTRAS), rechazarla (RECHAZADA) o compensarla (COMPENSATORIA).
+# El llamado de un día no laborable se valida aparte (05-11-2026): mientras siga «PENDIENTE» cuenta como otra jornada
+# por validar, aunque la jornada especial del mismo día ya esté decidida.
 _SQL_JE_POR_VALIDAR = f"""
-    SELECT {_area_de('je.empleado_id', 'je.fecha')} AS area, COUNT(*) AS jornadas
+    SELECT {_area_de('je.empleado_id', 'je.fecha')} AS area,
+           SUM((CASE WHEN COALESCE(je.estado, '') NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA') THEN 1 ELSE 0 END)
+             + (CASE WHEN COALESCE(je.llamado_minutos, 0) > 0 AND COALESCE(je.llamado_estado, 'PENDIENTE') = 'PENDIENTE' THEN 1 ELSE 0 END)) AS jornadas
       FROM jornadas_especiales je
      WHERE je.fecha BETWEEN ? AND ?
-       AND COALESCE(je.estado, '') NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA')
+       AND (COALESCE(je.estado, '') NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA')
+            OR (COALESCE(je.llamado_minutos, 0) > 0 AND COALESCE(je.llamado_estado, 'PENDIENTE') = 'PENDIENTE'))
      GROUP BY 1
 """
 

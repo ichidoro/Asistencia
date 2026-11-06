@@ -115,7 +115,11 @@ def test_los_textos_de_la_ventana_sobreviven_al_minificador():
     import rjsmin
     for archivo, texto in (("compensar_inasistencia.js", "Esa jornada deja de pagarse con el monto fijo y queda como jornada compensatoria."),
                            ("compensar_inasistencia.js", " (después de pagar la deuda del tramo)"),
-                           ("marcaciones_manuales.js", "'OK')} · ${asist.hora_entrada_real"),
+                           # Ventana de validación por partes (tabla, 05-11-2026)
+                           ("marcaciones_manuales.js", "'</b> <small>(se calcula solo, no se valida aquí)</small></span>'"),
+                           ("marcaciones_manuales.js", "' ese día. Cada parte se valida por separado.'"),
+                           ("marcaciones_manuales.js", "'Quedaría así: '"),
+                           ("marcaciones_manuales.js", "' arriba y '"),
                            ("marcaciones_manuales.js", "</strong> Trabajo en ")):
         js = (RAIZ / "frontend" / "js" / archivo).read_text(encoding="utf-8")
         assert texto in rjsmin.jsmin(js), (archivo, texto)

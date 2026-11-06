@@ -1382,12 +1382,20 @@ async def validar_jornada_endpoint(
     observaciones: Optional[str] = Body(None),
     minutos_autorizados: Optional[float] = Body(None),
     last_updated_at: Optional[str] = Body(None, description="Fecha/Hora de la versión que el usuario está viendo"),
+    parte: str = Body("JORNADA", description="JORNADA (jornada especial o +2) o LLAMADO (llamado de un día no laborable)"),
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
     """
-    Gestiona una jornada especial (APROBAR o RECHAZAR) con RLS.
+    Gestiona una jornada especial (APROBAR, APROBAR_COMO_HE, RECHAZAR o REVERTIR) con RLS. Con parte=LLAMADO decide el
+    llamado de emergencia de un día no laborable, aparte de la jornada especial (05-11-2026). Toda decisión, también
+    REVERTIR, queda en la auditoría.
     """
+    parte = (parte or "JORNADA").upper()
+    if parte not in ("JORNADA", "LLAMADO"):
+        raise HTTPException(status_code=400, detail="Parte no válida.")
+    if accion not in ("APROBAR", "APROBAR_COMO_HE", "RECHAZAR", "REVERTIR"):
+        raise HTTPException(status_code=400, detail="Acción no válida.")
     # RLS: Verificar pertenencia
     emp_repo = EmpleadoRepository(service.repository.db)
     emp = await emp_repo.get_by_id(empleado_id)
@@ -1417,11 +1425,26 @@ async def validar_jornada_endpoint(
             accion=accion,
             observaciones=observaciones,
             minutos_autorizados=minutos_autorizados,
-            validador_id=current_user.user_id
+            validador_id=current_user.user_id,
+            parte=parte,
         )
         if isinstance(resultado, dict) and 'error' in resultado:
             raise HTTPException(status_code=400, detail=resultado['error'])
-        if accion == "APROBAR_COMO_HE":
+        try:
+            from backend.repositories.seguridad import SeguridadRepository
+            import json as _json
+            await SeguridadRepository(service.repository.db).log_auditoria(
+                current_user.user_id, current_user.username,
+                "REVERTIR_JORNADA" if accion == "REVERTIR" else "VALIDAR_JORNADA", "MARCACIONES",
+                _json.dumps({"empleado_id": empleado_id, "empleado": f"{emp.apellido_paterno or ''} {emp.apellido_materno or ''}, {emp.nombre or ''}".strip(),
+                             "fecha": fecha, "parte": parte, "accion": accion,
+                             "minutos": (resultado or {}).get("minutos_extra_autorizados")}, ensure_ascii=False))
+        except Exception as audit_err:
+            logger.warning(f"[Jornada] Auditoría de la validación no registrada: {audit_err}")
+        if parte == "LLAMADO":
+            mensaje = {"APROBAR": "Llamado validado como jornada EXTRA", "APROBAR_COMO_HE": "Llamado validado como horas extra al 50%",
+                       "RECHAZAR": "Llamado rechazado", "REVERTIR": "Llamado devuelto a por validar"}[accion]
+        elif accion == "APROBAR_COMO_HE":
             mensaje = "Jornada validada exitosamente como Horas Extras al 50%"
         elif accion == "APROBAR":
             mensaje = "Jornada validada exitosamente como Jornada Especial"

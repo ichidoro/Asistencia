@@ -139,6 +139,14 @@ class ReportService:
                 lbl = f"{lbl}\n{der}"
                 bold = True
 
+            # Llamado de un día no laborable: segunda línea con su propia decisión (05-11-2026); rechazado no se muestra
+            llam = ja.get("llamado") or {}
+            if llam and llam.get("estado") != 'RECHAZADA':
+                base = "+2" if llam.get("tipo") == 'ADICIONAL' else (getattr(self, '_sigla_llamado', None) or "EME")
+                suf = {'HORAS_EXTRAS': " HE", 'EXTRA': " EXT"}.get(llam.get("estado"), "")
+                lbl = f"{lbl}\n{base}{suf}"
+                bold = True
+
         # 5. Caso Especial: Viaje Largo + Turno de Planta
         elif tiene_vl and bool(di.get("hora_entrada_real") and di.get("hora_salida_real")):
             lbl = f"VIAJE\n{lbl}" if lbl != "VIAJE" else "VIAJE\nOK"
@@ -183,6 +191,13 @@ class ReportService:
             raise
 
     async def _generate_excel_workbook(self, matrix_data: dict, rango_dias: List[date], area: Optional[str]) -> BytesIO:
+        # Sigla del llamado de un día no laborable: la de Configuración → Estados (por defecto «EME»)
+        try:
+            fila = await self.asistencia_service.repository.db.fetch_one(
+                "SELECT short_label FROM estados_asistencia WHERE codigo = 'LLAMADO_EMERGENCIA'")
+            self._sigla_llamado = (fila or {}).get('short_label') or 'EME'
+        except Exception:
+            self._sigla_llamado = 'EME'
         try:
             empleados = matrix_data.get("empleados", [])
             emp_matrix = matrix_data.get("matrix", {})
@@ -443,6 +458,13 @@ class ReportService:
                         # Jornada adicional aprobada como HE
                         min_ja_he = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
                         he_apr += min_ja_he
+                    # Llamado de un día no laborable aprobado como horas extra (se valida aparte, 05-11-2026)
+                    llam_d = (ja or {}).get("llamado") or {}
+                    if is_esp and llam_d.get("estado") == 'HORAS_EXTRAS':
+                        he_apr += float(llam_d.get("minutos_autorizados") or llam_d.get("minutos") or 0.0)
+                    # Llamado aprobado como jornada EXTRA: cuenta como una jornada especial más
+                    if llam_d.get("estado") == 'EXTRA':
+                        cnt_esp += 1
                         
                     # FIX: he_compensado se acumula para TODOS los días (incluidos JORNADA_ESPECIAL),
                     # igual que en el frontend (marcaciones_ui.js línea 4266)

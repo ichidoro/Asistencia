@@ -3328,6 +3328,13 @@ tr:hover .emp-name-cell {
     border: none;
 }
 
+/* Violeta intenso (llamado de emergencia en día no laborable, 05-11-2026): sólido, para que no pase desapercibido */
+.color-violeta {
+    background: #7c3aed;
+    color: white;
+    border: none;
+}
+
 /* == COLORES SÓLIDOS NUEVOS (4 adicionales) ==================== */
 .color-naranja,
 .badge-state-orange {

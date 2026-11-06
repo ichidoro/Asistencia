@@ -337,6 +337,20 @@ class ConfiguracionRepository:
         except Exception as mig_he_err:
             logger.warning(f"Migración estados_asistencia (HORAS_EXTRAS): {mig_he_err}")
 
+        # Llamado de emergencia en un día que la persona no tenía que trabajar: estado propio en la grilla, debajo de la
+        # jornada especial, y se valida aparte (orden del dueño, 05-11-2026). Nombre, etiqueta y color se editan en
+        # Configuración → Estados; si ya existe no se toca.
+        try:
+            await self.db.execute("""
+                INSERT OR IGNORE INTO estados_asistencia
+                (codigo, nombre_display, short_label, descripcion, color_clase, icono_bi, es_sistema, activo, orden)
+                VALUES ('LLAMADO_EMERGENCIA', 'LLAMADO DE EMERGENCIA', 'EME',
+                        'Llamado de emergencia en un día que la persona no tenía que trabajar (día libre, feriado o sin turno). Se valida aparte de la jornada especial: EXTRA, horas extra o rechazo.',
+                        'color-violeta', 'bi-telephone-inbound-fill', 1, 1, 17)
+            """)
+        except Exception as mig_eme_err:
+            logger.warning(f"Migración estados_asistencia (LLAMADO_EMERGENCIA): {mig_eme_err}")
+
         # 8. Tabla de Periodos de Empleo (Multi-Contrato) [NEW V15]
         if not await self.db.table_exists("periodos_empleo"):
             logger.info("🛠️ Creando tabla 'periodos_empleo' para gestión de reincorporaciones...")

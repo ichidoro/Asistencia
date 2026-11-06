@@ -77,7 +77,8 @@ def test_la_segunda_jornada_descuenta_su_propia_colacion(monkeypatch):
     assert je["minutos_trabajados"] == 377                                 # 6 h 47 min menos 30 min de colación
 
 
-def test_en_un_dia_libre_la_segunda_jornada_se_suma_a_la_jornada_especial(monkeypatch):
+def test_en_un_dia_libre_la_segunda_jornada_queda_aparte_de_la_jornada_especial(monkeypatch):
+    # Desde el 05-11-2026 la segunda jornada de un día libre se valida aparte, igual que un llamado de emergencia
     monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 10, 27, 12, 0))
     monkeypatch.setattr(qme, "REGLAS_MARCAS_ACTIVAS", {})
     marcas = [{"id": 1, "fecha_hora": "2026-10-11 07:00:00", "tipo": E}, {"id": 2, "fecha_hora": "2026-10-11 11:00:00", "tipo": S},
@@ -87,8 +88,12 @@ def test_en_un_dia_libre_la_segunda_jornada_se_suma_a_la_jornada_especial(monkey
                                global_ajustes={"asistencia_emergencia_gap_horas": "4", "asistencia_emergencia_jornada_limite_horas": "3"},
                                todos_ciclos_dia=[], consumidas_previas=set())
     je = r["_jornada_especial"]
-    assert r["estado"] == "JORNADA_ESPECIAL" and je["origen"] == "DIA_LIBRE" and je["minutos_trabajados"] == 420
-    assert je["observaciones"].count("Jornada Adicional (+2)") == 1
+    # Cada bloque de 4 h descuenta su colación de 30 min: 210 la jornada y 210 la segunda jornada (antes, 420 juntas)
+    assert r["estado"] == "JORNADA_ESPECIAL" and je["origen"] == "DIA_LIBRE" and je["minutos_trabajados"] == 210
+    assert (je["llamado_tipo"], je["llamado_hora_entrada"], je["llamado_hora_salida"], je["llamado_minutos"], je["llamado_estado"]) == \
+        ("ADICIONAL", "16:00", "20:00", 210, "PENDIENTE")
+    # La nota del +2 sale de la jornada especial: la grilla la sigue mostrando como ESP y el +2 va debajo
+    assert "Jornada Adicional (+2)" not in je["observaciones"]
 
 
 def test_el_mas_dos_aprobado_como_horas_extra_se_suma_a_las_de_la_jornada():

@@ -439,6 +439,16 @@ class TurnoRepository:
             ("fecha_validacion", "TEXT"),
             ("created_at", "TEXT"),
             ("updated_at", "TEXT"),
+            # Llamado de emergencia (o segunda jornada) en un día que la persona no tenía que trabajar: se guarda junto a la
+            # jornada especial del día, pero con su propia decisión (EXTRA, horas extra o rechazo), orden del dueño 05-11-2026.
+            ("llamado_tipo", "TEXT"),
+            ("llamado_hora_entrada", "TEXT"),
+            ("llamado_hora_salida", "TEXT"),
+            ("llamado_minutos", "INTEGER DEFAULT 0"),
+            ("llamado_estado", "TEXT"),
+            ("llamado_minutos_autorizados", "REAL DEFAULT 0"),
+            ("llamado_validador_id", "INTEGER"),
+            ("llamado_fecha_validacion", "TEXT"),
         ]
         try:
             cols_je = set(await self.db.get_column_names("jornadas_especiales"))

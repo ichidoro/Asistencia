@@ -151,6 +151,31 @@
 .vn-pill.a { background: var(--vn-amber-soft); color: var(--vn-amber); }
 .vn-pill.g { background: var(--vn-green-soft); color: var(--vn-green); }
 
+/* ── Validar por partes: una fila por parte del día y una columna por decisión (V3, aprobada por el dueño 05-11-2026) ── */
+.vt-tabla { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 13.5px; }
+.vt-tabla th { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ov-ink-3); font-weight: 600; text-align: center; padding: 0 6px; vertical-align: bottom; }
+.vt-tabla th small { display: block; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11px; }
+.vt-tabla th:first-child { text-align: left; }
+.vt-tabla td { background: #fff; border-top: 1px solid var(--ov-line); border-bottom: 1px solid var(--ov-line); padding: 10px 8px; text-align: center; vertical-align: middle; }
+.vt-tabla td:first-child { border-left: 1px solid var(--ov-line); border-radius: 12px 0 0 12px; text-align: left; }
+.vt-tabla td:last-child { border-right: 1px solid var(--ov-line); border-radius: 0 12px 12px 0; }
+.vt-tabla tr.vt-eme td { background: #faf7ff; border-color: #d9c9f7; }
+.vt-parte b { font-weight: 600; color: var(--ov-ink); }
+.vt-parte .vt-sub { display: block; margin-top: 2px; color: var(--ov-ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.vt-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 7px; font-weight: 700; font-size: 11.5px; margin-right: 4px; vertical-align: 1px; }
+.vt-tag.esp { background: #dbeafe; color: #1e40af; }
+.vt-tag.mas2 { background: #e0f2fe; color: #075985; box-shadow: inset 0 0 0 1px #7dd3fc; }
+.vt-rd { width: 32px; height: 32px; display: inline-grid; place-items: center; border: 0; background: transparent; border-radius: 50%; cursor: pointer; padding: 0; }
+.vt-rd::before { content: ''; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ov-line-strong); background: #fff; box-sizing: border-box; transition: background-color .15s, border-color .15s; }
+.vt-rd:hover::before { border-color: #9aa6cf; }
+.vt-rd[aria-checked="true"]::before { border-color: var(--vn-navy); box-shadow: inset 0 0 0 3px #fff; background: var(--vn-navy); }
+.vt-rd.vt-rech[aria-checked="true"]::before { border-color: var(--vn-pink); background: var(--vn-pink); }
+.vt-rd:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--vn-ring); }
+.vt-ctx { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--ov-sunk); border: 1px dashed var(--ov-line-strong); font-size: 13px; color: var(--ov-ink-2); }
+.vt-ctx small { color: var(--ov-ink-3); }
+.vt-res { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--vn-green-soft); border: 1px solid #bbe3c8; font-size: 13.5px; line-height: 1.45; color: var(--vn-green); }
+.vt-res.vt-falta { background: var(--ov-sunk); border-color: var(--ov-line-2); color: var(--ov-ink-3); }
+
 /* ── Pie ─────────────────────────────────────────────────────────────────── */
 .modal:not(#modalScannerLibreta) .modal-footer {
   background: var(--ov-sunk) !important;

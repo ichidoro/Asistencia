@@ -233,7 +233,11 @@
         return ACCIONES_DIA.filter(a => visible(a.id)).map(a => {
             let t = a.t, u = a.u;
             if (a.id === 'btn-validar-jornada') {
-                if (ja && ja.origen === 'COBERTURA_TURNO') { t = 'Validar cobertura (+2)'; u = 'Segunda jornada del día · ' + hMin(ja.minutos_trabajados); }
+                if (ja && ja.llamado) {
+                    const adic = ja.llamado.tipo === 'ADICIONAL';
+                    t = adic ? 'Validar jornada especial y segunda jornada' : 'Validar jornada especial y llamado';
+                    u = (ja.origen === 'FERIADO' ? 'Feriado' : 'Día libre') + ' · ' + hMin(ja.minutos_trabajados) + ' + ' + (adic ? '+2' : 'llamado') + ' · ' + hMin(ja.llamado.minutos);
+                } else if (ja && ja.origen === 'COBERTURA_TURNO') { t = 'Validar cobertura (+2)'; u = 'Segunda jornada del día · ' + hMin(ja.minutos_trabajados); }
                 else { t = 'Validar jornada especial'; u = ja ? (ja.origen === 'FERIADO' ? 'Feriado' : 'Día libre') + ' trabajado · ' + hMin(ja.minutos_trabajados) : 'Día libre o feriado trabajado'; }
             }
             return '<button type="button" class="td-da ' + a.tono + '" data-fn="' + a.fn + '"><span class="td-ic"><i class="bi ' + a.ic + '"></i></span><span><span class="td-t" style="display:block">' + esc(t) + '</span><span class="td-u" style="display:block">' + esc(u) + '</span></span><i class="bi bi-chevron-right"></i></button>';

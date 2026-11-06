@@ -751,6 +751,7 @@ async def seed_estados_asistencia(
         ('PERMISO',           'PERMISO',            'PER', 'El empleado cuenta con un permiso de horas aprobado para ese día.',          'badge-state-info',     'bi-calendar-check-fill',        1, 1, 13),
         ('INASISTENCIA_COMPENSADA', 'INASISTENCIA COMPENSADA', 'C.HE', 'Inasistencia compensada utilizando la bolsa de horas extras aprobadas.', 'badge-inasistencia-compensada-he', 'bi-clock-history', 1, 1, 14),
         ('JORNADA_COMPENSATORIA',   'JORNADA COMPENSATORIA',   'COMP', 'Día libre compensatorio por jornada trabajada en día de descanso.', 'badge-compensatorio', 'bi-arrow-left-right', 1, 1, 15),
+        ('LLAMADO_EMERGENCIA',      'LLAMADO DE EMERGENCIA',   'EME',  'Llamado de emergencia en un día que la persona no tenía que trabajar (día libre, feriado o sin turno). Se valida aparte de la jornada especial: EXTRA, horas extra o rechazo.', 'color-violeta', 'bi-telephone-inbound-fill', 1, 1, 17),
     ]
     for row in seed_data:
         await db.execute(

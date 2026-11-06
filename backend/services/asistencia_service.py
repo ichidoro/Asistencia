@@ -1544,7 +1544,11 @@ class AsistenciaService:
         observaciones: Optional[str] = None,
         minutos_autorizados: Optional[float] = None,
         validador_id: Optional[int] = None,
+        parte: str = 'JORNADA',
     ) -> Dict[str, Any]:
+        """`parte`: 'JORNADA' (la jornada especial o el +2 de siempre) o 'LLAMADO' (el llamado de emergencia o la segunda
+        jornada de un día no laborable, que se valida aparte desde el 05-11-2026). REVERTIR de la jornada devuelve
+        también el llamado a «por validar»: el día vuelve entero al estado anterior a validarse."""
         db = self.repository.db
         asist = await self.repository.get_asistencia(empleado_id, fecha)
         
@@ -1578,6 +1582,10 @@ class AsistenciaService:
             return {'error': 'No se encontró registro de jornada especial'}
         
         jornada_dict = dict(jornada)
+        tiene_llamado = bool(int(jornada_dict.get('llamado_minutos') or 0) > 0)
+
+        if parte == 'LLAMADO':
+            return await self._validar_llamado(empleado_id, fecha, accion, jornada_dict, validador_id)
 
         # Una jornada usada para compensar una inasistencia ya se gastó: primero se quita la compensación
         if jornada_dict.get('estado') == 'COMPENSATORIA':
@@ -1661,6 +1669,8 @@ class AsistenciaService:
                 """,
                 (obs_je, min_auth, validador_id, empleado_id, fecha)
             )
+            if tiene_llamado:
+                await self._sincronizar_he_con_llamado(empleado_id, fecha)
 
             # 3. El motor cuántico integra la decisión (HumanDecisionMerger) al recalcular
             await self._recalcular_tras_decision_humana(empleado_id, fecha)
@@ -1686,9 +1696,17 @@ class AsistenciaService:
             )
             # Limpiar cualquier registro en horas_extras
             await db.execute(
-                "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
+                "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL', 'LLAMADO_EMERGENCIA')",
                 (empleado_id, fecha)
             )
+            # El llamado del mismo día también vuelve a quedar por validar: el día vuelve entero a como estaba
+            if tiene_llamado:
+                await db.execute(
+                    "UPDATE jornadas_especiales SET llamado_estado = 'PENDIENTE', llamado_minutos_autorizados = 0, "
+                    "llamado_validador_id = NULL, llamado_fecha_validacion = NULL, updated_at = datetime('now') "
+                    "WHERE empleado_id = ? AND fecha = ?",
+                    (empleado_id, fecha)
+                )
         else:
             estado_nuevo = 'EXTRA' if accion == 'APROBAR' else 'RECHAZADA'
 
@@ -1725,9 +1743,86 @@ class AsistenciaService:
                 (update_data['estado'], update_data['observaciones'], min_auth, validador_id, empleado_id, fecha)
             )
 
+        # El llamado aprobado como horas extra sigue en la fila de horas extra del día aunque la jornada cambie
+        if tiene_llamado:
+            await self._sincronizar_he_con_llamado(empleado_id, fecha)
+
         # La asistencia NO se edita a mano: el motor cuántico recalcula e integra la decisión humana
         await self._recalcular_tras_decision_humana(empleado_id, fecha)
         return {'success': True, 'estado_he': estado_ret, 'minutos_extra_autorizados': minutos_ret}
+
+    async def _validar_llamado(
+        self, empleado_id: int, fecha: str, accion: str, jornada: Dict[str, Any], validador_id: Optional[int]
+    ) -> Dict[str, Any]:
+        """Valida el llamado de emergencia (o la segunda jornada) de un día no laborable, aparte de la jornada especial:
+        APROBAR = una jornada EXTRA más (monto fijo), APROBAR_COMO_HE = sus minutos pasan a horas extra al 50 %,
+        RECHAZAR = no se paga, REVERTIR = vuelve a quedar por validar (orden del dueño, 05-11-2026)."""
+        db = self.repository.db
+        minutos = int(jornada.get('llamado_minutos') or 0)
+        if minutos <= 0:
+            return {'error': 'Este día no tiene un llamado de emergencia por validar.', 'codigo': 'SIN_LLAMADO'}
+        estados = {'APROBAR': 'EXTRA', 'APROBAR_COMO_HE': 'HORAS_EXTRAS', 'RECHAZAR': 'RECHAZADA', 'REVERTIR': 'PENDIENTE'}
+        if accion not in estados:
+            return {'error': 'Acción no válida para el llamado.', 'codigo': 'ACCION_INVALIDA'}
+        nuevo = estados[accion]
+        aut = float(minutos) if nuevo in ('EXTRA', 'HORAS_EXTRAS') else 0.0
+        decidido = nuevo != 'PENDIENTE'
+        await db.execute(
+            "UPDATE jornadas_especiales SET llamado_estado = ?, llamado_minutos_autorizados = ?, llamado_validador_id = ?, "
+            + ("llamado_fecha_validacion = datetime('now'), " if decidido else "llamado_fecha_validacion = NULL, ")
+            + "updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?",
+            (nuevo, aut, validador_id if decidido else None, empleado_id, fecha)
+        )
+        await self._sincronizar_he_con_llamado(empleado_id, fecha)
+        await self._recalcular_tras_decision_humana(empleado_id, fecha)
+        estado_ret = {'EXTRA': 'APROBADO', 'HORAS_EXTRAS': 'APROBADO_HE', 'RECHAZADA': 'RECHAZADO'}.get(nuevo, 'REVERTIDO')
+        return {'success': True, 'estado_he': estado_ret, 'minutos_extra_autorizados': aut, 'parte': 'LLAMADO'}
+
+    async def _sincronizar_he_con_llamado(self, empleado_id: int, fecha: str) -> None:
+        """En un día no laborable con llamado, la fila de horas extra del día guarda el total aprobado como horas extra:
+        la jornada especial (si se aprobó así) más el llamado (si se aprobó así). Sin nada aprobado como horas extra la
+        fila se quita. Solo se usa en días con llamado; los demás siguen como siempre."""
+        db = self.repository.db
+        je = await db.fetch_one(
+            "SELECT estado, origen, minutos_autorizados, llamado_tipo, llamado_estado, llamado_minutos, llamado_minutos_autorizados "
+            "FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+            (empleado_id, fecha)
+        )
+        if not je:
+            return
+        je = dict(je)
+        min_esp = float(je.get('minutos_autorizados') or 0) if je.get('estado') == 'HORAS_EXTRAS' else 0.0
+        min_llam = float(je.get('llamado_minutos_autorizados') or 0) if (je.get('llamado_estado') == 'HORAS_EXTRAS' and int(je.get('llamado_minutos') or 0) > 0) else 0.0
+        total = round(min_esp + min_llam, 2)
+        origenes = "('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL', 'LLAMADO_EMERGENCIA')"
+        if total <= 0:
+            await db.execute(f"DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN {origenes}", (empleado_id, fecha))
+            return
+        if min_esp > 0:
+            origen = je.get('origen') if je.get('origen') in ('DIA_LIBRE', 'FERIADO') else 'COBERTURA_TURNO'
+        else:
+            origen = 'LLAMADO_EMERGENCIA'
+        nombre_llam = 'segunda jornada (+2)' if je.get('llamado_tipo') == 'ADICIONAL' else 'llamado de emergencia'
+        partes = []
+        if min_esp > 0:
+            partes.append(f"jornada especial {round(min_esp / 60.0, 1)}h")
+        if min_llam > 0:
+            partes.append(f"{nombre_llam} {round(min_llam / 60.0, 1)}h")
+        comentario = "Aprobado como Horas Extras al 50%: " + " + ".join(partes)
+        await db.execute(
+            """
+            INSERT INTO horas_extras (empleado_id, fecha, minutos_bruto, minutos_autorizados, estado, origen, comentario, updated_at)
+            VALUES (?, ?, ?, ?, 'APROBADO', ?, ?, datetime('now'))
+            ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+                minutos_bruto = excluded.minutos_bruto,
+                minutos_autorizados = excluded.minutos_autorizados,
+                estado = 'APROBADO',
+                origen = excluded.origen,
+                comentario = excluded.comentario,
+                updated_at = datetime('now')
+            """,
+            (empleado_id, fecha, total, total, origen, comentario)
+        )
 
     async def _recalcular_tras_decision_humana(self, empleado_id: int, fecha: str) -> None:
         """Recalcula el día a través del motor cuántico tras una validación humana (JE/HE)."""
@@ -2742,7 +2837,16 @@ class AsistenciaService:
                     'hora_salida': j['hora_salida'],
                     'minutos_trabajados': j['minutos_trabajados'],
                     'minutos_autorizados': j.get('minutos_autorizados', 0),
-                    'observaciones': j.get('observaciones') or ''
+                    'observaciones': j.get('observaciones') or '',
+                    # Llamado de un día no laborable: se muestra debajo de la jornada especial y se valida aparte
+                    'llamado': ({
+                        'tipo': j.get('llamado_tipo') or 'EMERGENCIA',
+                        'hora_entrada': j.get('llamado_hora_entrada'),
+                        'hora_salida': j.get('llamado_hora_salida'),
+                        'minutos': int(j.get('llamado_minutos') or 0),
+                        'estado': j.get('llamado_estado') or 'PENDIENTE',
+                        'minutos_autorizados': float(j.get('llamado_minutos_autorizados') or 0),
+                    } if int(j.get('llamado_minutos') or 0) > 0 else None),
                 }
 
         # Días por revisar (Reglas de marcaciones): la celda lleva un triángulo mientras

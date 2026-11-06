@@ -304,13 +304,40 @@ class AsistenciaRepository:
         Guarda o actualiza un registro en la tabla de jornadas_especiales.
         Incluye origen trazable y respeta decisiones humanas previas.
         """
+        # El llamado de un día no laborable (llamado_*) va en la misma fila pero con su propia decisión: una decisión ya
+        # tomada se respeta mientras el llamado siga en el día (05-11-2026).
         query = """
             INSERT INTO jornadas_especiales (
-                empleado_id, fecha, hora_entrada, hora_salida, 
+                empleado_id, fecha, hora_entrada, hora_salida,
                 minutos_trabajados, estado, observaciones, origen,
-                minutos_autorizados, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                minutos_autorizados, llamado_tipo, llamado_hora_entrada, llamado_hora_salida,
+                llamado_minutos, llamado_estado, llamado_minutos_autorizados, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+                llamado_tipo=excluded.llamado_tipo,
+                llamado_hora_entrada=excluded.llamado_hora_entrada,
+                llamado_hora_salida=excluded.llamado_hora_salida,
+                llamado_minutos=excluded.llamado_minutos,
+                llamado_estado=CASE
+                    WHEN COALESCE(excluded.llamado_minutos, 0) > 0
+                         AND jornadas_especiales.llamado_estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.llamado_estado
+                    ELSE excluded.llamado_estado
+                END,
+                llamado_minutos_autorizados=CASE
+                    WHEN COALESCE(excluded.llamado_minutos, 0) > 0
+                         AND jornadas_especiales.llamado_estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.llamado_minutos_autorizados
+                    ELSE excluded.llamado_minutos_autorizados
+                END,
+                llamado_validador_id=CASE
+                    WHEN COALESCE(excluded.llamado_minutos, 0) > 0
+                         AND jornadas_especiales.llamado_estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.llamado_validador_id
+                    ELSE NULL
+                END,
+                llamado_fecha_validacion=CASE
+                    WHEN COALESCE(excluded.llamado_minutos, 0) > 0
+                         AND jornadas_especiales.llamado_estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.llamado_fecha_validacion
+                    ELSE NULL
+                END,
                 hora_entrada=excluded.hora_entrada,
                 hora_salida=excluded.hora_salida,
                 minutos_trabajados=excluded.minutos_trabajados,
@@ -339,6 +366,12 @@ class AsistenciaRepository:
             data.get('observaciones', ''),
             data.get('origen', 'SISTEMA'),
             data.get('minutos_autorizados', 0),
+            data.get('llamado_tipo'),
+            data.get('llamado_hora_entrada'),
+            data.get('llamado_hora_salida'),
+            int(data.get('llamado_minutos') or 0),
+            data.get('llamado_estado') if data.get('llamado_minutos') else None,
+            float(data.get('llamado_minutos_autorizados') or 0) if data.get('llamado_minutos') else 0,
         )
         await self.db.execute(query, params)
 
