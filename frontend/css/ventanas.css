@@ -555,3 +555,121 @@
   #modalVerQR.modal .modal-footer { flex-direction: column-reverse; }
   #modalVerQR.modal .modal-footer .btn { flex: none; width: 100%; white-space: nowrap; }
 }
+
+/* ═══ Ventana «Nuevo turno»: asistente de 6 pasos (07-11-2026) ═══════════════
+   Se arma el horario en el orden en que se piensa: qué es, para quién, cuánto,
+   días y horas, colación y tolerancias, revisar. Columnas siempre parejas
+   (1, 2, 3 o 4 iguales) y ventana a pantalla completa bajo 992 px, para que
+   ningún texto se corte. */
+#modalTurno .modal-dialog { max-width: min(1040px, 94vw); }
+#modalTurno .modal-content { min-height: min(780px, calc(100vh - 3.5rem)); }
+#modalTurno .modal-header .vn-tit { flex: 1; min-width: 0; }
+
+/* Pasos */
+.tw-pasos { padding: 12px 22px 14px; border-bottom: 1px solid var(--ov-line-2); background: #fff; flex: none; }
+.tw-pasos ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.tw-paso {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; min-height: 44px;
+  padding: 4px 2px; border: 0; background: none; text-align: left; cursor: pointer;
+  font: 500 13px/1.3 'Barlow', system-ui, sans-serif; color: var(--ov-ink-3);
+  border-radius: 8px;
+}
+.tw-barra { display: block; height: 4px; border-radius: 2px; background: var(--ov-line); transition: background-color .2s; }
+.tw-nombre { text-wrap: balance; }
+.tw-num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.tw-paso:hover { color: var(--ov-ink-2); }
+.tw-paso.hecho { color: var(--ov-ink-2); }
+.tw-paso.hecho .tw-barra, .tw-paso[aria-current="step"] .tw-barra { background: var(--vn-navy); }
+.tw-paso[aria-current="step"] { color: var(--ov-ink); font-weight: 600; }
+.tw-paso:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--vn-ring); }
+
+/* Cuerpo de cada paso */
+.modal.tw-modal .modal-body { padding: 26px 28px 28px !important; }
+.tw-panel { max-width: 940px; }
+.tw-preg { font: 600 21px/1.25 'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif !important; color: var(--ov-ink); margin: 0 0 4px; text-wrap: balance; }
+.tw-sub { font: 600 17px/1.3 'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif !important; color: var(--ov-ink); margin: 30px 0 4px; }
+.tw-ayuda { font-size: 14px; line-height: 1.45; color: var(--ov-ink-2); margin: 0 0 18px; max-width: 72ch; }
+.tw-mt { margin-top: 20px; }
+span.tw-mt { display: block; }
+.tw-grid-2, .tw-grid-3, .tw-grid-4 { display: grid; gap: 16px 20px; align-items: start; }
+.tw-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tw-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tw-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
+#modalTurno .form-label { font-size: 13.5px; font-weight: 600; color: var(--ov-ink); margin-bottom: 6px; }
+#modalTurno .form-text { font-size: 12.5px; line-height: 1.4; color: var(--ov-ink-3); margin-top: 6px; }
+#modalTurno .form-control, #modalTurno .form-select { min-height: 44px; font-variant-numeric: tabular-nums; }
+#modalTurno .input-group-text { font-size: 13px; color: var(--ov-ink-2); background: var(--ov-sunk); }
+#modalTurno .vn-check { margin: 0; }
+.tw-check-alto { min-height: 44px; align-items: center; }
+.tw-tipo { height: 100%; }
+
+/* Áreas como fichas */
+.tw-areas { display: flex; flex-wrap: wrap; gap: 8px; }
+.tw-areas .form-check { position: relative; margin: 0 !important; padding: 0; min-height: 0; }
+.tw-areas .form-check-input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.tw-areas .form-check-label {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px;
+  border: 1px solid var(--ov-line); border-radius: 999px; background: #fff;
+  font-size: 14px !important; color: var(--ov-ink-2); cursor: pointer; white-space: nowrap;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+.tw-areas .form-check:hover .form-check-label { border-color: #c5cdea; }
+.tw-areas .form-check-input:checked + .form-check-label { background: var(--vn-navy); border-color: var(--vn-navy); color: #fff; font-weight: 600; }
+.tw-areas .form-check-input:focus-visible + .form-check-label { box-shadow: 0 0 0 3px var(--vn-ring); }
+
+/* Días y horas */
+.tw-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
+.tw-cab .vn-pill { font-size: 13px; padding: 5px 12px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.vn-pill.tw-ok { background: var(--vn-green-soft); color: var(--vn-green); }
+.vn-pill.tw-dif { background: var(--vn-amber-soft); color: var(--vn-amber); }
+.tw-opciones { gap: 8px; margin-bottom: 14px; }
+.tw-opciones .nav-link { min-height: 40px; border-radius: 10px; font-weight: 600; color: var(--vn-navy); }
+.tw-opciones .nav-link.active { background: var(--vn-navy); color: #fff; }
+.tw-acciones-opcion { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tw-acciones-opcion .btn { min-height: 40px; }
+.tw-tabla { margin-bottom: 0; }
+.tw-tabla thead th { font-size: 12.5px; font-weight: 700; color: var(--ov-ink-2); background: var(--ov-sunk); vertical-align: bottom; white-space: normal; line-height: 1.25; }
+.tw-tabla td { padding: 6px 8px; }
+.tw-tabla .form-control-sm { min-height: 36px; min-width: 96px; font-variant-numeric: tabular-nums; }
+
+/* Colación y tolerancias */
+.tw-grupo { margin: 0; min-width: 0; border: 1px solid var(--ov-line); border-radius: 12px; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+.tw-grupo > legend { float: none; width: auto; margin: 0 0 -4px -6px; padding: 0 6px; font: 600 14px/1.3 'Barlow', system-ui, sans-serif; color: var(--vn-navy); }
+.tw-hoy { margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
+
+/* Revisar */
+.tw-grid-2:has(> .tw-grupo) { align-items: stretch; }
+.tw-resumen { display: flex; flex-direction: column; gap: 16px; }
+.tw-res-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.tw-res-cab b { font-size: 14.5px; font-weight: 600; color: var(--ov-ink); }
+.tw-res-cab .btn-link { min-height: 36px; font-weight: 600; color: var(--vn-navy); text-decoration: none; }
+.tw-res-cab .btn-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Pie */
+.modal.tw-modal .tw-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 22px !important; }
+.tw-pie .tw-espacio { flex: 1 1 auto; }
+.tw-pie .btn { min-height: 44px; padding: 0 18px; font-weight: 600; margin: 0; }
+.tw-sig-corta { display: none; }
+
+@media (max-width: 991.98px) {
+  #modalTurno .modal-dialog { margin: 0 !important; max-width: none !important; width: 100vw; height: 100%; }
+  #modalTurno .modal-content { min-height: 100%; border-radius: 0 !important; }
+  .tw-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tw-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767.98px) {
+  .tw-pasos { padding: 10px 16px 12px; }
+  .tw-pasos ol { gap: 6px; }
+  .tw-paso { min-height: 24px; padding: 10px 0; }
+  .tw-nombre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .modal.tw-modal .modal-body { padding: 20px 16px 24px !important; }
+  .tw-grid-2, .tw-grid-3, .tw-grid-4, .tw-hoy { grid-template-columns: minmax(0, 1fr); }
+  .modal.tw-modal .tw-pie { padding: 12px 16px !important; }
+  .tw-pie .tw-espacio { display: none; }
+  .tw-pie .btn { flex: 1 1 auto; }
+  .tw-sig-larga { display: none; }
+  .tw-sig-corta { display: inline; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tw-barra, .tw-areas .form-check-label { transition: none; }
+}

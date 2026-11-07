@@ -53,6 +53,10 @@ async function saveTurno() {
     const form = document.getElementById('formTurno');
     const formData = new FormData(form);
 
+    // Si algo falta, se vuelve al paso donde se completa (asistente de 6 pasos)
+    for (const n of [1, 2, 3, 5]) {
+        if (!twValidar(n)) { twIr(n); return; }
+    }
     // La colación del horario es obligatoria: el cálculo la descuenta y la usa para reconocer la pausa de colación.
     if (!document.getElementById('chkColacion').checked || !(parseInt(document.getElementById('numColacion').value, 10) > 0)) {
         Avisos.falta('Falta la colación. Marque «Descontar» y escriba los minutos de colación.');
@@ -299,39 +303,15 @@ async function exportarTurnosJson(btn) {
 }
 window.exportarTurnosJson = exportarTurnosJson;
 
-function ensureRotacionDinamicaSwitch() {
-    const divMetaJornada = document.getElementById('div-meta-jornada');
-    if (divMetaJornada && !document.getElementById('divRotacionDinamica')) {
-        const divCol = document.createElement('div');
-        divCol.className = 'col-12 mt-2';
-        divCol.id = 'divRotacionDinamica';
-        divCol.innerHTML = `
-            <div class="card border-warning bg-warning bg-opacity-10 p-2">
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="chkRotacionDinamicaDiaria" name="rotacion_dinamica_diaria">
-                    <label class="form-check-label fw-bold text-dark" for="chkRotacionDinamicaDiaria">
-                        <i class="bi bi-gear" aria-hidden="true"></i> Rotación Dinámica Diaria (Evaluar ciclo por presencia del día)
-                    </label>
-                    <div class="form-text small text-muted">
-                        Activa la evaluación cuántica día a día para turnos operativos abiertos (ej. Mantención) donde los trabajadores rotan libremente entre opciones según su asistencia real, sin forzar semanas fijas ni turnos de noche vacíos.
-                    </div>
-                </div>
-            </div>
-        `;
-        divMetaJornada.parentNode.insertBefore(divCol, divMetaJornada.nextSibling);
-    }
-}
-
 // ==========================================
 // UI HELPERS
 // ==========================================
 async function openModalHorario(id = null) {
-    ensureRotacionDinamicaSwitch();
     currentTurnoId = id;
     const modalTitle = document.getElementById('modalTurnoLabel');
     const form = document.getElementById('formTurno');
 
-    if (modalTitle) modalTitle.textContent = id ? "Editar Turno" : "Nuevo Turno";
+    if (modalTitle) modalTitle.textContent = id ? "Editar turno" : "Nuevo turno";
 
     if (id) {
         // Cargar datos
@@ -461,6 +441,7 @@ async function openModalHorario(id = null) {
     if (existingInstance) {
         existingInstance.dispose();
     }
+    twIr(1);
     const modalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
     modalInstance.show();
 }
@@ -1086,204 +1067,408 @@ function renderTurnosTable() {
 }
 
 function renderModalHtml() {
+    // Asistente de 6 pasos (orden del dueño, 07-11-2026): se arma el horario en el orden en que se piensa.
+    // Los campos conservan sus id y name: saveTurno, openModalHorario y los cálculos no cambian.
+    const pasos = TW_PASOS.map((p, i) => `
+                    <li><button type="button" class="tw-paso" data-paso="${i + 1}" onclick="twIr(${i + 1})">
+                        <span class="tw-barra" aria-hidden="true"></span>
+                        <span class="tw-nombre"><span class="tw-num">${i + 1}</span> ${p}</span>
+                    </button></li>`).join('');
     return `
     <!-- Sin clase 'fade': la animación Bootstrap de fade causaba Layout Shifts masivos (CLS 60+) -->
-    <div class="modal" id="modalTurno" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+    <div class="modal tw-modal" id="modalTurno" tabindex="-1" aria-labelledby="modalTurnoLabel">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-lg-down">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalTurnoLabel">Nuevo Turno</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="vn-tit">
+                        <h5 class="modal-title" id="modalTurnoLabel">Nuevo turno</h5>
+                        <div class="vn-sub" id="tw-sub" aria-live="polite">Paso 1 de 6 · Qué horario es</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
-                <div class="modal-body p-4">
-                    <form id="formTurno">
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-3">
-                                <label for="input-nombre-turno" class="form-label">Nombre del Turno</label>
-                                <input type="text" id="input-nombre-turno" class="form-control" name="nombre" required placeholder="Ej: Operativo Mañana">
-                            </div>
-                            <div class="col-md-2">
-                                <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
-                                <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="onTipoProgramacionCambiado()">
-                                    <option value="CICLO_INTELIGENTE">Ciclo Inteligente</option>
-                                    <option value="BOLSA_FLEXIBLE">Bolsa Flexible</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2" id="div-meta-jornada">
-                                <label for="input-meta-jornada" class="form-label fw-bold text-primary">Jornada Semanal</label>
-                                <div class="input-group">
-                                    <input type="number" id="input-meta-jornada" class="form-control border-primary" name="meta_horas_semanales" value="" step="0.5" oninput="updateAllCalculations()" required>
-                                    <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
-                                </div>
-                                <div class="form-text small text-primary">Meta de horas esperadas.</div>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="input-activo-turno" class="form-label fw-bold text-dark">Estado</label>
-                                <select id="input-activo-turno" class="form-select" name="activo">
-                                    <option value="true">Activo</option>
-                                    <option value="false">Inactivo</option>
-                                </select>
-                                <div class="form-text small text-muted">¿Permitir nuevas asignaciones?</div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="form-label fw-bold text-success d-flex justify-content-between align-items-center mb-1">
-                                    <span>Áreas de Visibilidad</span>
-                                </div>
-                                <div id="container-areas-turno" class="border border-success rounded p-2 overflow-auto" style="max-height: 120px; background-color: #f8fff9;">
-                                    <div class="text-center text-muted small py-2">Cargando áreas...</div>
-                                </div>
-                                <div class="form-text small">Selecciona al menos un área a la cual estará asignado este turno.</div>
-                            </div>
-                        </div>
+                <nav class="tw-pasos" aria-label="Pasos para crear el turno">
+                    <ol>${pasos}
+                    </ol>
+                </nav>
+                <div class="modal-body">
+                    <form id="formTurno" novalidate onsubmit="return false;">
 
-                        <div class="row g-3 mb-4" id="divLineaFicticia" style="display:none;">
-                            <div class="col-md-4 border-start border-danger border-4 ps-3">
-                                <label for="input-hora-ficticia" class="form-label fw-bold text-danger">Hora Límite Ficticia (Trigger Inasistencia)</label>
-                                <input type="time" id="input-hora-ficticia" class="form-control border-danger" name="hora_limite_ficticia" value="" required>
-                                <div class="form-text small text-danger">Si a esta hora no hay marcación, se emitirá alerta de INASISTENCIA (Reversible).</div>
-                            </div>
-                            <div class="col-md-4 border-start border-primary border-4 ps-3" id="colMetaBolsa">
-                                <label for="input-meta-bolsa" class="form-label fw-bold text-primary">Meta Mensual (180h / Bolsa)</label>
-                                <div class="input-group">
-                                    <input type="number" id="input-meta-bolsa" class="form-control border-primary" value="" step="0.5" required>
-                                    <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
+                        <section class="tw-panel" data-paso="1" aria-labelledby="tw-t1">
+                            <h6 class="tw-preg" id="tw-t1">¿Qué horario es?</h6>
+                            <p class="tw-ayuda">Un nombre que se reconozca al asignarlo y el tipo de horario.</p>
+                            <div class="tw-grid-2">
+                                <div>
+                                    <label for="input-nombre-turno" class="form-label">Nombre del turno</label>
+                                    <input type="text" id="input-nombre-turno" class="form-control" name="nombre" required placeholder="Ej.: Operativo mañana" autocomplete="off">
                                 </div>
-                                <div class="form-text small text-primary">Meta en horas del ciclo mensual (Art. 25 bis: 180 hrs).</div>
-                            </div>
-                            <div class="col-md-4 border-start border-warning border-4 ps-3" id="colMetaEspera">
-                                <label for="input-meta-espera" class="form-label fw-bold text-warning-emphasis">Meta Espera (88h)</label>
-                                <div class="input-group">
-                                    <input type="number" id="input-meta-espera" class="form-control border-warning" value="88.0" step="0.5" required>
-                                    <span class="input-group-text bg-warning text-dark border-warning">Hrs</span>
-                                </div>
-                                <div class="form-text small text-muted">Tope mensual de tiempos de espera retribuidos (Art. 25 bis: máx 88 hrs).</div>
-                            </div>
-                            <div class="col-12 mt-2" id="divModalidadControl">
-                                <div class="p-2 border border-success rounded bg-success bg-opacity-10">
-                                    <label for="select-modalidad-control" class="form-label fw-bold text-success mb-1">
-                                        <i class="bi bi-clipboard-check" aria-hidden="true"></i> Modalidad de Control de Asistencia
-                                    </label>
-                                    <select id="select-modalidad-control" name="modalidad_control" class="form-select border-success">
-                                        <option value="RELOJ">Reloj Control Biométrico Tradicional</option>
-                                        <option value="LIBRETA_180H">Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj)</option>
+                                <div>
+                                    <label for="input-activo-turno" class="form-label">Estado</label>
+                                    <select id="input-activo-turno" class="form-select" name="activo">
+                                        <option value="true">Activo: se puede asignar</option>
+                                        <option value="false">Inactivo: no se puede asignar</option>
                                     </select>
-                                    <div class="form-text small text-muted mt-1">
-                                        Define si la asistencia del trabajador se registra vía Libreta Digital Art. 25 bis (sin marcas biométricas) o mediante reloj control físico.
+                                </div>
+                            </div>
+                            <span class="form-label tw-mt" id="tw-tipo-lbl">Tipo de horario</span>
+                            <select id="input-tipo-programacion" class="visually-hidden" name="tipo_programacion" tabindex="-1" aria-hidden="true" onchange="onTipoProgramacionCambiado()">
+                                <option value="CICLO_INTELIGENTE">Ciclo inteligente</option>
+                                <option value="BOLSA_FLEXIBLE">Bolsa flexible</option>
+                            </select>
+                            <div class="tw-grid-2" role="radiogroup" aria-labelledby="tw-tipo-lbl">
+                                <button type="button" class="vn-op tw-tipo" role="radio" aria-checked="true" data-tipo="CICLO_INTELIGENTE" onclick="twElegirTipo('CICLO_INTELIGENTE')">
+                                    <span class="vn-rd" aria-hidden="true"></span>
+                                    <span><b>Ciclo inteligente</b><span class="vn-t">Días y horas fijos. Si tiene varias opciones (mañana, tarde, noche), el sistema elige la del día.</span></span>
+                                    <span></span>
+                                </button>
+                                <button type="button" class="vn-op tw-tipo" role="radio" aria-checked="false" data-tipo="BOLSA_FLEXIBLE" onclick="twElegirTipo('BOLSA_FLEXIBLE')">
+                                    <span class="vn-rd" aria-hidden="true"></span>
+                                    <span><b>Bolsa flexible</b><span class="vn-t">Meta de horas al mes, sin horario diario. Choferes con libreta Art. 25 bis.</span></span>
+                                    <span></span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <section class="tw-panel" data-paso="2" aria-labelledby="tw-t2" hidden>
+                            <h6 class="tw-preg" id="tw-t2">¿Para qué áreas es?</h6>
+                            <p class="tw-ayuda">Solo esas áreas verán este turno al asignarlo. Elija al menos una.</p>
+                            <div id="container-areas-turno" class="tw-areas" role="group" aria-labelledby="tw-t2">
+                                <div class="text-muted small py-2">Cargando áreas…</div>
+                            </div>
+                        </section>
+
+                        <section class="tw-panel" data-paso="3" aria-labelledby="tw-t3" hidden>
+                            <h6 class="tw-preg" id="tw-t3">¿Cuánto se trabaja?</h6>
+                            <p class="tw-ayuda" id="tw-ayuda-3">Las horas de la semana contra las que se compara el horario.</p>
+                            <div class="tw-grid-2" id="div-meta-jornada">
+                                <div>
+                                    <label for="input-meta-jornada" class="form-label">Horas por semana</label>
+                                    <div class="input-group">
+                                        <input type="number" id="input-meta-jornada" class="form-control" name="meta_horas_semanales" value="" step="0.5" min="0" oninput="updateAllCalculations()" required>
+                                        <span class="input-group-text">horas</span>
                                     </div>
-                                    <label for="input-libreta-desde" class="form-label fw-bold text-success mt-2 mb-1">Sin reloj a partir de</label>
-                                    <input type="date" id="input-libreta-desde" class="form-control border-success">
-                                    <div class="form-text small text-muted mt-1">
-                                        Desde este día el horario se controla con la libreta y no se guardan marcas del reloj; antes de este día, con el reloj.
-                                        Cada horario tiene su propia fecha. Vacío: siempre con libreta.
+                                </div>
+                                <div id="divRotacionDinamica" class="vn-check">
+                                    <input class="form-check-input" type="checkbox" id="chkRotacionDinamicaDiaria" name="rotacion_dinamica_diaria">
+                                    <label class="form-check-label" for="chkRotacionDinamicaDiaria">
+                                        <strong>Elegir la opción cada día según la llegada</strong><br>
+                                        <span>Para turnos rotativos sin semanas fijas (por ejemplo, mantención).</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="divLineaFicticia" class="tw-bolsa" style="display:none;">
+                                <div class="tw-grid-3">
+                                    <div id="colMetaBolsa">
+                                        <label for="input-meta-bolsa" class="form-label">Meta del mes</label>
+                                        <div class="input-group">
+                                            <input type="number" id="input-meta-bolsa" class="form-control" value="" step="0.5" min="0" required>
+                                            <span class="input-group-text">horas</span>
+                                        </div>
+                                        <div class="form-text">Art. 25 bis: 180 horas al mes.</div>
+                                    </div>
+                                    <div id="colMetaEspera">
+                                        <label for="input-meta-espera" class="form-label">Tope de espera pagada</label>
+                                        <div class="input-group">
+                                            <input type="number" id="input-meta-espera" class="form-control" value="88.0" step="0.5" min="0" required>
+                                            <span class="input-group-text">horas</span>
+                                        </div>
+                                        <div class="form-text">Art. 25 bis: hasta 88 horas al mes.</div>
+                                    </div>
+                                    <div>
+                                        <label for="input-hora-ficticia" class="form-label">Hora límite para avisar inasistencia</label>
+                                        <input type="time" id="input-hora-ficticia" class="form-control" name="hora_limite_ficticia" value="" required>
+                                        <div class="form-text">Si a esa hora no hay marca, se avisa inasistencia (se puede corregir).</div>
+                                    </div>
+                                </div>
+                                <div class="tw-grid-2 tw-mt" id="divModalidadControl">
+                                    <div>
+                                        <label for="select-modalidad-control" class="form-label">Cómo se registra la asistencia</label>
+                                        <select id="select-modalidad-control" name="modalidad_control" class="form-select">
+                                            <option value="RELOJ">Reloj control</option>
+                                            <option value="LIBRETA_180H">Libreta Art. 25 bis (sin reloj)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="input-libreta-desde" class="form-label">Sin reloj a partir de</label>
+                                        <input type="date" id="input-libreta-desde" class="form-control">
+                                        <div class="form-text">Antes de esta fecha se usa el reloj. Vacío: siempre con libreta.</div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
-                        <h6>Reglas de Asistencia</h6>
-                        <div class="row g-3 mb-4 p-3 bg-light rounded border">
-                            <!-- Fila 1: Gobernanza de Tiempos. Entrada (3 columnas) y salida (2 columnas); con 0 no hay margen -->
-                            <div class="col-md-4 gobernanza-col">
-                                <label for="input-tol-alerta" class="form-label small fw-bold">Tolerancia Atraso Visual (min)</label>
-                                <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" min="0" step="1" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Atraso que pasa de estos minutos sin pasar la tolerancia real: aviso amarillo, sin marcar ATRASO.</div>
+                        <section class="tw-panel" data-paso="4" aria-labelledby="tw-t4" hidden>
+                            <div class="tw-cab">
+                                <div>
+                                    <h6 class="tw-preg" id="tw-t4">¿Qué días y a qué hora se trabaja?</h6>
+                                    <p class="tw-ayuda" id="tw-ayuda-4">Marque los días libres y escriba la entrada y la salida. Las horas del día se calculan solas.</p>
+                                </div>
+                                <span class="vn-pill" id="tw-total" aria-live="polite"></span>
                             </div>
-                            <div class="col-md-4 gobernanza-col">
-                                <label for="input-tol-desc" class="form-label small fw-bold">Tolerancia Atraso Real (min)</label>
-                                <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" min="0" step="1" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Atraso que pasa de estos minutos: el día queda en ATRASO. Con 0 cuenta todo atraso, aunque sean segundos.</div>
+                            <div id="wrapper-semanas">
+                                <ul class="nav nav-pills tw-opciones" id="pills-tab-weeks" role="tablist">
+                                    <!-- JS Tabs -->
+                                </ul>
+                                <div class="tab-content" id="pills-tabContent-weeks">
+                                    <!-- JS Content -->
+                                </div>
+                                <div id="btn-add-week-container" class="tw-acciones-opcion" style="display:none;">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addWeekTab()">
+                                        <i class="bi bi-plus-lg" aria-hidden="true"></i> Agregar opción
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="removeLastWeekTab()">
+                                        <i class="bi bi-dash-lg" aria-hidden="true"></i> Quitar la última opción
+                                    </button>
+                                </div>
                             </div>
-                            <div class="col-md-4 gobernanza-col">
-                                <label for="input-anclaje" class="form-label small fw-bold" title="Minutos antes de la entrada que se asimilan al inicio oficial">Rango Anticipación Entrada (min)</label>
-                                <input type="number" id="input-anclaje" class="form-control" name="anclaje_entrada_minutos" min="0" step="1" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo previo se asumen como entrada a la hora en punto. Con 0 cuenta la hora real.</div>
-                            </div>
-                            <div class="col-md-4 gobernanza-col">
-                                <label for="input-tol-salida" class="form-label small fw-bold">Tolerancia Salida Adelantada (min)</label>
-                                <input type="number" id="input-tol-salida" class="form-control" name="tolerancia_salida_adelantada" min="0" step="1" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Salida antes de la hora que pasa de estos minutos: el día queda en SALIDA ADELANTADA. Con 0 cuenta toda salida antes de la hora, aunque sean segundos.</div>
-                            </div>
-                            <div class="col-md-4 gobernanza-col">
-                                <label for="input-anclaje-salida" class="form-label small fw-bold" title="Minutos después de la salida que se asimilan al fin oficial">Rango Demora Salida (min)</label>
-                                <input type="number" id="input-anclaje-salida" class="form-control" name="anclaje_salida_minutos" min="0" step="1" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo posterior se asumen como salida a la hora en punto. Con 0 cuenta la hora real.</div>
-                            </div>
-                            <div class="col-md-4 gobernanza-col">
-                                <div class="form-text small mt-md-4" style="font-size: 0.75rem;">La deuda del día siempre cuenta el tiempo que falta para sus horas. Las tolerancias solo deciden si el día se marca como ATRASO o SALIDA ADELANTADA.</div>
-                            </div>
-                            <!-- Día de hoy: cuánto se espera antes de cerrar el día (no cambia los cálculos de días terminados) -->
-                            <div class="col-md-4">
-                                <label for="input-ventana-en-curso" class="form-label small fw-bold">Espera para cerrar un día sin salida (min)</label>
-                                <input type="number" id="input-ventana-en-curso" class="form-control" name="ventana_en_curso_minutos" min="0" step="1" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Hoy, si la persona marcó entrada y aún no salida, el día queda «en curso» hasta estos minutos después de la hora de salida. Después se marca como anomalía «falta salida». Con 0 se marca apenas pasa la hora de salida.</div>
-                            </div>
-                            <div class="col-md-4 gobernanza-col">
-                                <label for="input-espera-inasistencia" class="form-label small fw-bold">Espera para marcar inasistencia (min)</label>
-                                <input type="number" id="input-espera-inasistencia" class="form-control" name="espera_inasistencia_minutos" min="0" step="1" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Hoy, si la persona no tiene ninguna marca, la inasistencia aparece estos minutos después de la hora de salida. Con 0 aparece a la hora de salida.</div>
-                            </div>
+                        </section>
 
-                            <!-- Fila 2: Ajustes de Cálculo (Simétrica 2 columnas) -->
-                            <div class="col-md-6">
-                                <label for="chkColacion" class="form-label small fw-bold">Colación Automática</label>
-                                <div class="d-flex flex-column gap-2">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <div class="form-check mb-0">
-                                            <input class="form-check-input" type="checkbox" id="chkColacion" name="descuento_colacion_auto" onchange="toggleColacionInput()">
-                                            <label class="form-check-label small" for="chkColacion">Descontar</label>
-                                        </div>
-                                        <div id="divColacionTime" style="display:none; width: 140px;">
-                                            <div class="input-group input-group-sm">
-                                                <input type="number" class="form-control text-center" id="numColacion" placeholder="Min" value="" oninput="updateAllCalculations()" required>
-                                                <span class="input-group-text">min</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="divColacionUmbral" style="display:none; width: 220px;">
-                                        <div class="input-group input-group-sm" title="Horas mínimas de trabajo para aplicar el descuento">
-                                            <span class="input-group-text">Umbral</span>
-                                            <input type="number" class="form-control text-center" id="umbralColacion" placeholder="Hrs" value="0" step="0.5" required>
-                                            <span class="input-group-text">hrs</span>
-                                        </div>
-                                    </div>
-                                    <div id="divColacionTolerancia" style="display:none; width: 300px;">
-                                        <div class="input-group input-group-sm" title="Minutos sobre la colación del horario que no se anotan como exceso de colación">
-                                            <label class="input-group-text" for="toleranciaExcesoColacion">Tolerancia de exceso</label>
-                                            <input type="number" class="form-control text-center" id="toleranciaExcesoColacion" name="tolerancia_exceso_colacion_minutos" min="0" step="1" value="0">
-                                            <span class="input-group-text">min</span>
-                                        </div>
+                        <section class="tw-panel" data-paso="5" aria-labelledby="tw-t5" hidden>
+                            <h6 class="tw-preg" id="tw-t5">Colación y tolerancias</h6>
+                            <p class="tw-ayuda">La colación es obligatoria: el cálculo la descuenta y la usa para reconocer la pausa.</p>
+                            <div class="tw-grid-4">
+                                <div class="vn-check tw-check-alto">
+                                    <input class="form-check-input" type="checkbox" id="chkColacion" name="descuento_colacion_auto" onchange="toggleColacionInput()">
+                                    <label class="form-check-label" for="chkColacion"><strong>Descontar</strong></label>
+                                </div>
+                                <div id="divColacionTime" style="display:none;">
+                                    <label for="numColacion" class="form-label">Minutos de colación</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="numColacion" value="" min="0" oninput="updateAllCalculations()" required>
+                                        <span class="input-group-text">min</span>
                                     </div>
                                 </div>
-                                <div class="form-text small">Sin marcas de colación resta estos minutos, si la persona estuvo al menos el umbral. Con la pausa marcada resta lo mayor entre la pausa y estos minutos; bajo el umbral, solo la pausa. Lo que pase de la colación más la tolerancia queda como exceso.</div>
+                                <div id="divColacionUmbral" style="display:none;">
+                                    <label for="umbralColacion" class="form-label">Si trabajó al menos</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="umbralColacion" value="0" step="0.5" min="0" required>
+                                        <span class="input-group-text">horas</span>
+                                    </div>
+                                </div>
+                                <div id="divColacionTolerancia" style="display:none;">
+                                    <label for="toleranciaExcesoColacion" class="form-label">Margen antes de exceso</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="toleranciaExcesoColacion" name="tolerancia_exceso_colacion_minutos" min="0" step="1" value="0">
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                            <p class="form-text">Sin marca de colación se restan los minutos, si la persona estuvo al menos esas horas. Con la pausa marcada se resta lo mayor entre la pausa y los minutos. Lo que pase de la colación más el margen queda como exceso.</p>
 
-                        <div id="wrapper-semanas">
-                            <ul class="nav nav-pills mb-3" id="pills-tab-weeks" role="tablist">
-                                <!-- JS Tabs -->
-                            </ul>
-                            <div class="tab-content" id="pills-tabContent-weeks">
-                                <!-- JS Content -->
+                            <h6 class="tw-sub">Tolerancias</h6>
+                            <p class="tw-ayuda">Con 0 no hay margen. La deuda del día siempre cuenta el tiempo que falta; las tolerancias solo deciden si el día se marca como atraso o salida adelantada.</p>
+                            <div class="tw-grid-2">
+                                <fieldset class="tw-grupo gobernanza-col">
+                                    <legend>Entrada</legend>
+                                    <div>
+                                        <label for="input-tol-alerta" class="form-label">Avisar atraso desde</label>
+                                        <div class="input-group"><input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" min="0" step="1" value="0"><span class="input-group-text">min</span></div>
+                                        <div class="form-text">Aviso amarillo, sin marcar atraso.</div>
+                                    </div>
+                                    <div>
+                                        <label for="input-tol-desc" class="form-label">Marcar atraso desde</label>
+                                        <div class="input-group"><input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" min="0" step="1" value="0"><span class="input-group-text">min</span></div>
+                                        <div class="form-text">Desde aquí el día queda en ATRASO.</div>
+                                    </div>
+                                    <div>
+                                        <label for="input-anclaje" class="form-label">Llegada anticipada se cuenta en punto</label>
+                                        <div class="input-group"><input type="number" id="input-anclaje" class="form-control" name="anclaje_entrada_minutos" min="0" step="1" value="0"><span class="input-group-text">min</span></div>
+                                        <div class="form-text">Marcas hasta este tiempo antes se toman a la hora.</div>
+                                    </div>
+                                </fieldset>
+                                <fieldset class="tw-grupo gobernanza-col">
+                                    <legend>Salida</legend>
+                                    <div>
+                                        <label for="input-tol-salida" class="form-label">Marcar salida adelantada desde</label>
+                                        <div class="input-group"><input type="number" id="input-tol-salida" class="form-control" name="tolerancia_salida_adelantada" min="0" step="1" value="0"><span class="input-group-text">min</span></div>
+                                        <div class="form-text">Desde aquí el día queda en SALIDA ADELANTADA.</div>
+                                    </div>
+                                    <div>
+                                        <label for="input-anclaje-salida" class="form-label">Salida tardía se cuenta en punto</label>
+                                        <div class="input-group"><input type="number" id="input-anclaje-salida" class="form-control" name="anclaje_salida_minutos" min="0" step="1" value="0"><span class="input-group-text">min</span></div>
+                                        <div class="form-text">Marcas hasta este tiempo después se toman a la hora.</div>
+                                    </div>
+                                </fieldset>
                             </div>
-                            <div id="btn-add-week-container" class="mt-2" style="display:none;">
-                                <button type="button" class="btn btn-sm btn-outline-success" onclick="addWeekTab()">
-                                    <i class="bi bi-plus-circle"></i> Añadir Opción
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeLastWeekTab()">
-                                    <i class="bi bi-dash-circle"></i> Quitar Última Opción
-                                </button>
-                            </div>
-                        </div>
+                            <fieldset class="tw-grupo tw-hoy">
+                                <legend>Día de hoy</legend>
+                                <div>
+                                    <label for="input-ventana-en-curso" class="form-label">Esperar la salida hasta</label>
+                                    <div class="input-group"><input type="number" id="input-ventana-en-curso" class="form-control" name="ventana_en_curso_minutos" min="0" step="1" value="0"><span class="input-group-text">min después</span></div>
+                                    <div class="form-text">Con entrada y sin salida, el día sigue «en curso» hasta entonces; después queda «falta salida».</div>
+                                </div>
+                                <div class="gobernanza-col">
+                                    <label for="input-espera-inasistencia" class="form-label">Marcar inasistencia a los</label>
+                                    <div class="input-group"><input type="number" id="input-espera-inasistencia" class="form-control" name="espera_inasistencia_minutos" min="0" step="1" value="0"><span class="input-group-text">min después</span></div>
+                                    <div class="form-text">Sin ninguna marca, la inasistencia aparece entonces.</div>
+                                </div>
+                            </fieldset>
+                        </section>
+
+                        <section class="tw-panel" data-paso="6" aria-labelledby="tw-t6" hidden>
+                            <h6 class="tw-preg" id="tw-t6">Revise antes de guardar</h6>
+                            <p class="tw-ayuda">Use «Cambiar» para volver a un paso. Al guardar se recalcula el tramo abierto de las personas con este turno.</p>
+                            <div id="tw-resumen" class="tw-resumen"></div>
+                        </section>
                     </form>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="saveTurno()">Guardar</button>
+                <div class="modal-footer tw-pie">
+                    <button type="button" class="btn btn-outline-secondary" id="tw-atras" onclick="twIr(twPaso - 1)"><i class="bi bi-chevron-left" aria-hidden="true"></i> Atrás</button>
+                    <span class="tw-espacio"></span>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-outline-primary" id="tw-guardar-ya" onclick="saveTurno()" hidden>Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" id="tw-siguiente" onclick="twSiguiente()">Siguiente <i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                    <button type="button" class="btn btn-primary" id="tw-guardar" onclick="saveTurno()" hidden>Guardar turno</button>
                 </div>
             </div>
         </div>
     </div>
     `;
+}
+
+// ── Asistente de pasos ───────────────────────────────────────────────────────
+const TW_PASOS = ['Qué horario es', 'Para qué áreas', 'Cuánto se trabaja', 'Días y horas', 'Colación y tolerancias', 'Revisar y guardar'];
+let twPaso = 1;
+
+function twEsBolsa() {
+    const t = document.getElementById('input-tipo-programacion')?.value;
+    return t === 'BOLSA_FLEXIBLE' || t === 'FLEXIBLE_BOLSA';
+}
+
+// Va al paso n (1..6). Se puede saltar a cualquier paso; «Siguiente» revisa el paso actual antes de avanzar.
+function twIr(n) {
+    n = Math.max(1, Math.min(TW_PASOS.length, n));
+    twPaso = n;
+    document.querySelectorAll('#modalTurno .tw-panel').forEach(p => { p.hidden = Number(p.dataset.paso) !== n; });
+    document.querySelectorAll('#modalTurno .tw-paso').forEach(b => {
+        const k = Number(b.dataset.paso);
+        b.classList.toggle('hecho', k < n);
+        if (k === n) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    });
+    const sub = document.getElementById('tw-sub');
+    const nombre = document.getElementById('input-nombre-turno')?.value.trim();
+    if (sub) sub.textContent = `Paso ${n} de ${TW_PASOS.length} · ${TW_PASOS[n - 1]}` + (nombre && n > 1 ? ` · ${nombre}` : '');
+    const atras = document.getElementById('tw-atras');
+    const sig = document.getElementById('tw-siguiente');
+    const guardar = document.getElementById('tw-guardar');
+    const guardarYa = document.getElementById('tw-guardar-ya');
+    if (atras) atras.hidden = n === 1;
+    if (sig) {
+        sig.hidden = n === TW_PASOS.length;
+        sig.innerHTML = `<span class="tw-sig-larga">Siguiente: ${TW_PASOS[n] || ''}</span><span class="tw-sig-corta">Siguiente</span> <i class="bi bi-chevron-right" aria-hidden="true"></i>`;
+    }
+    if (guardar) guardar.hidden = n !== TW_PASOS.length;
+    // Al editar un turno se puede guardar desde cualquier paso
+    if (guardarYa) guardarYa.hidden = !currentTurnoId || n === TW_PASOS.length;
+    if (n === 4) twActualizarTotal();
+    if (n === TW_PASOS.length) twResumen();
+    const body = document.querySelector('#modalTurno .modal-body');
+    if (body) body.scrollTop = 0;
+}
+window.twIr = twIr;
+
+// Revisa lo mínimo del paso actual. Devuelve false y muestra qué falta si no está completo.
+function twFalta(mensaje, idCampo) {
+    Avisos.falta(mensaje);
+    const el = idCampo && document.getElementById(idCampo);
+    if (el) setTimeout(() => el.focus(), 50);
+    return false;
+}
+function twValidar(n) {
+    if (n === 1 && !document.getElementById('input-nombre-turno').value.trim()) {
+        return twFalta('Falta el nombre del turno.', 'input-nombre-turno');
+    }
+    if (n === 2 && !document.querySelector('.chk-area-turno:checked')) {
+        return twFalta('Falta el área. Elija al menos una para el turno.');
+    }
+    if (n === 3) {
+        if (twEsBolsa()) {
+            if (!document.getElementById('input-meta-bolsa').value) return twFalta('Falta la meta del mes de la bolsa flexible.', 'input-meta-bolsa');
+            if (!document.getElementById('input-hora-ficticia').value) return twFalta('Falta la hora límite para avisar inasistencia.', 'input-hora-ficticia');
+        } else if (!document.getElementById('input-meta-jornada').value) {
+            return twFalta('Faltan las horas por semana.', 'input-meta-jornada');
+        }
+    }
+    if (n === 5 && (!document.getElementById('chkColacion').checked || !(parseInt(document.getElementById('numColacion').value, 10) > 0))) {
+        return twFalta('Falta la colación. Marque «Descontar colación» y escriba los minutos.', document.getElementById('chkColacion').checked ? 'numColacion' : 'chkColacion');
+    }
+    return true;
+}
+function twSiguiente() {
+    if (twValidar(twPaso)) twIr(twPaso + 1);
+}
+window.twSiguiente = twSiguiente;
+
+// Las tarjetas del tipo de horario manejan el selector oculto que leen saveTurno y los cálculos
+function twElegirTipo(tipo) {
+    const sel = document.getElementById('input-tipo-programacion');
+    if (!sel || sel.value === tipo) return;
+    sel.value = tipo;
+    onTipoProgramacionCambiado();
+}
+window.twElegirTipo = twElegirTipo;
+
+function twSincronizarTipo() {
+    const tipo = document.getElementById('input-tipo-programacion')?.value;
+    const bolsa = twEsBolsa();
+    document.querySelectorAll('#modalTurno .tw-tipo').forEach(b => {
+        const sel = b.dataset.tipo === tipo || (bolsa && b.dataset.tipo === 'BOLSA_FLEXIBLE');
+        b.setAttribute('aria-checked', sel ? 'true' : 'false');
+        b.tabIndex = sel ? 0 : -1;
+    });
+    const a3 = document.getElementById('tw-ayuda-3');
+    if (a3) a3.textContent = bolsa ? 'La meta del mes, el tope de espera y cómo se registra la asistencia.' : 'Las horas de la semana contra las que se compara el horario.';
+    const a4 = document.getElementById('tw-ayuda-4');
+    if (a4) a4.textContent = bolsa ? 'Marque los días libres de la semana. La bolsa no tiene horario diario.' : 'Marque los días libres y escriba la entrada y la salida. Las horas del día se calculan solas.';
+}
+
+// Total de la primera opción contra las horas por semana
+function twActualizarTotal() {
+    const pill = document.getElementById('tw-total');
+    if (!pill) return;
+    if (twEsBolsa()) { pill.hidden = true; return; }
+    const cont = document.querySelector('#modalTurno .week-container.active') || document.querySelector('#modalTurno .week-container');
+    if (!cont) { pill.hidden = true; return; }
+    const total = Array.from(cont.querySelectorAll('.hours-calc')).reduce((a, i) => a + (parseFloat(i.value) || 0), 0);
+    const meta = parseFloat(document.getElementById('input-meta-jornada')?.value);
+    const fmt = (x) => (Math.round(x * 100) / 100).toLocaleString('es-CL');
+    pill.hidden = false;
+    pill.textContent = isNaN(meta) ? `${fmt(total)} h por semana` : `${fmt(total)} h de ${fmt(meta)} h por semana`;
+    pill.classList.toggle('tw-ok', !isNaN(meta) && Math.abs(total - meta) < 0.01);
+    pill.classList.toggle('tw-dif', !isNaN(meta) && Math.abs(total - meta) >= 0.01);
+}
+
+function twEsc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Paso 6: lo que se va a guardar, en datos legibles, con un botón para volver a cada paso
+function twResumen() {
+    const cont = document.getElementById('tw-resumen');
+    if (!cont) return;
+    const v = (id) => document.getElementById(id)?.value || '';
+    const bolsa = twEsBolsa();
+    const areas = Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(c => c.value);
+    const opciones = Array.from(document.querySelectorAll('#pills-tab-weeks li')).filter(li => li.style.display !== 'none').map(li => li.textContent.trim());
+    const colacion = document.getElementById('chkColacion').checked
+        ? `${v('numColacion') || '—'} min si trabajó ${v('umbralColacion') || 0} h; margen ${v('toleranciaExcesoColacion') || 0} min`
+        : 'Sin descontar (falta)';
+    const tol = bolsa
+        ? `Esperar la salida ${v('input-ventana-en-curso') || 0} min`
+        : `Atraso desde ${v('input-tol-desc') || 0} min · salida adelantada desde ${v('input-tol-salida') || 0} min`;
+    const bloques = [
+        [1, 'Qué horario es', [['Nombre', v('input-nombre-turno') || '—'], ['Tipo', bolsa ? 'Bolsa flexible' : 'Ciclo inteligente'], ['Estado', v('input-activo-turno') === 'false' ? 'Inactivo' : 'Activo']]],
+        [2, 'Para qué áreas', [['Áreas', areas.length ? areas.join(', ') : 'Ninguna (falta)']]],
+        [3, 'Cuánto se trabaja', bolsa
+            ? [['Meta del mes', `${v('input-meta-bolsa') || '—'} h`], ['Tope de espera', `${v('input-meta-espera') || '—'} h`], ['Hora límite', v('input-hora-ficticia') || '—'], ['Registro', v('select-modalidad-control') === 'LIBRETA_180H' ? `Libreta${v('input-libreta-desde') ? ' desde ' + v('input-libreta-desde') : ''}` : 'Reloj']]
+            : [['Horas por semana', `${v('input-meta-jornada') || '—'} h`], ['Elige la opción cada día', document.getElementById('chkRotacionDinamicaDiaria')?.checked ? 'Sí' : 'No']]],
+        [4, 'Días y horas', [['Opciones', opciones.length ? opciones.join(', ') : '—']]],
+        [5, 'Colación y tolerancias', [['Colación', colacion], ['Tolerancias', tol]]]
+    ];
+    cont.innerHTML = bloques.map(([n, titulo, datos]) => `
+        <div class="tw-res">
+            <div class="tw-res-cab"><b>${twEsc(titulo)}</b><button type="button" class="btn btn-link btn-sm" onclick="twIr(${n})">Cambiar</button></div>
+            <div class="vn-kvs">${datos.map(([k, val]) => `<div><span>${twEsc(k)}</span><b>${twEsc(val)}</b></div>`).join('')}</div>
+        </div>`).join('');
 }
 
 let activeWeeksCount = 1;
@@ -1338,9 +1523,9 @@ window.addWeekTab = function (triggerChange = true) {
     const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
     div.innerHTML = `
         <div class="row mb-2 etiqueta-bloque-container" style="${isInteligente ? '' : 'display:none;'}">
-            <div class="col-md-4">
-                <label for="etiqueta-bloque-${i}" class="form-label small fw-bold text-primary">Nombre del Ciclo/Opción</label>
-                <input type="text" id="etiqueta-bloque-${i}" class="form-control form-control-sm etiqueta-input" list="etiquetas-sugeridas" placeholder="Ej: Mañana, Tarde, Noche" value="" oninput="document.getElementById('pill-week-${i}-tab').innerText = this.value.trim() || 'Opción ${i}'">
+            <div class="col-sm-8 col-md-5">
+                <label for="etiqueta-bloque-${i}" class="form-label">Nombre de la opción</label>
+                <input type="text" id="etiqueta-bloque-${i}" class="form-control etiqueta-input" list="etiquetas-sugeridas" placeholder="Ej: Mañana, Tarde, Noche" value="" oninput="document.getElementById('pill-week-${i}-tab').innerText = this.value.trim() || 'Opción ${i}'">
                 <datalist id="etiquetas-sugeridas">
                     <option value="Mañana"></option>
                     <option value="Tarde"></option>
@@ -1350,21 +1535,21 @@ window.addWeekTab = function (triggerChange = true) {
             </div>
         </div>
         <div class="table-responsive">
-            <table class="table table-sm text-center align-middle">
+            <table class="table table-sm text-center align-middle tw-tabla">
                 <thead>
                     <tr>
-                        <th style="width: 100px;">Día</th>
-                        <th>Libre</th>
-                        <th>Entrada</th>
-                        <th>Salida</th>
-                        <th>Cruce</th>
-                        <th class="col-teoricas">Hrs. Teóricas</th>
+                        <th scope="col" class="text-start">Día</th>
+                        <th scope="col">Libre</th>
+                        <th scope="col">Entrada</th>
+                        <th scope="col">Salida</th>
+                        <th scope="col">Pasa la medianoche</th>
+                        <th scope="col" class="col-teoricas">Horas del día</th>
                     </tr>
                 </thead>
                 <tbody class="dias-input-body">
                     ${dias.map((dia, index) => `
                         <tr data-day="${index}">
-                            <td class="small fw-bold">${dia}</td>
+                            <td class="text-start fw-semibold">${dia}</td>
                             <td><input type="checkbox" id="chk-libre-w${i}-d${index}" name="chk-libre-w${i}-d${index}" class="form-check-input chk-libre" onchange="toggleDiaRow(this)"></td>
                             <td><input type="time" id="time-in-w${i}-d${index}" name="time-in-w${i}-d${index}" class="form-control form-control-sm time-in" value="08:00" oninput="updateAllCalculations()"></td>
                             <td><input type="time" id="time-out-w${i}-d${index}" name="time-out-w${i}-d${index}" class="form-control form-control-sm time-out" value="16:00" oninput="updateAllCalculations()"></td>
@@ -1412,9 +1597,9 @@ function toggleColacionInput() {
     const div = document.getElementById('divColacionTime');
     const divUmbral = document.getElementById('divColacionUmbral');
     const divTol = document.getElementById('divColacionTolerancia');
-    if (div) div.style.display = chk.checked ? 'block' : 'none';
-    if (divUmbral) divUmbral.style.display = chk.checked ? 'flex' : 'none';
-    if (divTol) divTol.style.display = chk.checked ? 'flex' : 'none';
+    if (div) div.style.display = chk.checked ? '' : 'none';
+    if (divUmbral) divUmbral.style.display = chk.checked ? '' : 'none';
+    if (divTol) divTol.style.display = chk.checked ? '' : 'none';
     updateAllCalculations();
 }
 
@@ -1473,23 +1658,21 @@ function handleTipoProgramacionChange() {
     const isFlexible = tipo === 'BOLSA_FLEXIBLE' || tipo === 'FLEXIBLE_BOLSA';
     const isRotativo = tipo === 'CICLO_INTELIGENTE' || tipo === 'DINAMICO_FLEXIBLE';
 
-    if (isRotativo) {
-        ensureRotacionDinamicaSwitch();
-    }
+    twSincronizarTipo();
 
     const divRotacionDinamica = document.getElementById('divRotacionDinamica');
-    if (divRotacionDinamica) divRotacionDinamica.style.display = isRotativo ? 'block' : 'none';
+    if (divRotacionDinamica) divRotacionDinamica.style.display = isRotativo ? '' : 'none';
 
     // Visibilidad del bloque de Hora Ficticia: sólo visible en modo Bolsa Flexible
     const divLineaFicticia = document.getElementById('divLineaFicticia');
-    if (divLineaFicticia) divLineaFicticia.style.display = isFlexible ? 'flex' : 'none';
+    if (divLineaFicticia) divLineaFicticia.style.display = isFlexible ? '' : 'none';
 
     const divMetaJornada = document.getElementById('div-meta-jornada');
-    if (divMetaJornada) divMetaJornada.style.display = isFlexible ? 'none' : 'block';
+    if (divMetaJornada) divMetaJornada.style.display = isFlexible ? 'none' : '';
 
     // Ocultar Gobernanza de Tiempos si es Flexible
     document.querySelectorAll('.gobernanza-col').forEach(col => {
-        col.style.display = isFlexible ? 'none' : 'block';
+        col.style.display = isFlexible ? 'none' : '';
     });
 
 
@@ -1589,6 +1772,7 @@ function updateAllCalculations() {
     const tipo = tipoSelect.value;
     if (tipo === 'BOLSA_FLEXIBLE' || tipo === 'FLEXIBLE_BOLSA') {
         document.querySelectorAll('.alert-hours-warning').forEach(alert => alert.remove());
+        twActualizarTotal();
         return; // Flexible is manual
     }
 
@@ -1651,6 +1835,7 @@ function updateAllCalculations() {
             alertDiv.remove();
         }
     });
+    twActualizarTotal();
 }
 
 function calculateDiff(start, end, crossesMidnight) {
