@@ -13,9 +13,8 @@ Arquitectura Matemática Integral:
      y clasificación de permisos intermedios (con/sin goce o detectados en reloj).
    - Segmentación de bloques extras por gaps parametrizados desde la tabla 'ajustes' (Llamados de Emergencia y Jornada Adicional +2).
 4. AutoMealOperator: Descuento de colación condicionado al umbral de horas trabajadas y tolerancias de exceso configuradas.
-5. FlexibleBolsaDualClassifier: Soporte dual para Bolsa Flexible:
-   - Clase A: Con Viajes Largos (horas de manejo/descanso reconocidas, marcas terminales consumidas, estado VIAJE_LARGO).
-   - Clase B: Sin Viajes Largos (bolsa local presencial, horas efectivas de reloj, deuda diaria = 0).
+5. Bolsa Flexible: bolsa local presencial, horas efectivas de reloj (o de libreta), deuda diaria = 0.
+   (Los viajes largos se quitaron el 07-11-2026: ya no había horarios ni registros que los usaran.)
 6. SpecialWorkdayClassifier: Segregación estricta de JORNADA_ESPECIAL (minutos_extra_bruto = 0).
 """
 
@@ -1328,53 +1327,14 @@ class LibretaArt25BisResolver:
         is_holiday: bool = False,
         holiday_desc: Optional[str] = None,
         es_libre_dia: bool = False,
-        viaje_largo_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Día bajo modalidad Libreta Digital 180h (Art. 25 bis / Sin Reloj) SIN libreta registrada aún.
         Blindaje inviolable: JAMÁS se resuelve con reloj biométrico.
-        - Viaje largo activo -> VIAJE_LARGO
         - Feriado -> FERIADO
         - Libre programado -> LIBRE
         - Día hábil -> PENDIENTE (espera registro de libreta digital / escaneo / manual)
         """
-        if viaje_largo_info:
-            return {
-                'empleado_id': empleado_id,
-                'fecha': fecha,
-                'hora_entrada_real': None,
-                'hora_salida_real': None,
-                'hora_salida_colacion': None,
-                'hora_entrada_colacion': None,
-                'hora_inicio_permiso': None,
-                'hora_termino_permiso': None,
-                'horas_teoricas': horas_teoricas,
-                'horas_trabajadas': 0.0,
-                'minutos_espera': 0,
-                'minutos_conduccion': 0,
-                'minutos_auxiliares': 0,
-                'minutos_descanso': 0,
-                'minutos_colacion': 0,
-                'minutos_colacion_real': 0,
-                'minutos_colacion_auto': 0,
-                'minutos_exceso_colacion': 0,
-                'minutos_permisos_detectados': 0,
-                'minutos_permiso_personal_deuda': 0,
-                'minutos_atraso': 0.0,
-                'minutos_salida_adelantada': 0.0,
-                'minutos_extra_bruto': 0.0,
-                'minutos_deuda': 0.0,
-                'tiene_atraso': 0,
-                'tiene_salida_adelantada': 0,
-                'tiene_permiso': 0,
-                'alerta_atraso': False,
-                'estado': 'VIAJE_LARGO',
-                'observaciones': '[En Viaje Largo de Ruta]',
-                'origen': 'VIAJE_LARGO',
-                'marcas_consumidas_ids': [],
-                '_jornada_especial': None,
-                '_jornada_adicional': None,
-            }
         if is_holiday:
             obs = f"Feriado: {holiday_desc}" if holiday_desc else "Feriado Legal"
             return {
@@ -1723,7 +1683,6 @@ class QuantumMatrixEngine:
         justificaciones: Optional[List[Dict[str, Any]]] = None,
         global_ajustes: Optional[Dict[str, Any]] = None,
         consumidas_previas: Optional[Set[int]] = None,
-        viaje_largo_info: Optional[Dict[str, Any]] = None,
         todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None,
         es_modalidad_180h: bool = False,
         libreta_180h: Optional[Dict[str, Any]] = None,
@@ -1763,7 +1722,6 @@ class QuantumMatrixEngine:
                     is_holiday=is_holiday,
                     holiday_desc=holiday_desc,
                     es_libre_dia=es_libre_dia,
-                    viaje_largo_info=viaje_largo_info,
                 )
         else:
             res = cls._solve_core(
@@ -1776,7 +1734,6 @@ class QuantumMatrixEngine:
                 hourly_justs=hourly_justs,
                 global_ajustes=global_ajustes,
                 consumidas_previas=consumidas_previas,
-                viaje_largo_info=viaje_largo_info,
                 todos_ciclos_dia=todos_ciclos_dia,
                 holiday_desc=holiday_desc,
                 todos_ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
@@ -1784,19 +1741,6 @@ class QuantumMatrixEngine:
             if not is_bolsa:
                 cls._registrar_emergencias(res)
                 cls._registrar_jornada_adicional(res, empleado_id, fecha)
-
-        # ── Capa 1.5: Cobertura de Viaje Largo activo (cualquier tipo de turno) ──
-        # Un día dentro de un viaje largo registrado no es ausencia ni anomalía.
-        if viaje_largo_info:
-            if res is None:
-                res = cls._base_result(empleado_id, fecha, horas_teo_dia, [])
-                res['estado'] = 'PENDIENTE'
-            if res.get('estado') in ('ANOMALIA', 'INASISTENCIA', 'PENDIENTE', None):
-                res['estado'] = 'VIAJE_LARGO'
-                res['minutos_deuda'] = 0.0
-                res['tiene_anomalia'] = 0
-                res['alerta_anomalia'] = 0
-                res['origen'] = 'VIAJE_LARGO'
 
         # ── Capa 2: Justificación de día completo ──
         if j_full:
@@ -1995,7 +1939,6 @@ class QuantumMatrixEngine:
         hourly_justs: Optional[List[Dict[str, Any]]] = None,
         global_ajustes: Optional[Dict[str, Any]] = None,
         consumidas_previas: Optional[Set[int]] = None,
-        viaje_largo_info: Optional[Dict[str, Any]] = None,
         todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None,
         holiday_desc: Optional[str] = None,
         todos_ciclos_dia_siguiente: Optional[List[Dict[str, Any]]] = None,
@@ -2020,11 +1963,6 @@ class QuantumMatrixEngine:
 
         tipo_prog = t_cfg.get('tipo_programacion', 'CICLO_INTELIGENTE')
         is_bolsa = (tipo_prog in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'))
-        is_pvl = bool(
-            t_cfg.get('permite_viajes_largos') == 1 or
-            str(t_cfg.get('permite_viajes_largos')) in ('1', 'true', 'True') or
-            t_cfg.get('permite_viajes_largos') is True
-        )
 
         tolerancia_alerta = int(t_cfg.get('tolerancia_retraso_alerta', 0) or 0)
         tolerancia_descuento = int(t_cfg.get('tolerancia_retraso_descuento', 0) or 0)
@@ -2078,67 +2016,6 @@ class QuantumMatrixEngine:
             except Exception:
                 pass
 
-        # ─────────────────────────────────────────────────────────────────────
-        # DUALIDAD BOLSA FLEXIBLE: CLASE A (CON VIAJE LARGO ACTIVO)
-        # ─────────────────────────────────────────────────────────────────────
-        if is_bolsa and viaje_largo_info:
-            c_orig = viaje_largo_info.get('ciudad_origen', 'Planta Aguacol')
-            c_dest = viaje_largo_info.get('ciudad_destino', '')
-            h_man = viaje_largo_info.get('horas_manejo_efectivas', 0.0)
-            h_desc = viaje_largo_info.get('horas_descanso', 0.0)
-            h_tot = viaje_largo_info.get('horas_reconocidas_totales', 0.0)
-
-            # Distribución proporcional diaria de horas de viaje largo
-            f_ini_vl = viaje_largo_info.get('fecha_inicio', fecha)
-            f_fin_vl = viaje_largo_info.get('fecha_fin', fecha)
-            try:
-                d_ini = datetime.strptime(str(f_ini_vl)[:10], "%Y-%m-%d")
-                d_fin = datetime.strptime(str(f_fin_vl)[:10], "%Y-%m-%d")
-                cant_dias_vl = max(1, (d_fin - d_ini).days + 1)
-            except Exception:
-                cant_dias_vl = 1
-
-            h_dia_vl = round(float(h_tot or 0.0) / float(cant_dias_vl), 2)
-            
-            vl_entry_id = viaje_largo_info.get('log_entrada_id')
-            vl_exit_id = viaje_largo_info.get('log_salida_id')
-            m_ids = []
-            if vl_entry_id: m_ids.append(vl_entry_id)
-            if vl_exit_id: m_ids.append(vl_exit_id)
-
-            obs = f"🚛 VIAJE LARGO ({c_orig} -> {c_dest}): {h_dia_vl}h/día ({h_man}h manejo, {h_desc}h descanso total)."
-            return {
-                'empleado_id': empleado_id,
-                'fecha': fecha,
-                'hora_entrada_real': viaje_largo_info.get('hora_entrada_real'),
-                'hora_salida_real': viaje_largo_info.get('hora_salida_real'),
-                'hora_salida_colacion': None,
-                'hora_entrada_colacion': None,
-                'hora_inicio_permiso': None,
-                'hora_termino_permiso': None,
-                'horas_teoricas': 0.0,
-                'horas_trabajadas': h_dia_vl,
-                'minutos_colacion': 0,
-                'minutos_colacion_real': 0,
-                'minutos_colacion_auto': 0,
-                'minutos_exceso_colacion': 0,
-                'minutos_permisos_detectados': 0,
-                'minutos_permiso_personal_deuda': 0,
-                'minutos_atraso': 0.0,
-                'minutos_salida_adelantada': 0.0,
-                'minutos_extra_bruto': 0.0,
-                'minutos_deuda': 0.0,
-                'tiene_atraso': 0,
-                'tiene_salida_adelantada': 0,
-                'tiene_permiso': 0,
-                'alerta_atraso': False,
-                'estado': 'VIAJE_LARGO',
-                'observaciones': obs,
-                'marcas_consumidas_ids': m_ids,
-                '_jornada_especial': None,
-                '_jornada_adicional': None
-            }
-
         # 3. Filtrar marcas no consumidas por días anteriores
         consumidas_set = set(consumidas_previas or [])
         marcas_no_consumidas = [l for l in logs if l.get('id') not in consumidas_set]
@@ -2155,86 +2032,7 @@ class QuantumMatrixEngine:
                 es_nocturno = True
 
         ext_horizon_bolsa = None
-        if is_bolsa and is_pvl:
-            # ─────────────────────────────────────────────────────────────────
-            # BOLSA FLEXIBLE VIAJES LARGOS (TURNO 25 - LOGÍSTICA TRANSPORTE):
-            # Paradigma de viaje continuo inter-día:
-            # 1. Domingo: Día de descanso. Las entradas nocturnas (>= 18:00)
-            #    NO se consumen en domingo, quedan reservadas para el Lunes.
-            # 2. Lunes a Sábado:
-            #    Si existe una entrada nocturna de la víspera (>= 18:00) no consumida,
-            #    el horizonte abre a las 18:00 del día anterior para absorberla
-            #    y emparejarla con la salida de hoy.
-            # 3. Las entradas nocturnas de hoy (>= 18:00) que no tienen salida antes de medianoche
-            #    quedan reservadas para la jornada de mañana.
-            # ─────────────────────────────────────────────────────────────────
-            dia_sem_num = dt_fecha.weekday()  # 0=Lun, 6=Dom
-
-            if dia_sem_num == 6:
-                # Domingo: solo observa marcas diurnas < 18:00
-                start_horizon = dt_fecha
-                end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)
-                es_nocturno = False
-            else:
-                f_ayer_str = (dt_fecha - timedelta(days=1)).strftime("%Y-%m-%d")
-                dt_ayer = dt_fecha - timedelta(days=1)
-                entrada_vispera = None
-
-                for l in marcas_no_consumidas:
-                    fh = str(l.get('fecha_hora', ''))
-                    if fh[:10] == f_ayer_str:
-                        try:
-                            h = int(fh[11:13])
-                            tipo = str(l.get('tipo', '')).strip().lower()
-                            if h >= 18 and tipo in _TIPOS_E:
-                                entrada_vispera = l
-                                break
-                        except Exception:
-                            pass
-
-                marcas_hoy_disp = [
-                    l for l in marcas_no_consumidas 
-                    if str(l.get('fecha_hora', ''))[:10] == fecha
-                ]
-
-                if entrada_vispera:
-                    start_horizon = dt_ayer.replace(hour=18, minute=0, second=0)
-                    es_nocturno = True
-                    salida_hoy = None
-                    for l in marcas_hoy_disp:
-                        tipo = str(l.get('tipo', '')).strip().lower()
-                        if tipo in _TIPOS_S:
-                            salida_hoy = l
-                            break
-
-                    if salida_hoy:
-                        dt_s = MultiBlockTensorSolver.parse_dt(salida_hoy)
-                        end_horizon = (dt_s + timedelta(seconds=1)) if dt_s else dt_fecha.replace(hour=18, minute=0, second=0)
-                    else:
-                        end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)
-                else:
-                    start_horizon = dt_fecha
-                    es_nocturno = False
-
-                    entradas_hoy = [l for l in marcas_hoy_disp if str(l.get('tipo', '')).strip().lower() in _TIPOS_E]
-                    salidas_hoy = [l for l in marcas_hoy_disp if str(l.get('tipo', '')).strip().lower() in _TIPOS_S]
-
-                    if entradas_hoy and salidas_hoy:
-                        dt_last_s = MultiBlockTensorSolver.parse_dt(salidas_hoy[-1])
-                        end_horizon = (dt_last_s + timedelta(seconds=1)) if dt_last_s else (dt_fecha + timedelta(days=1, seconds=-1))
-                    elif not salidas_hoy and entradas_hoy:
-                        primera_e = entradas_hoy[0]
-                        try:
-                            h_e = int(str(primera_e.get('fecha_hora', ''))[11:13])
-                            if h_e >= 18:
-                                end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)
-                            else:
-                                end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
-                        except Exception:
-                            end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
-                    else:
-                        end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
-        elif is_bolsa:
+        if is_bolsa:
             # En Bolsa Flexible Local no hay horario rígido diario de entrada/salida (meta mensual 180h).
             # El horizonte de observación inicia a las 00:00:00 del día natural (captura ingresos de madrugada).
             start_horizon = dt_fecha

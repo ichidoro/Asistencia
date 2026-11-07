@@ -54,7 +54,7 @@ class TurnoRepository:
             ("rotacion_secuencial",                 "BOOLEAN DEFAULT 1"),
             ("semana_fallback_sin_marcas",          "INTEGER DEFAULT 1"),
             ("activo",                              "BOOLEAN DEFAULT 1"),
-            ("permite_viajes_largos",               "INTEGER DEFAULT 0"),
+            ("permite_viajes_largos",               "INTEGER DEFAULT 0"),   # sin uso desde el 07-11-2026 (se quitaron los viajes largos); la columna se conserva
             ("rotacion_dinamica_diaria",            "INTEGER DEFAULT 0"),
             ("meta_horas_espera",                   "REAL DEFAULT 88.0"),
             ("modalidad_control",                   "TEXT DEFAULT 'RELOJ'"),
@@ -575,9 +575,9 @@ class TurnoRepository:
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, espera_inasistencia_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
-                    activo, permite_viajes_largos, rotacion_dinamica_diaria,
+                    activo, rotacion_dinamica_diaria,
                     meta_horas_espera, modalidad_control, libreta_desde
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
@@ -588,7 +588,6 @@ class TurnoRepository:
                 turno.turno_padre_id, turno.fecha_vigencia,
                 1 if turno.rotacion_secuencial else 0, turno.semana_fallback_sin_marcas,
                 1 if turno.activo else 0,
-                1 if turno.permite_viajes_largos else 0,
                 1 if turno.rotacion_dinamica_diaria else 0,
                 getattr(turno, 'meta_horas_espera', 88.0) or 88.0,
                 getattr(turno, 'modalidad_control', 'RELOJ') or 'RELOJ',
@@ -1074,7 +1073,7 @@ class TurnoRepository:
                     descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?,
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, espera_inasistencia_minutos=?, tolerancia_exceso_colacion_minutos=?,
-                    turno_padre_id=?, fecha_vigencia=?, activo=?, permite_viajes_largos=?,
+                    turno_padre_id=?, fecha_vigencia=?, activo=?,
                     rotacion_dinamica_diaria=?, meta_horas_espera=?, modalidad_control=?, libreta_desde=?
                 WHERE id=?
             """
@@ -1086,7 +1085,6 @@ class TurnoRepository:
                 turno.ventana_en_curso_minutos, turno.espera_inasistencia_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
                 1 if turno.activo else 0,
-                1 if turno.permite_viajes_largos else 0,
                 1 if turno.rotacion_dinamica_diaria else 0,
                 getattr(turno, 'meta_horas_espera', 88.0) or 88.0,
                 getattr(turno, 'modalidad_control', 'RELOJ') or 'RELOJ',

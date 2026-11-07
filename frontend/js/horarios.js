@@ -103,7 +103,6 @@ async function saveTurno() {
         anclaje_salida_minutos: Math.max(0, parseInt(formData.get('anclaje_salida_minutos') || 0, 10) || 0),
         ventana_en_curso_minutos: Math.max(0, parseInt(formData.get('ventana_en_curso_minutos') || 0, 10) || 0),
         espera_inasistencia_minutos: Math.max(0, parseInt(formData.get('espera_inasistencia_minutos') || 0, 10) || 0),
-        permite_viajes_largos: ((formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') && ((document.getElementById('chkPermiteViajesLargos')?.checked) || (document.getElementById('chk-permite-viajes-largos')?.checked))) ? 1 : 0,
         rotacion_dinamica_diaria: ((formData.get('tipo_programacion') === 'CICLO_INTELIGENTE') && ((document.getElementById('chkRotacionDinamicaDiaria')?.checked) || (document.getElementById('chk-rotacion-dinamica-diaria')?.checked))) ? 1 : 0,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
         activo: formData.get('activo') !== 'false',
@@ -300,28 +299,6 @@ async function exportarTurnosJson(btn) {
 }
 window.exportarTurnosJson = exportarTurnosJson;
 
-function ensureViajesLargosSwitch() {
-    const divLineaFicticia = document.getElementById('divLineaFicticia');
-    if (divLineaFicticia && !document.getElementById('divPermiteViajesLargos')) {
-        const divCol = document.createElement('div');
-        divCol.className = 'col-12 mt-2';
-        divCol.id = 'divPermiteViajesLargos';
-        divCol.innerHTML = `
-            <div class="card border-info bg-info bg-opacity-10 p-2">
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
-                    <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
-                        <i class="bi bi-truck" aria-hidden="true"></i> Habilitar Viajes Largos y Rutas Nocturnas Continuas
-                    </label>
-                    <div class="form-text small text-muted">
-                        Activa el reconocimiento de turnos nocturnos continuos (≥ 20:00), dobles jornadas en el mismo día y la unión de retornos de ruta de días posteriores.
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-}
-
 function ensureRotacionDinamicaSwitch() {
     const divMetaJornada = document.getElementById('div-meta-jornada');
     if (divMetaJornada && !document.getElementById('divRotacionDinamica')) {
@@ -349,7 +326,6 @@ function ensureRotacionDinamicaSwitch() {
 // UI HELPERS
 // ==========================================
 async function openModalHorario(id = null) {
-    ensureViajesLargosSwitch();
     ensureRotacionDinamicaSwitch();
     currentTurnoId = id;
     const modalTitle = document.getElementById('modalTurnoLabel');
@@ -391,9 +367,6 @@ async function openModalHorario(id = null) {
 
             const inputLibretaDesde = document.getElementById('input-libreta-desde');
             if (inputLibretaDesde) inputLibretaDesde.value = turno.libreta_desde || '';
-
-            const chkViajes = document.getElementById('chkPermiteViajesLargos') || document.getElementById('chk-permite-viajes-largos');
-            if (chkViajes) chkViajes.checked = Boolean(turno.permite_viajes_largos === 1 || turno.permite_viajes_largos === true);
 
             const chkRotDin = document.getElementById('chkRotacionDinamicaDiaria') || document.getElementById('chk-rotacion-dinamica-diaria');
             if (chkRotDin) chkRotDin.checked = Boolean(turno.rotacion_dinamica_diaria === 1 || turno.rotacion_dinamica_diaria === true);
@@ -468,8 +441,6 @@ async function openModalHorario(id = null) {
         const tolInput = document.getElementById('toleranciaExcesoColacion');
         if (tolInput) tolInput.value = "0";
         toggleColacionInput();
-        const chkViajesLargos = document.getElementById('chk-permite-viajes-largos');
-        if (chkViajesLargos) chkViajesLargos.checked = false;
         const inputMetaEsp = document.getElementById('input-meta-espera');
         if (inputMetaEsp) inputMetaEsp.value = "88.0";
         const selectModControl = document.getElementById('select-modalidad-control');
@@ -1080,7 +1051,7 @@ function renderTurnosTable() {
     const tipoDe = function (t) {
         const isBolsa = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA');
         const isLibreta = isBolsa && t.modalidad_control === 'LIBRETA_180H';   // sin modalidad = reloj, igual que el cálculo
-        if (isBolsa) return isLibreta ? (t.permite_viajes_largos ? 'Libreta 180 h, Art. 25 bis (viajes)' : 'Libreta 180 h, Art. 25 bis') : (t.permite_viajes_largos ? 'Bolsa flexible (viajes largos)' : 'Bolsa flexible');
+        if (isBolsa) return isLibreta ? 'Libreta 180 h, Art. 25 bis' : 'Bolsa flexible';
         return t.rotacion_dinamica_diaria ? 'Ciclo inteligente, elige la opción cada día' : 'Ciclo inteligente';
     };
     const min = function (n) { n = Number(n || 0); return n + (n === 1 ? ' minuto' : ' minutos'); };
@@ -1204,21 +1175,6 @@ function renderModalHtml() {
                                     <div class="form-text small text-muted mt-1">
                                         Desde este día el horario se controla con la libreta y no se guardan marcas del reloj; antes de este día, con el reloj.
                                         Cada horario tiene su propia fecha. Vacío: siempre con libreta.
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12 mt-2" id="divPermiteViajesLargos">
-                                <div class="card border-info bg-info bg-opacity-10 p-2">
-                                    <div class="form-check form-switch mb-1">
-                                        <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
-                                        <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
-                                            <i class="bi bi-truck" aria-hidden="true"></i> Habilitar Gestión de Viajes Largos en Ruta
-                                        </label>
-                                    </div>
-                                    <div class="form-text small text-muted">
-                                        <strong>Activado:</strong> Choferes/acompañantes de larga distancia con bitácoras de ruta y viajes de varios días.
-                                        <br>
-                                        <strong>Desactivado:</strong> Bolsa Flexible Normal / Local con marcación presencial directa en reloj control y emparejamiento automático de jornadas nocturnas entre días consecutivos.
                                     </div>
                                 </div>
                             </div>
@@ -1517,15 +1473,9 @@ function handleTipoProgramacionChange() {
     const isFlexible = tipo === 'BOLSA_FLEXIBLE' || tipo === 'FLEXIBLE_BOLSA';
     const isRotativo = tipo === 'CICLO_INTELIGENTE' || tipo === 'DINAMICO_FLEXIBLE';
 
-    if (isFlexible) {
-        ensureViajesLargosSwitch();
-    }
     if (isRotativo) {
         ensureRotacionDinamicaSwitch();
     }
-
-    const divPermiteViajesLargos = document.getElementById('divPermiteViajesLargos');
-    if (divPermiteViajesLargos) divPermiteViajesLargos.style.display = isFlexible ? 'block' : 'none';
 
     const divRotacionDinamica = document.getElementById('divRotacionDinamica');
     if (divRotacionDinamica) divRotacionDinamica.style.display = isRotativo ? 'block' : 'none';

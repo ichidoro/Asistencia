@@ -271,60 +271,6 @@
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "if dia_sem_num == 6:",
-  "numeros": [
-   "6"
-  ],
-  "tipo": "codigo",
-  "motivo": "Domingo en el calendario (6)."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)",
-  "numeros": [
-   "18"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "if h >= 18 and tipo in _TIPOS_E:",
-  "numeros": [
-   "18"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "start_horizon = dt_ayer.replace(hour=18, minute=0, second=0)",
-  "numeros": [
-   "18"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "end_horizon = (dt_s + timedelta(seconds=1)) if dt_s else dt_fecha.replace(hour=18, minute=0, second=0)",
-  "numeros": [
-   "18"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "if h_e >= 18:",
-  "numeros": [
-   "18"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
   "linea": "if len(marcas_hoy) % 2 == 1:",
   "numeros": [
    "2"

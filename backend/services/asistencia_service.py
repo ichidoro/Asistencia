@@ -250,7 +250,7 @@ class AsistenciaService:
                 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
-                'permite_viajes_largos', 'rotacion_dinamica_diaria',
+                'rotacion_dinamica_diaria',
                 'modalidad_control', 'meta_horas_espera',
             ]
 
@@ -873,7 +873,7 @@ class AsistenciaService:
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento', 'tolerancia_salida_adelantada',
                 'meta_horas_semanales',
-                'tipo_programacion', 'nombre', 'permite_viajes_largos',
+                'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
                 'rotacion_dinamica_diaria',
                 'modalidad_control', 'meta_horas_espera',
@@ -2198,23 +2198,6 @@ class AsistenciaService:
             tipo_prog = 'CICLO_INTELIGENTE'
 
         is_bolsa = (tipo_prog == 'BOLSA_FLEXIBLE')
-        is_pvl = bool(
-            asignacion and (
-                asignacion.get('permite_viajes_largos') == 1 or
-                str(asignacion.get('permite_viajes_largos')) in ('1', 'true', 'True') or
-                asignacion.get('permite_viajes_largos') is True
-            )
-        )
-
-        # ── CONSULTA DE VIAJE LARGO ACTIVO (SOLO BOLSA FLEXIBLE CON VIAJES LARGOS) ──
-        viaje_largo = None
-        if is_bolsa and is_pvl:
-            if bulk_ctx and 'viajes_largos' in bulk_ctx:
-                vl_list = bulk_ctx['viajes_largos'].get(empleado_id, [])
-                viaje_largo = next((v for v in vl_list if str(v.get('fecha_inicio') or '')[:10] <= fecha <= str(v.get('fecha_fin') or '')[:10]), None)
-            else:
-                viaje_largo = await self.repository.get_viaje_largo_activo(empleado_id, fecha)
-
         # ── RESOLUCIÓN TOPOLÓGICA DE CONFIGURACIÓN DEL DÍA Y SEMANA ─────────
         semana_ganadora = 1
         config_dia = None
@@ -2369,7 +2352,6 @@ class AsistenciaService:
                 justificaciones=justificaciones,
                 global_ajustes=global_ajustes_ctx,
                 consumidas_previas=consumidas_emp,
-                viaje_largo_info=viaje_largo,
                 todos_ciclos_dia=todos_ciclos_dia,
                 todos_ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
                 es_modalidad_180h=es_180h,
@@ -2639,7 +2621,7 @@ class AsistenciaService:
         """
         
         q_asig = f"""
-            SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.permite_viajes_largos, t.nombre as turno_nombre,
+            SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.nombre as turno_nombre,
                    t.meta_horas_espera, t.modalidad_control, t.libreta_desde
             FROM asignacion_turnos a
             JOIN turnos t ON a.turno_id = t.id
@@ -2686,7 +2668,7 @@ class AsistenciaService:
 
         asistencias = [dict(a) for a in asist_rows]
         if turno_id:
-            asistencias = [a for a in asistencias if a.get('turno_asignado_id') == turno_id or (a.get('turno_asignado_id') is None and a.get('estado') == 'VIAJE_LARGO')]
+            asistencias = [a for a in asistencias if a.get('turno_asignado_id') == turno_id]
 
         jornadas_especiales = [dict(j) for j in jornadas_rows]
 
@@ -2753,7 +2735,6 @@ class AsistenciaService:
                 emp['modalidad_control'] = t_info.get('modalidad_control') or 'RELOJ'
                 emp['libreta_desde'] = fecha_libreta_del_horario(t_info)
                 emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'CICLO_INTELIGENTE'
-                emp['permite_viajes_largos'] = t_info.get('permite_viajes_largos') or 0
                 emp['turno'] = t_info.get('turno_nombre')
                 t_id = t_info.get('turno_id')
                 emp['primer_dia_semana_turno'] = primer_dia_por_turno.get(t_id, 1)  # default Lunes
@@ -2880,60 +2861,6 @@ class AsistenciaService:
                         cel['revision_opciones'] = opciones_por_secuencia.get(sec_cel, [])
         except Exception as e_rev:
             logger.warning(f"[Matrix] No se pudo marcar los días por revisar: {e_rev}")
-
-        # Viajes largos: se adjunta el objeto del viaje como metadato (el estado VIAJE_LARGO lo decide el motor)
-        q_vl = f"""
-            SELECT * FROM viajes_largos
-            WHERE empleado_id IN ({ids_ph})
-              AND fecha_inicio <= ? AND fecha_fin >= ?
-        """
-        vl_rows = await db.fetch_all(q_vl, tuple(emp_ids) + (fecha_fin, fecha_inicio))
-        for vl in vl_rows:
-            v_dict = dict(vl)
-            eid = v_dict['empleado_id']
-            if eid not in matrix:
-                continue
-            try:
-                d_cur = datetime.strptime(v_dict['fecha_inicio'][:10], '%Y-%m-%d')
-                d_end = datetime.strptime(v_dict['fecha_fin'][:10], '%Y-%m-%d')
-                tiene_feriado_en_ruta = False
-                tiene_domingo_en_ruta = False
-                d_chk = d_cur
-                while d_chk <= d_end:
-                    if d_chk.strftime('%Y-%m-%d') in feriados_dict:
-                        tiene_feriado_en_ruta = True
-                    if d_chk.weekday() == 6:
-                        tiene_domingo_en_ruta = True
-                    d_chk += timedelta(days=1)
-                v_dict['feriado_en_ruta'] = tiene_feriado_en_ruta
-                v_dict['domingo_en_ruta'] = tiene_domingo_en_ruta
-
-                ds_fin = d_end.strftime('%Y-%m-%d')
-                if ds_fin in matrix[eid]:
-                    h_salida_vl = v_dict['fecha_fin'][11:16] if (v_dict.get('fecha_fin') and len(v_dict['fecha_fin']) > 10) else None
-                    h_ent_local = matrix[eid][ds_fin].get('hora_entrada_real')
-                    if h_salida_vl and h_ent_local:
-                        try:
-                            dt_ret = datetime.strptime(f"{ds_fin} {h_salida_vl[:5]}", "%Y-%m-%d %H:%M")
-                            dt_ent = datetime.strptime(f"{ds_fin} {h_ent_local[:5]}", "%Y-%m-%d %H:%M")
-                            if dt_ent > dt_ret:
-                                diff_descanso = round((dt_ent - dt_ret).total_seconds() / 3600.0, 1)
-                                v_dict['descanso_post_viaje_horas'] = diff_descanso
-                                if diff_descanso < 8.0:
-                                    v_dict['alerta_descanso_post_viaje'] = True
-                                else:
-                                    v_dict['cumple_descanso_post_viaje'] = True
-                        except Exception:
-                            pass
-
-                while d_cur <= d_end:
-                    ds = d_cur.strftime('%Y-%m-%d')
-                    if ds in matrix[eid]:
-                        matrix[eid][ds]['viaje_largo'] = v_dict
-                        matrix[eid][ds]['tiene_viaje_largo'] = 1
-                    d_cur += timedelta(days=1)
-            except Exception:
-                pass
 
         # Justificaciones: metadato de la justificación resuelta por el motor (por justificacion_id)
         for eid, emp_cells in matrix.items():

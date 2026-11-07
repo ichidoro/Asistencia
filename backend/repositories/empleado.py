@@ -915,7 +915,7 @@ class EmpleadoRepository:
         async with self.db.transaction():
             pendientes = list(tablas)
             while pendientes:
-                # Una tabla puede depender de otra (viajes_largos → logs_raw): las que fallan se reintentan después
+                # Una tabla puede depender de otra por una llave foránea: las que fallan se reintentan después
                 fallidas, ultimo_error = [], None
                 for tabla, columna in pendientes:
                     try:

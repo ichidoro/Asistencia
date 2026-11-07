@@ -60,21 +60,6 @@ class CompensacionCreate(BaseModel):
     minutos: float
     observaciones: Optional[str] = None
 
-class ViajeLargoCreate(BaseModel):
-    empleado_id: int
-    fecha_inicio: str  # YYYY-MM-DD
-    fecha_fin: str     # YYYY-MM-DD
-    log_entrada_id: int
-    log_salida_id: int
-    fecha_hora_inicio: str  # YYYY-MM-DD HH:MM:SS
-    fecha_hora_fin: str     # YYYY-MM-DD HH:MM:SS
-    ciudad_origen: Optional[str] = "Planta Aguacol"
-    ciudad_destino: str
-    horas_manejo_efectivas: float
-    horas_descanso: float
-    horas_reconocidas_totales: Optional[float] = None
-    observaciones: Optional[str] = None
-
 class CompensarInasistenciaRequest(BaseModel):
     empleado_id: int
     fecha: str                          # YYYY-MM-DD, el día de la inasistencia

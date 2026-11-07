@@ -19,9 +19,7 @@ Este documento define la especificación técnica canónica y las reglas de nego
 - **Ámbito**: Choferes de distribución y logística.
 - **Naturaleza**: Horario de bolsa de horas semanal o mensual (sin horas rígidas diarias, `horas_teoricas: 0.0` diario, sin atrasos punitivos diarios). Las horas efectivas se acumulan a la meta de la bolsa.
 - **Cruce de Medianoche Universal**: **ACTIVADO EN TODOS LOS CASOS.** Cualquier jornada que inicie en la noche y termine en la madrugada del día siguiente ($D \rightarrow D+1$) se empareja de forma continua como un único vector de trabajo.
-- **Diferenciador Único (`permite_viajes_largos`)**:
-  - **`permite_viajes_largos = 0` (Bolsa Flexible Estándar)**: Choferes de reparto local / distribución urbana diaria.
-  - **`permite_viajes_largos = 1` (Bolsa Flexible con Viajes Largos)**: Choferes de ruta interurbana con pernoctación fuera de planta, acreditación de bitácora de viaje (conducción + descanso) y protección contra falsas inasistencias en días de ruta.
+- **Sin viajes largos (orden del dueño, 07-11-2026)**: se quitó la gestión de viajes largos (bitácora de viaje, estado `VIAJE_LARGO`, horas reconocidas por viaje y la casilla «permite viajes largos» del horario). Ya no quedaban horarios ni registros que la usaran, y la libreta Art. 25 bis registra cada día la conducción, la espera y el descanso. La columna `turnos.permite_viajes_largos` y la tabla `viajes_largos` quedan en la base, sin uso.
 - **Cero menciones de "Art. 25 BIS"**: En la interfaz, reportes y tablas se denomina única y limpiamente como **Bolsa Flexible**. (El tipo de horario no se nombra por el artículo; los avisos legales sí citan la ley cuando explican un ajuste.)
 - **Meta con vigencia parcial (decisión del dueño, 22-10-2026)**: a quien ingresa o egresa a mitad del tramo RRHH no se le exigen las 180 horas completas. La meta (y las 88 h de espera) se prorratea por los **días corridos** de vigencia del contrato (`empleados.fecha_ingreso` / `fecha_salida`) dentro del tramo: `backend/services/bolsa_prorrateo.py` lo calcula una sola vez en la matriz (campo `bolsa_prorrateo` del empleado) y lo aplican las cuatro réplicas (grilla y vista individual en `marcaciones_ui.js`, Excel en `report_service.py`, resumen de cierre en `cierre_service.py`); los días fuera de la vigencia no cuentan como programados. Se usan días corridos —no programados— para que los días libres del turno no cambien la proporción: la ley fija 180 h máximas repartidas en al menos 21 días y no da fórmula para meses incompletos, y el prorrateo nunca exige más carga por día que la de un mes completo. Si los días corridos disponibles no llegan a 21, la pantalla **avisa sin bloquear** (⚠ junto a la meta y en la vista individual). Pruebas: `test_bolsa_prorrateo.py` (casos reales del tramo 26-09 → 25-10-2026) y la guardia `test_la_meta_de_bolsa_se_prorratea_en_todas_las_replicas`.
 
@@ -32,7 +30,7 @@ Este documento define la especificación técnica canónica y las reglas de nego
 Antes de cualquier despliegue a producción:
 1. Validar compilación de sintaxis de todos los archivos `.py` (`py_compile`).
 2. Validar sintaxis y referencias en archivos `.js`.
-3. Validar consistencia con datos reales de la base de datos (choferes de viajes largos, choferes de reparto local y operarios nocturnos).
+3. Validar consistencia con datos reales de la base de datos (choferes de reparto local y operarios nocturnos).
 
 ---
 

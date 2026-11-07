@@ -69,7 +69,7 @@
 .tp-pb { margin-bottom: 9px; } .tp-pb:last-child { margin-bottom: 0; }
 .tp-pb .l { display: flex; justify-content: space-between; font-size: .7rem; margin-bottom: 4px; gap: 8px; }
 .tp-pb .t { height: 8px; border-radius: 4px; background: #ece9f7; overflow: hidden; } .tp-pb .t i { display: block; height: 100%; border-radius: 4px; }
-/* bloques que se conservan (balance, viaje largo, jornada adicional…) */
+/* bloques que se conservan (balance, jornada adicional…) */
 .tp-sec > div[style*="border"] { margin-bottom: 8px !important; }
 .tp-ft { padding: 8px 16px; background: #fafcfc; border-top: 1px solid #eef2f2; font-size: .64rem; color: var(--ag-muted); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .tp-ft kbd { font-family: var(--font-mono, monospace); font-size: .6rem; background: #fff; border: 1px solid var(--ag-line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; color: #14235c; }

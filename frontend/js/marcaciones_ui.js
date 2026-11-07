@@ -1614,20 +1614,10 @@ function calcularMetricasEmpleado(data) {
     let salidasAdelantadasCount = 0;
     let jornadasEspecialesCount = 0;
     let permisosCount = 0;
-    const modalViajesIds = new Set();
 
     dataList.forEach(a => {
-        let vlMin = 0;
-        if (a.viaje_largo && a.viaje_largo.id && !modalViajesIds.has(a.viaje_largo.id)) {
-            modalViajesIds.add(a.viaje_largo.id);
-            const yaRegistrado = (a.horas_trabajadas || 0) > 0;
-            if (!yaRegistrado) {
-                vlMin = Math.round((parseFloat(a.viaje_largo.horas_reconocidas_totales) || parseFloat(a.viaje_largo.horas_manejo_efectivas) || 0) * 60);
-            }
-        }
-
-        if (a.horas_trabajadas || vlMin > 0) {
-            minutosTrabajadosAcumulados += Math.round((a.horas_trabajadas || 0) * 60) + vlMin;
+        if (a.horas_trabajadas) {
+            minutosTrabajadosAcumulados += Math.round((a.horas_trabajadas || 0) * 60);
         }
         if (a.minutos_deuda) minutosDeuda += a.minutos_deuda;
         
@@ -1645,7 +1635,7 @@ function calcularMetricasEmpleado(data) {
         if (a.justificacion || a.nomenclatura) justificacionesCount++;
         if (a.tiene_permiso_hora || a.permiso_activo) permisosCount++;
         
-        if (['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA', 'VIAJE_LARGO'].includes(a.estado)) {
+        if (['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'].includes(a.estado)) {
             diasTrabajados++;
         }
 
@@ -6466,7 +6456,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
 
                 const isJustificado = !isDEOP && diCheck.estado && (
                     estadosJustificados.some(ej => estUpper.includes(ej)) ||
-                    (nom !== '' && nom !== 'LIB' && nom !== 'FER' && nom !== 'OK' && nom !== 'VIAJE')
+                    (nom !== '' && nom !== 'LIB' && nom !== 'FER' && nom !== 'OK')
                 );
                 
                 if (isJustificado) {
@@ -6497,8 +6487,6 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
         startDayJS = (emp.info.primer_dia_semana_turno + 1) % 7;
     }
 
-    const viajesSumadosIds = new Set();
-
     dates.forEach(d => {
         const dt = new Date(d+'T00:00:00');
         if (dt.getDay() === startDayJS) acumSemanal = 0; 
@@ -6512,16 +6500,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
             if (di.minutos_espera) acumEspera += Number(di.minutos_espera || 0);
         }
 
-        let vlMin = 0;
-        if (esBolsa && di.viaje_largo && di.viaje_largo.id && !viajesSumadosIds.has(di.viaje_largo.id)) {
-            viajesSumadosIds.add(di.viaje_largo.id);
-            const yaRegistradoEnCelda = (di.horas_trabajadas || 0) > 0;
-            if (!yaRegistradoEnCelda) {
-                vlMin = Math.round((parseFloat(di.viaje_largo.horas_reconocidas_totales) || parseFloat(di.viaje_largo.horas_manejo_efectivas) || 0) * 60);
-            }
-        }
-
-        const trab = Math.round((di.horas_trabajadas||0)*60) + vlMin;
+        const trab = Math.round((di.horas_trabajadas||0)*60);
         const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (!esBolsa && Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
         const tieneJa = Boolean(di.jornada_adicional && di.jornada_adicional.estado !== 'RECHAZADA');
         
@@ -7866,7 +7845,7 @@ function _analiticaCellBadge(di) {
     const isLibretaCerrada = Boolean(di.libreta_cerrada || di.cerrado);
 
     if (di._esBolsa || hasRealLibreta) {
-        if (hasRealLibreta && hasMinutosActividad && !isLibretaCerrada && est !== 'LIBRE' && est !== 'PENDIENTE' && est !== 'FERIADO' && est !== 'VIAJE_LARGO') {
+        if (hasRealLibreta && hasMinutosActividad && !isLibretaCerrada && est !== 'LIBRE' && est !== 'PENDIENTE' && est !== 'FERIADO') {
             est = 'BORRADOR_180H';
         } else if (['ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'].includes(est)) {
             est = 'OK'; // Visualmente es un día trabajado normal
@@ -7902,10 +7881,6 @@ function _analiticaCellBadge(di) {
         'badge-inasistencia-compensada-he', 
         '<i class="bi bi-clock-history me-1"></i>C.HE'
     ];
-    badgeMap['VIAJE_LARGO'] = [
-        'bg-info text-dark font-monospace fw-bold', 
-        '<i class="bi bi-truck me-1"></i>VIAJE'
-    ];
     badgeMap['DESCANSO OPERATIVO'] = [
         'badge-state-info', 
         '<i class="bi bi-pause-circle-fill me-1"></i>DEOP'
@@ -7935,7 +7910,6 @@ function _analiticaCellBadge(di) {
             'PERMISO':          ['badge-state-info',     '<i class="bi bi-person-check-fill me-1"></i>PER'],
             'EXTRA':            ['badge-state-info',     '<i class="bi bi-plus-circle-fill me-1"></i>EXT'],
             'ANOMALIA':         ['bg-dark text-white',   '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'],
-            'VIAJE_LARGO':      ['bg-info text-dark font-monospace fw-bold', '<i class="bi bi-truck me-1"></i>VIAJE'],
             'PENDIENTE':        ['badge-state-warning',  '<i class="bi bi-hourglass-split me-1"></i>PEN'],
             'JORNADA_ESPECIAL': ['badge-state-info',     '<i class="bi bi-star-fill me-1"></i>ESP'],
             'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR'],
@@ -7949,7 +7923,6 @@ function _analiticaCellBadge(di) {
     const stdBadgeStyle = "width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; flex-direction:column; line-height:1.1;";
 
     // ── Estado PRIMARIO: viene resuelto por el motor cuántico (sin overrides en UI) ──
-    const tieneViajeLargoRegistrado = Boolean(di.viaje_largo || di.tiene_viaje_largo || est === 'VIAJE_LARGO');
 
     // ── Badge del estado PRIMARIO ─────────────────────────────────────────────
     let pillClass = 'badge-state-neutral';
@@ -7974,7 +7947,6 @@ function _analiticaCellBadge(di) {
         else if (est === 'INASISTENCIA') tooltipTitle = 'Inasistencia (Generada automáticamente)';
         else if (est === 'INASISTENCIA_COMPENSADA_INTERCAMBIO') tooltipTitle = 'Día Compensado por Intercambio (1x1)';
         else if (est === 'INASISTENCIA_COMPENSADA_HE') tooltipTitle = 'Compensado con Horas Extras';
-        else if (est === 'VIAJE_LARGO') tooltipTitle = 'Viaje Largo en Ruta registrado';
     } else if (di.nomenclatura) {
         pillClass = 'badge-state-info';
         label = di.nomenclatura;
@@ -8071,53 +8043,14 @@ function _analiticaCellBadge(di) {
             }
         }
     }
-    // ── Si tiene VIAJE LARGO y además un turno de planta completado (Entrada + Salida) ──
-    const tieneTurnoPlantaConViaje = tieneViajeLargoRegistrado && Boolean(di.hora_entrada_real && di.hora_salida_real);
-
-    const esRetornoRutaSplit = !tieneViajeLargoRegistrado && (
+    const esRetornoRutaSplit = (
         (di.observaciones && di.observaciones.includes('Retorno de Ruta') && Boolean(di.hora_entrada_real)) ||
         (di.observaciones && di.observaciones.includes('Salida a Ruta') && Boolean(di.hora_salida_real)) ||
         (est !== 'ANOMALIA' && (di.observaciones && (di.observaciones.includes('Retorno de Ruta') || di.observaciones.includes('Salida a Ruta')))) ||
         (est !== 'ANOMALIA' && (di.tiene_anomalia || di.alerta_anomalia) && Boolean(di._esBolsa))
     );
 
-    if (tieneTurnoPlantaConViaje && !di.jornada_adicional) {
-        const [vc, vl] = badgeMap['VIAJE_LARGO'] || ['bg-info text-dark font-monospace fw-bold', '<i class="bi bi-truck me-1"></i>VIAJE'];
-        const class_local = (est === 'ATRASO' || di.tiene_atraso) ? 'badge-state-warning' : 'badge-state-success';
-        const label_local = (est === 'ATRASO' || di.tiene_atraso) ? '<i class="bi bi-clock-fill me-1"></i>ATR' : '<i class="bi bi-check-circle-fill me-1"></i>OK';
-        
-        // Determinar orden cronológico:
-        // Si el viaje terminó en este día (Retorno de viaje temprano): el Viaje fue PRIMERO (arriba) y el Turno Local después (abajo).
-        // Si el viaje inició en este día (después de un turno matutino): el Turno Local fue PRIMERO (arriba) y el Viaje después (abajo).
-        const dateStr = (di && di.fecha) ? String(di.fecha) : '';
-        const vlObj = di.viaje_largo || {};
-        const fhFinVl = vlObj.fecha_hora_fin || '';
-        const fhIniVl = vlObj.fecha_hora_inicio || '';
-        const horaLocalIn = di.hora_entrada_real || '99:99';
-        
-        let viajeEsPrimero = true; // Por defecto retorno de viaje en la madrugada/mañana
-        if (fhFinVl && fhFinVl.startsWith(dateStr)) {
-            const hFin = fhFinVl.substring(11, 19);
-            viajeEsPrimero = (hFin <= horaLocalIn);
-        } else if (fhIniVl && fhIniVl.startsWith(dateStr)) {
-            const hIni = fhIniVl.substring(11, 19);
-            viajeEsPrimero = (hIni <= horaLocalIn);
-        }
-
-        const badgeViajeHtml = `
-            <div class="badge-status ${vc}" style="${stdBadgeStyle}" title="Viaje Largo en Ruta Registrado">
-                <span>${vl}</span>
-            </div>`;
-        const badgeLocalHtml = `
-            <div class="badge-status ${class_local}" style="${stdBadgeStyle}" title="Turno Planta Realizado (${di.hora_entrada_real} - ${di.hora_salida_real})">
-                <span>${label_local}</span>
-            </div>`;
-
-        primaryBadge = `
-        <div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">
-            ${viajeEsPrimero ? badgeViajeHtml + badgeLocalHtml : badgeLocalHtml + badgeViajeHtml}
-        </div>`;
-    } else if (esRetornoRutaSplit && !di.jornada_adicional) {
+    if (esRetornoRutaSplit && !di.jornada_adicional) {
         const [anc, anl] = badgeMap['ANOMALIA'] || ['bg-dark text-white', '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'];
         
         // Si la anomalía es de retorno (en la mañana), va ARRIBA del OK. Si es salida a ruta (en la tarde/noche), va ABAJO del OK.
@@ -8154,11 +8087,11 @@ function _analiticaCellBadge(di) {
     // Solo se muestran si el flag es verdadero Y el estado primario no lo representa ya
     const extraBadges = [];
 
-    if ((di.tiene_atraso || di.alerta_atraso) && est !== 'ATRASO' && est !== 'ANOMALIA' && !tieneViajeLargoRegistrado) {
+    if ((di.tiene_atraso || di.alerta_atraso) && est !== 'ATRASO' && est !== 'ANOMALIA') {
         const [ac, al] = badgeMap['ATRASO'] || ['badge-state-warning', '<i class="bi bi-clock-fill me-1"></i>ATR'];
         extraBadges.push(`<div class="badge-status ${ac}" style="${stdBadgeStyle}"><span>${al}</span></div>`);
     }
-    if (di.tiene_salida_adelantada && est !== 'SALIDA_ADELANTADA' && est !== 'ANOMALIA' && !tieneViajeLargoRegistrado) {
+    if (di.tiene_salida_adelantada && est !== 'SALIDA_ADELANTADA' && est !== 'ANOMALIA') {
         const [sc, sl] = badgeMap['SALIDA_ADELANTADA'] || ['badge-state-info', '<i class="bi bi-box-arrow-left me-1"></i>SAD'];
         extraBadges.push(`<div class="badge-status ${sc}" style="${stdBadgeStyle}"><span>${sl}</span></div>`);
     }
@@ -8166,7 +8099,7 @@ function _analiticaCellBadge(di) {
         const [pc, pl] = badgeMap['PERMISO'] || ['badge-state-info', '<i class="bi bi-calendar-check-fill me-1"></i>PER'];
         extraBadges.push(`<div class="badge-status ${pc}" style="${stdBadgeStyle}"><span>${pl}</span></div>`);
     }
-    if ((di.tiene_anomalia || di.alerta_anomalia) && est !== 'ANOMALIA' && !esRetornoRutaSplit && !tieneViajeLargoRegistrado) {
+    if ((di.tiene_anomalia || di.alerta_anomalia) && est !== 'ANOMALIA' && !esRetornoRutaSplit) {
         const [anc, anl] = badgeMap['ANOMALIA'] || ['badge-state-dark', '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'];
         extraBadges.push(`<div class="badge-status ${anc}" style="${stdBadgeStyle}" title="Marcación Anómala / Libre en el día"><span>${anl}</span></div>`);
     }
@@ -8174,11 +8107,6 @@ function _analiticaCellBadge(di) {
     if (di.observaciones && di.observaciones.includes('[Jornada Adicional Pendiente:')) {
         extraBadges.push(`<div class="badge-status" style="${stdBadgeStyle}; background-color: #0284c7; color: #ffffff; font-weight: 800; border: 1px solid #0369a1;" title="Segundo Turno por Cambio de Turno en la Semana"><span><i class="bi bi-plus-lg me-1"></i>+ 2</span></div>`);
     }
-    if (tieneViajeLargoRegistrado && est !== 'VIAJE_LARGO' && !tieneTurnoPlantaConViaje) {
-        const [vc, vl] = badgeMap['VIAJE_LARGO'] || ['bg-info text-dark font-monospace fw-bold', '<i class="bi bi-truck me-1"></i>VIAJE'];
-        extraBadges.push(`<div class="badge-status ${vc}" style="${stdBadgeStyle}" title="Viaje Largo en Ruta registrado"><span>${vl}</span></div>`);
-    }
-
     // Si hay badges adicionales → contenedor columna; si no → badge simple
     let resultHtml = '';
     if (extraBadges.length > 0) {
@@ -8323,7 +8251,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
     // día con la misma etiqueta de la vista normal (pendiente, borrador, descanso operativo, licencia, libre, feriado…) (pedido del dueño 05-11-2026)
     if (viewMode === 'velocidad') {
         if (!window.mxVelCelda) return '';
-        const trabajo = !!(di && ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO','VIAJE_LARGO'].includes(di.estado));
+        const trabajo = !!(di && ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO'].includes(di.estado));
         return window.mxVelCelda(emp, dateStr, trabajo, () => _analiticaCellContent(di, dateStr, emp, 'conceptos', isFer));
     }
     // Proyección visual de LIBRE o FERIADO para fechas sin datos o guardadas sin marcas
@@ -8353,7 +8281,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
         return '';
     }
     
-    const hasEff = ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO','VIAJE_LARGO'].includes(est);
+    const hasEff = ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO'].includes(est);
 
     let resultHtml = '';
 
@@ -8645,8 +8573,6 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
         tone = 'neutral'; vTitle = 'Día libre'; vSub = 'Sin libreta Art. 25 bis para este día'; tagLabel = 'LIBRE'; tagIcon = 'bi-cup-hot-fill';
     } else if (isFer && !hasData) {
         tone = 'warn'; vTitle = 'Feriado'; vSub = feriadoDesc; tagLabel = 'FERIADO'; tagIcon = 'bi-star-fill';
-    } else if (est === 'VIAJE_LARGO') {
-        tone = 'info'; vTitle = 'Viaje largo en ruta'; vSub = 'Horas reconocidas por el viaje'; tagLabel = 'VIAJE'; tagIcon = 'bi-truck';
     } else if (hasData && totalMinReg > 0) {
         tone = 'info'; vTitle = `Resumen registrado · ${_tpHM(totalMinReg)}`; vSub = 'Sin distribución de 24 h en la libreta'; tagLabel = 'PARCIAL'; tagIcon = 'bi-clipboard-data';
     } else {
@@ -8780,9 +8706,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
     const e = di;
     let est = e.estado;
-    if ((e.viaje_largo || e.tiene_viaje_largo) && (est === 'ANOMALIA' || est === 'INASISTENCIA' || !est)) {
-        est = 'VIAJE_LARGO';
-    }
     
     // Icon mappings
     const iconMap = {
@@ -8797,8 +8720,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         'JORNADA_ESPECIAL': '<i class="bi bi-star-fill me-1"></i>',
         'EXTRA': '<i class="bi bi-plus-circle-fill me-1"></i>',
         'ANOMALIA': '<i class="bi bi-exclamation-triangle-fill me-1"></i>',
-        'PENDIENTE': '<i class="bi bi-exclamation-triangle-fill me-1"></i>',
-        'VIAJE_LARGO': '<i class="bi bi-truck me-1"></i>'
+        'PENDIENTE': '<i class="bi bi-exclamation-triangle-fill me-1"></i>'
     };
     
     const stateNameMap = {};
@@ -8810,11 +8732,10 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             'OK': 'OK', 'INASISTENCIA': 'INASISTENCIA',
             'SALIDA_ADELANTADA': 'SALIDA ADELANTADA', 'EN_CURSO': 'EN TURNO',
             'JORNADA_ESPECIAL': 'JORNADA ESPECIAL', 'EXTRA': 'JORNADA EXTRA',
-            'ANOMALIA': 'ANOMALÍA (INCOMPLETA)', 'VIAJE_LARGO': 'VIAJE LARGO'
+            'ANOMALIA': 'ANOMALÍA (INCOMPLETA)'
         });
     }
     stateNameMap['PENDIENTE'] = 'ANOMALÍA (JE INCOMPLETA)';
-    stateNameMap['VIAJE_LARGO'] = 'VIAJE LARGO';
     
     const pillClassMap = {
         'OK': 'badge-state-success',
@@ -8828,8 +8749,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         'JORNADA_ESPECIAL': 'badge-state-info',
         'EXTRA': 'badge-state-info',
         'ANOMALIA': 'bg-dark text-white border-0',
-        'PENDIENTE': 'bg-dark text-white border-0',
-        'VIAJE_LARGO': 'bg-info text-dark font-monospace fw-bold'
+        'PENDIENTE': 'bg-dark text-white border-0'
     };
 
     let badgeHtml = '';
@@ -9326,81 +9246,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         </div>`;
     }
 
-    // 2. Mostrar Viaje Largo en Ruta si está presente en la celda
-    if (e.viaje_largo) {
-        const vl = e.viaje_largo;
-        const orig = vl.ciudad_origen || vl.origen || 'Origen';
-        const dest = vl.ciudad_destino || vl.destino || 'Destino';
-        const fIniStr = vl.fecha_inicio ? String(vl.fecha_inicio).substring(0, 10) : '';
-        const fFinStr = vl.fecha_fin ? String(vl.fecha_fin).substring(0, 10) : '';
-        const fIniFull = vl.fecha_inicio ? String(vl.fecha_inicio).substring(0, 16).replace('T', ' ') : '--';
-        const fFinFull = vl.fecha_fin ? String(vl.fecha_fin).substring(0, 16).replace('T', ' ') : '--';
-        const hMan = vl.horas_manejo_efectivas != null ? vl.horas_manejo_efectivas : (vl.horas_manejo || '--');
-        const hDesc = vl.horas_descanso != null ? vl.horas_descanso : '--';
-        const hRecon = vl.horas_reconocidas_totales != null ? vl.horas_reconocidas_totales : '--';
-
-        let badgeTitle = 'EN TRÁNSITO / EN VIAJE';
-        let badgeColor = '#0284c7';
-        let bgStyle = 'rgba(2, 132, 199, 0.06)';
-        let borderStyle = 'rgba(2, 132, 199, 0.3)';
-
-        if (dateStr === fIniStr) {
-            badgeTitle = 'INICIO DE VIAJE LARGO';
-            badgeColor = '#0d9488';
-            bgStyle = 'rgba(13, 148, 136, 0.06)';
-            borderStyle = 'rgba(13, 148, 136, 0.3)';
-        } else if (dateStr === fFinStr) {
-            badgeTitle = 'TÉRMINO DE VIAJE LARGO';
-            badgeColor = '#2563eb';
-            bgStyle = 'rgba(37, 99, 235, 0.06)';
-            borderStyle = 'rgba(37, 99, 235, 0.3)';
-        }
-
-        bloquesAdicionalesHtml += `
-        <div style="border: 1px solid ${borderStyle}; background-color: ${bgStyle}; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
-            <div style="color: ${badgeColor}; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                <span><i class="bi bi-truck me-1"></i> ${badgeTitle}</span>
-                <span style="font-size: 0.6875rem; background-color: rgba(255,255,255,0.7); padding: 1px 6px; border-radius: 4px; border: 1px solid ${borderStyle}; display: inline-flex; align-items: center; text-transform: uppercase; color: ${badgeColor}; font-weight:700;"><i class="bi bi-geo-alt me-1"></i>${orig} → ${dest}</span>
-            </div>
-            <div style="font-size: 0.75rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 3px; font-family: monospace;">
-                <div style="display:flex; justify-content:space-between;">
-                    <span style="color:#64748b;">Inicio: <strong style="color:#1e293b;">${fIniFull}</strong></span>
-                    <span style="color:#64748b;">Fin: <strong style="color:#1e293b;">${fFinFull}</strong></span>
-                </div>
-                <div style="display:flex; justify-content:space-between; margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
-                    <span>Manejo: <strong>${hMan}h</strong></span>
-                    <span>Descanso: <strong>${hDesc}h</strong></span>
-                    <span style="color:${badgeColor}; font-weight:700;">Reconocido: ${hRecon}h</span>
-                </div>
-                ${vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size: 0.75rem; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:4px; padding:2px 6px;"><i class="bi bi-star-fill me-1"></i>Ruta cruzó Día Feriado (Aplica Día Compensatorio Art. 38)</div>` : ''}
-                ${vl.domingo_en_ruta && !vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size: 0.75rem; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; border-radius:4px; padding:2px 6px;"><i class="bi bi-calendar-event me-1"></i>Ruta en Domingo (Aplica descanso compensatorio)</div>` : ''}
-                ${(vl.descanso_post_viaje_horas != null && dateStr === fFinStr) ? (vl.alerta_descanso_post_viaje ? `<div style="margin-top:4px; font-size: 0.75rem; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Descanso Post-Viaje Reducido: ${vl.descanso_post_viaje_horas}h (< 8h mínimas legales)</div>` : `<div style="margin-top:4px; font-size: 0.75rem; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:4px; padding:2px 6px;"><i class="bi bi-check-circle-fill me-1"></i>Descanso Post-Viaje: ${vl.descanso_post_viaje_horas}h (Cumple norma ≥ 8h)</div>`) : ''}
-            </div>
-        </div>`;
-    }
-
-    // 2.1. Mostrar Sugerencia de Viaje Largo si está detectada en la celda
-    const sug = e.sugerencia_viaje_largo || e.sugerencia_viaje_retorno;
-    if (sug && !e.viaje_largo && !e.tiene_viaje_largo) {
-        const hIni = sug.fecha_hora_inicio ? sug.fecha_hora_inicio.substring(11, 16) : '';
-        const hFin = sug.fecha_hora_fin ? sug.fecha_hora_fin.substring(11, 16) : '';
-        const isRet = !!e.sugerencia_viaje_retorno;
-        const bannerTitle = isRet ? 'SUGERENCIA: RETORNO DE VIAJE LARGO' : 'SUGERENCIA: INICIO DE VIAJE LARGO';
-        bloquesAdicionalesHtml += `
-        <div style="border: 1px solid rgba(2, 132, 199, 0.4); background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(3, 105, 161, 0.14) 100%); border-radius: 6px; padding: 10px; margin-bottom: 12px; text-align: left;">
-            <div style="color: #0284c7; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                <span><i class="bi bi-truck me-1"></i> ${bannerTitle}</span>
-                <span class="badge bg-primary text-white font-monospace">${sug.horas_transcurridas}h reloj</span>
-            </div>
-            <div style="font-size: 0.75rem; color: #1e293b; margin-bottom: 8px;">
-                Se detectó <strong>Salida</strong> el ${sug.fecha_inicio} (${hIni}) y <strong>Retorno</strong> el ${sug.fecha_fin} (${hFin}).
-            </div>
-            <button type="button" class="btn btn-sm btn-primary w-100 py-1 fw-bold shadow-sm" onclick="if(window.proceedToViajeLargoConSugerencia){ window.proceedToViajeLargoConSugerencia(${empId}, '${sug.fecha_inicio}', ${sug.log_inicio_id}, ${sug.log_fin_id}); } else { window.proceedToViajeLargo(); }">
-                <i class="bi bi-link-45deg me-1"></i> Vincular Viaje Largo con 1 Clic
-            </button>
-        </div>`;
-    }
-    
     // 2. Mostrar Llamado de Emergencia Corto si existe en observaciones
     if (e.observaciones && e.observaciones.includes('[Llamado de Emergencia:')) {
         const regex = /\[Llamado de Emergencia:\s*([^\]]+)\]/g;
@@ -9499,8 +9344,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         vTitle = est === 'FERIADO' ? 'Feriado' : 'Día libre';
         vSub = est === 'FERIADO' ? (feriadoDesc || 'Día no laborable') : 'Asignación automática';
         if (e.jornada_adicional) { tone = 'he'; vTitle = `${vTitle} trabajado`; vSub = 'Con jornada adicional'; }
-    } else if (est === 'VIAJE_LARGO') {
-        tone = 'info'; vTitle = 'Viaje largo en ruta'; vSub = '';
     } else if (minDeudaNeta > 0) {
         tone = minDeudaNeta >= 30 ? 'bad' : 'warn';
         const solo = minAtr > 0 && minSad === 0 && minExCol === 0 && durPerMin === 0 ? 'Atraso de ' : (minSad > 0 && minAtr === 0 && minExCol === 0 && durPerMin === 0 ? 'Salida anticipada de ' : 'Deuda neta de ');

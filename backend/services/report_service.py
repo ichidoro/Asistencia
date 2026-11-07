@@ -61,8 +61,6 @@ class ReportService:
             return ("", "000000", False)
         
         di_estado = di.get("estado") or ""
-        # El estado viene resuelto por el motor cuántico (Bolsa Flexible y Viaje Largo incluidos).
-        tiene_vl = bool(di.get("viaje_largo") or di.get("tiene_viaje_largo") or di_estado == 'VIAJE_LARGO')
             
         # 3. Label primario y color
         lbl = di_estado
@@ -98,8 +96,6 @@ class ReportService:
             lbl, color, bold = "DEOP", "475569", True
         elif di.get("nomenclatura") or di_estado in ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'LCM', 'LMU', 'CUM', 'DUE']:
             lbl, color, bold = (di.get("nomenclatura") or di_estado[:3].upper()), "0000FF", True
-        elif di_estado == 'VIAJE_LARGO':
-            lbl, color, bold = "VIAJE", "0284C7", True
         elif di_estado == 'JORNADA_ESPECIAL':
             lbl, color, bold = "ESP", "0284C7", True
         elif di_estado == 'EXTRA':
@@ -146,11 +142,6 @@ class ReportService:
                 suf = {'HORAS_EXTRAS': " HE", 'EXTRA': " EXT"}.get(llam.get("estado"), "")
                 lbl = f"{lbl}\n{base}{suf}"
                 bold = True
-
-        # 5. Caso Especial: Viaje Largo + Turno de Planta
-        elif tiene_vl and bool(di.get("hora_entrada_real") and di.get("hora_salida_real")):
-            lbl = f"VIAJE\n{lbl}" if lbl != "VIAJE" else "VIAJE\nOK"
-            color, bold = "0284C7", True
 
         return (lbl, color, bold)
 
@@ -310,7 +301,6 @@ class ReportService:
                 
                 acum_semanal = 0
                 start_day_db = emp.get("primer_dia_semana_turno", 0)
-                viajes_sumados_ids = set()
                 
                 for d in rango_dias:
                     if d.weekday() == start_day_db:
@@ -321,17 +311,7 @@ class ReportService:
                     if not di:
                         continue
                         
-                    # Minutos reconocidos de viaje largo para Bolsa Flexible (idéntico a marcaciones_ui.js líneas 4585-4594)
-                    vl_min = 0
-                    if es_bolsa and di.get("viaje_largo") and di["viaje_largo"].get("id") and di["viaje_largo"]["id"] not in viajes_sumados_ids:
-                        viajes_sumados_ids.add(di["viaje_largo"]["id"])
-                        ya_registrado = (float(di.get("horas_trabajadas") or 0.0) > 0)
-                        if not ya_registrado:
-                            vl_obj = di["viaje_largo"]
-                            vl_hrs = float(vl_obj.get("horas_reconocidas_totales") or vl_obj.get("horas_manejo_efectivas") or 0.0)
-                            vl_min = round(vl_hrs * 60)
-                            
-                    trab = round((di.get("horas_trabajadas") or 0.0) * 60) + vl_min
+                    trab = round((di.get("horas_trabajadas") or 0.0) * 60)
                     di_estado = di.get("estado") or ""
                     
                     # Detección exhaustiva de Jornada Especial y Coberturas (idéntico a marcaciones_ui.js líneas 4665-4678)
@@ -836,7 +816,7 @@ class ReportService:
                                     
                                 # Pestaña Horas
                                 elif view_mode == "horas":
-                                    has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                    has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']
                                     if has_eff:
                                         if di_estado == 'EN_CURSO':
                                             val = ">>"
@@ -852,7 +832,7 @@ class ReportService:
                                                 
                                 # Pestaña Colación
                                 elif view_mode == "colacion":
-                                    has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                    has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']
                                     if has_eff and di.get("hora_entrada_real") and di.get("hora_salida_real"):
                                         col_aplicado = di.get("minutos_colacion") or 0
                                         exceso = di.get("minutos_exceso_colacion") or 0
@@ -883,7 +863,7 @@ class ReportService:
                                         else:
                                             val = "PER"
                                         cell.font = Font(name="Segoe UI", size=9, color="D97706", bold=True)
-                                    elif di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']:
+                                    elif di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']:
                                         val = "—"
                                         cell.font = Font(name="Segoe UI", size=9, color="9CA3AF")
                                         
@@ -917,7 +897,7 @@ class ReportService:
                                 # Pestaña Acumulado
                                 elif view_mode == "acumulado":
                                     if r["esBolsa"]:
-                                        has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                        has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']
                                         if has_eff:
                                             snap = di.get("_acumuladoBolsaSnap") or 0
                                             snap_ayer = di.get("_acumuladoBolsaSnapPrev") or 0
@@ -931,7 +911,7 @@ class ReportService:
                                                 else:
                                                     cell.font = Font(name="Segoe UI", size=9, color="2563EB")
                                     else:
-                                        has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                        has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']
                                         if has_eff and di.get("horas_trabajadas", 0) > 0:
                                             snap = di.get("_acumuladoSemanalSnap") or 0
                                             val = self._format_hhmmss(snap) if snap > 0 else "—"

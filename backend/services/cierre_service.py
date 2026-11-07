@@ -130,7 +130,7 @@ class CierreService:
                         di_nomen = (di_check.get("nomenclatura") or "").strip().upper()
                         is_justificado = (
                             any(ej in di_estado for ej in estados_justificados) or
-                            (bool(di_nomen) and di_nomen not in ('DEOP', 'LIB', 'FER', 'OK', 'VIAJE'))
+                            (bool(di_nomen) and di_nomen not in ('DEOP', 'LIB', 'FER', 'OK'))
                         )
                         if is_justificado:
                             dias_justificados += 1
@@ -150,7 +150,6 @@ class CierreService:
 
             acum_bolsa = 0
             acum_espera = 0
-            viajes_sumados_ids = set()
 
             for d in rango_dias:
                 f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
@@ -160,16 +159,7 @@ class CierreService:
 
                 di_estado = di.get("estado") or ""
 
-                vl_min = 0
-                if es_bolsa and di.get("viaje_largo") and di["viaje_largo"].get("id") and di["viaje_largo"]["id"] not in viajes_sumados_ids:
-                    viajes_sumados_ids.add(di["viaje_largo"]["id"])
-                    ya_registrado = (float(di.get("horas_trabajadas") or 0.0) > 0)
-                    if not ya_registrado:
-                        vl_obj = di["viaje_largo"]
-                        vl_hrs = float(vl_obj.get("horas_reconocidas_totales") or vl_obj.get("horas_manejo_efectivas") or 0.0)
-                        vl_min = round(vl_hrs * 60)
-
-                trab = round((di.get("horas_trabajadas") or 0.0) * 60) + vl_min
+                trab = round((di.get("horas_trabajadas") or 0.0) * 60)
                 ja = di.get("jornada_adicional") or {}
                 es_ja_he = (ja.get("estado") == 'HORAS_EXTRAS')
                 is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)

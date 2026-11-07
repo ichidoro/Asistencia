@@ -223,7 +223,6 @@
         { id: 'btn-gestionar-he', fn: 'proceedToHoraExtra', tono: 'es', ic: 'bi-stopwatch', t: 'Gestionar horas extra', u: 'Aprobar o rechazar las horas extra del día' },
         { id: 'btn-revertir-he', fn: 'proceedToRevertExtra', tono: 'ne', ic: 'bi-arrow-counterclockwise', t: 'Revertir jornada a especial', u: 'Deshace la aprobación de las horas extra' },
         { id: 'btn-edit-justificacion', fn: 'proceedToEditJustify', tono: 'rj', ic: 'bi-pencil-square', t: 'Editar o eliminar justificación', u: 'Cambiar la justificación de este día' },
-        { id: 'btn-viaje-largo', fn: 'proceedToViajeLargo', tono: 'ne', ic: 'bi-truck', t: 'Registrar viaje largo', u: 'Unir la salida y el regreso del viaje' },
         { id: 'btn-marcacion-180h', fn: 'proceedToMarcacion180h', tono: 'ne', ic: 'bi-truck-front', t: 'Marcación 180 horas (Art. 25 bis)', u: 'Libreta: conducción, espera y descanso' },
     ];
     const visible = (id) => { const b = document.getElementById(id); return !!(b && !b.classList.contains('d-none')); };
