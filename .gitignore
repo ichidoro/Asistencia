@@ -333,3 +333,6 @@ respaldo_*.txt
 
 # Grafo de conocimiento del código (graphify): se genera en cada PC, no va al repo
 graphify-out/
+
+# Copia del plan con nombres reales de trabajadores: queda solo en este PC
+docs/PLAN_PENDIENTE_local.md

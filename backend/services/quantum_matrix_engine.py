@@ -228,16 +228,6 @@ class QuantumPhaseTopology:
         return diff
 
     @classmethod
-    def unwrap_overnight_span(cls, start_phase: float, end_phase: float, is_overnight_shift: bool = False) -> float:
-        """
-        Calcula la duración en minutos entre start_phase y end_phase.
-        Si is_overnight_shift o end_phase < start_phase, añade 1440 para cruzar medianoche de forma continua.
-        """
-        if is_overnight_shift or end_phase < start_phase:
-            return (end_phase + cls.PERIOD_MINUTES) - start_phase
-        return end_phase - start_phase
-
-    @classmethod
     def is_evening_or_night_shift(
         cls,
         hora_ent_teo_str: Optional[str],

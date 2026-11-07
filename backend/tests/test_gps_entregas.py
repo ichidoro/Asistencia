@@ -43,9 +43,9 @@ def test_el_camion_no_paro_en_esa_comuna():
 
 def test_con_coordenada_exacta_mide_la_distancia():
     # 0,0005° de latitud ≈ 55 m · 0,003° ≈ 333 m · 0,02° ≈ 2,2 km (comuna distinta de las paradas, así que decide la distancia)
-    def e(la):
+    def entrega_en(la):
         return entrega("Otra 1", "Romeral", lat=la, lon=-70.9600, exacto=True)
-    assert estados([e(-34.6005), e(-34.6030), e(-34.6200)]) == ["calza", "cercana", "lejos"]
+    assert estados([entrega_en(-34.6005), entrega_en(-34.6030), entrega_en(-34.6200)]) == ["calza", "cercana", "lejos"]
 
 
 def test_coordenada_aproximada_no_se_mide():

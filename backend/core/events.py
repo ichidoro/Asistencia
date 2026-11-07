@@ -405,18 +405,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Error durante shutdown: {e}")
 
 
-async def on_startup():
-    """Función de startup alternativa (compatibilidad)"""
-    await db.connect()
-
-
-async def on_shutdown():
-    """Función de shutdown alternativa (compatibilidad)"""
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-    await db.disconnect()
-
-
 async def get_empleado_service_internal(db_instance) -> "EmpleadoService":
     """Helper interno para evitar imports circulares pesados en startup"""
     from backend.repositories.empleado import EmpleadoRepository

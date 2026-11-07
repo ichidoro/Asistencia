@@ -113,7 +113,3 @@ def limpiar(ip: str, usuario: str) -> None:
     """Ingreso correcto: se borra el contador de ese usuario en esa IP."""
     _fallos_usuario.pop((ip, _clave_usuario(usuario)), None)
 
-
-def reiniciar_todo() -> None:
-    _fallos_usuario.clear()
-    _fallos_ip.clear()

@@ -568,20 +568,6 @@ class EmpleadoRepository:
             logger.error(f"Error obteniendo rut_id_map: {e}")
             raise
 
-    async def get_ruts_by_areas(self, areas: List[str]) -> List[str]:
-        """Obtener RUTs de empleados que pertenecen a las áreas dadas (Área Actual)"""
-        if not areas:
-            return []
-            
-        # Crear placeholders para la query IN (?, ?, ?)
-        placeholders = ",".join(["?"] * len(areas))
-        query = f"""SELECT e.rut FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
-            LEFT JOIN areas a_hist ON ha.area_id = a_hist.id
-            LEFT JOIN areas a_emp ON e.area_id = a_emp.id WHERE COALESCE(a_hist.nombre, a_emp.nombre) IN ({placeholders})"""
-        
-        results = await self.db.fetch_all(query, tuple(areas))
-        return [row['rut'] for row in results]
-
     async def get_ruts_by_areas_with_pending(self, areas: List[str]) -> List[str]:
         """
         Obtener RUTs de empleados que:
@@ -1206,21 +1192,6 @@ class EmpleadoRepository:
         
         await self.db.execute(query, tuple(params))
         return True
-
-    async def get_area_at_date(self, empleado_id: int, fecha: str) -> Optional[str]:
-        """Obtener el área del empleado en una fecha específica"""
-        query = """
-            SELECT a.nombre as area 
-            FROM historial_areas h
-            LEFT JOIN areas a ON h.area_id = a.id
-            WHERE h.empleado_id = ? 
-              AND h.fecha_desde <= ? 
-              AND (h.fecha_hasta IS NULL OR h.fecha_hasta >= ?)
-            ORDER BY h.es_actual DESC, h.fecha_desde DESC
-            LIMIT 1
-        """
-        result = await self.db.fetch_one(query, (empleado_id, fecha, fecha))
-        return result["area"] if result else None
 
     def _dict_to_empleado(self, data: dict) -> Empleado:
         """Convertir diccionario de DB a modelo Empleado"""

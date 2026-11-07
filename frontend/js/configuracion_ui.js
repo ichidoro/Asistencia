@@ -1208,10 +1208,6 @@ async function saveTipoJustificacion() {
     }
 }
 
-function editTipoJ(id) {
-    const tipo = tiposJustificacionList.find(t => t.id === id);
-    if (tipo) openModalTipoJ(tipo);
-}
 
 async function confirmDeleteTipoJ(id) {
     if (await uiConfirm('¿Eliminar este tipo de justificación?', { items: ['Ya no se podrá elegir al justificar un día.'], confirmText: 'Eliminar tipo', danger: true })) {

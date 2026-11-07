@@ -2939,21 +2939,6 @@ window.executeConfirmarCambioArea = async function () {
 // openDiagnostico y toggleDbMode eliminados.
 
 
-async function setSyncSpeed(speed) {
-  try {
-    const resp = await fetch("/api/sync/speed/" + speed + "/");
-    if (resp.ok) {
-      Avisos.listo("Listo. Velocidad de sincronización: " + speed + ".");
-    } else {
-      const err = await resp.json();
-      Avisos.error(err.message || "No se pudo cambiar la velocidad de sincronización.");
-    }
-  } catch (e) {
-    console.error("Error cambiando velocidad sync", e);
-    Avisos.error("No se pudo cambiar la velocidad de sincronización.");
-  }
-}
-
 // RUT para mostrar: sin el prefijo que no es parte del RUT real (un "9" antepuesto) y con puntos y guión. El dato guardado no se toca.
 window.rutVista = function (rut) {
     const crudo = String(rut == null ? '' : rut);

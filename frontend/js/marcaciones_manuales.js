@@ -3467,10 +3467,6 @@ function m180SetLocked(locked) {
     if (cancel) cancel.textContent = m180_locked ? 'Cerrar' : 'Cancelar';
 }
 
-function m180EsSuperAdmin() {
-    try { return JSON.parse(localStorage.getItem('user'))?.is_superuser === true; } catch (_) { return false; }
-}
-
 function getLibretaAuthHeaders() {
     const token = localStorage.getItem('access_token') || localStorage.getItem('access_token') || window.AuthToken || '';
     return token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -4982,46 +4978,6 @@ window.m180HandleFileForScanner = function(event) {
     input.value = '';
 };
 
-
-function activarRecorteImagen(imageSrc) {
-    document.getElementById('scanner-step-camera')?.classList.add('d-none');
-    document.getElementById('scanner-step-loading')?.classList.add('d-none');
-    const cropStep = document.getElementById('scanner-step-crop');
-    const cropImg = document.getElementById('scanner-crop-image');
-    
-    if (cropStep) cropStep.classList.remove('d-none');
-    if (cropImg) {
-        cropImg.src = imageSrc;
-        
-        // Destruir cropper previo si existe
-        if (scannerCropperInstance) {
-            scannerCropperInstance.destroy();
-            scannerCropperInstance = null;
-        }
-
-        // Inicializar Cropper.js con proporción 5.2:1 de 1 cuadrícula diaria por defecto
-        if (typeof Cropper !== 'undefined') {
-            setTimeout(() => {
-                scannerCropperInstance = new Cropper(cropImg, {
-                    viewMode: 1,
-                    dragMode: 'move',
-                    aspectRatio: 5.2, // Proporción calibrada de 1 día de 24h
-                    autoCropArea: 0.92,
-                    restore: false,
-                    guides: true,
-                    center: true,
-                    highlight: true,
-                    cropBoxMovable: true,
-                    cropBoxResizable: true,
-                    toggleDragModeOnDblclick: false,
-                    responsive: true,
-                    background: false
-                });
-                window._scannerRatioLocked = true;
-            }, 100);
-        }
-    }
-}
 
 let scannerGuideMode = '1day';
 window._scannerRatioLocked = true;

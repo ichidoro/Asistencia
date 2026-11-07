@@ -765,25 +765,6 @@ class ConfiguracionRepository:
                      f"{existing['fecha_inicio']} → {existing['fecha_fin']})")
         return existing
 
-    async def get_justificaciones_periodo(self, fecha_inicio: str, fecha_fin: str, empleado_id: int = None) -> List[Dict]:
-        """Obtiene todas las justificaciones que se traslapan con el periodo dado"""
-        query = """
-            SELECT j.*, t.nombre as tipo_nombre, t.nomenclatura as tipo_nomenclatura, t.con_goce_sueldo, t.pagador,
-                   t.dias_corridos, t.sobreescribe_feriados, t.descuenta_remuneracion, t.es_horas_sindicales,
-                   t.es_por_horas, t.genera_deuda_horaria
-            FROM justificaciones j
-            JOIN justificacion_tipos t ON j.tipo_id = t.id
-            WHERE (date(j.fecha_inicio) <= date(?) AND date(j.fecha_fin) >= date(?))
-        """
-        params = [fecha_fin, fecha_inicio]
-        
-        if empleado_id:
-            query += " AND j.empleado_id = ?"
-            params.append(empleado_id)
-            
-        query += " ORDER BY j.fecha_inicio ASC"
-        return await self.db.fetch_all(query, tuple(params))
-
     async def get_justificaciones_dia_empleado(self, empleado_id: int, fecha: str) -> List[Dict]:
         """Obtiene todas las justificaciones (día completo o por horas) para un empleado en una fecha"""
         query = """
@@ -798,23 +779,6 @@ class ConfiguracionRepository:
         """
         return await self.db.fetch_all(query, (empleado_id, fecha, fecha))
 
-    async def get_justificacion_activa(self, empleado_id: int, fecha: str) -> Optional[Dict]:
-        """
-        Busca si existe una justificación activa para la fecha dada.
-        Retorna el detalle si existe, o None.
-        """
-        query = """
-            SELECT j.*, t.nombre as tipo_nombre, t.nomenclatura as tipo_nomenclatura, t.con_goce_sueldo, t.dias_habiles, t.pagador,
-                   t.dias_corridos, t.sobreescribe_feriados, t.descuenta_remuneracion
-            FROM justificaciones j
-            JOIN justificacion_tipos t ON j.tipo_id = t.id
-            WHERE j.empleado_id = ? 
-            AND date(?) BETWEEN date(j.fecha_inicio) AND date(j.fecha_fin)
-            ORDER BY j.id DESC
-            LIMIT 1
-        """
-        return await self.db.fetch_one(query, (empleado_id, fecha))
-
     # --- ASIGNACIÓN DE BONOS (HISTÓRICOS) ---
     async def create_asignacion(self, empleado_id: int, bono_id: int, fecha_desde: str) -> int:
         """Crear una asignación explícita de bono"""
@@ -824,40 +788,6 @@ class ConfiguracionRepository:
         """
         res = await self.db.execute(query, (empleado_id, bono_id, fecha_desde))
         return res.lastrowid
-
-    async def close_asignaciones(self, empleado_id: int, fecha_hasta: str):
-        """Cerrar todas las asignaciones activas de un empleado"""
-        query = """
-            UPDATE bono_asignaciones 
-            SET fecha_hasta = ? 
-            WHERE empleado_id = ? AND fecha_hasta IS NULL
-        """
-        await self.db.execute(query, (fecha_hasta, empleado_id))
-
-    async def delete_today_asignaciones(self, empleado_id: int, fecha_desde: str):
-        """
-        Eliminar asignaciones creadas hoy (o en el futuro) para evitar duplicados 
-        o rangos inválidos al recalcular el mismo día.
-        """
-        query = """
-            DELETE FROM bono_asignaciones 
-            WHERE empleado_id = ? 
-            AND date(fecha_desde) >= date(?)
-        """
-        await self.db.execute(query, (empleado_id, fecha_desde))
-
-    async def get_active_asignaciones(self, empleado_id: int, fecha: str) -> List[Dict]:
-        """Obtener asignaciones activas para una fecha específica"""
-        query = """
-            SELECT a.*, b.nombre as bono_nombre, b.id as bono_id
-            FROM bono_asignaciones a
-            JOIN bonos b ON a.bono_id = b.id
-            WHERE a.empleado_id = ?
-            AND date(a.fecha_desde) <= date(?)
-            AND (a.fecha_hasta IS NULL OR date(a.fecha_hasta) >= date(?))
-            AND b.activo = 1
-        """
-        return await self.db.fetch_all(query, (empleado_id, fecha, fecha))
 
     async def count_justificaciones_anio(self, empleado_id: int, tipo_id: int, anio: int) -> int:
         """Contar cuántas justificaciones de este tipo tiene el empleado en el año"""

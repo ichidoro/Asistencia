@@ -120,11 +120,11 @@ def entorno(monkeypatch):
     async def pend(svc, e, f):
         return [p for p in pendientes.get(e, []) if p < f]
 
-    async def post(svc, e, f):
+    async def posteriores_falsas(svc, e, f):
         return posteriores.get(e, 0)
 
     monkeypatch.setattr(libreta_orden, "pendientes_anteriores", pend)
-    monkeypatch.setattr(libreta_orden, "libretas_posteriores", post)
+    monkeypatch.setattr(libreta_orden, "libretas_posteriores", posteriores_falsas)
     monkeypatch.setattr(asist._motor, "_get_now_local", lambda: HOY)
     monkeypatch.setattr(asist.QuantumMatrixEngine, "resolve_control_modality", staticmethod(lambda a, f: True))
     return servicio, pendientes, posteriores

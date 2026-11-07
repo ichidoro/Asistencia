@@ -511,12 +511,6 @@ class BioAlbaScraper:
             logger.error(f"❌ Error parseando Excel empleados: {e}")
             logger.error(traceback.format_exc())
             return []
-    def _clean(self, text: str) -> str:
-
-        """Limpiar texto"""
-        if not text or text == "None":
-            return ""
-        return str(text).strip().replace('\n', ' ').replace('\r', '').replace('\t', ' ').strip()
     
     def _format_rut(self, rut: str) -> str:
         """Formatear RUT chileno para coincidir con la base de datos (solo números/K, sin guión)"""

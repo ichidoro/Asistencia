@@ -41,26 +41,6 @@ class AsistenciaRepository:
         """ % LOGS_CON_TIPO_CORREGIDO
         return await self.db.fetch_all(query, (empleado_id, f"{ayer} 00:00:00", f"{manana} 23:59:59"))
 
-    async def get_raw_logs_summary(self, fecha_inicio: str, fecha_fin: str) -> Dict[int, Dict[str, int]]:
-        """
-        Retorna conteo de marcas por empleado_id y fecha en el periodo.
-        """
-        query = """
-            SELECT empleado_id, substr(fecha_hora, 1, 10) as fecha, COUNT(*) as total
-            FROM logs_raw
-            WHERE fecha_hora BETWEEN ? AND ?
-            GROUP BY empleado_id, fecha
-        """
-        rows = await self.db.fetch_all(query, (f"{fecha_inicio} 00:00:00", f"{fecha_fin} 23:59:59"))
-        
-        res = {}
-        for r in rows:
-            eid = r['empleado_id']
-            f = r['fecha']
-            if eid not in res: res[eid] = {}
-            res[eid][f] = r['total']
-        return res
-
     async def get_asistencia(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
         """
         Obtiene el registro de asistencia procesada de un empleado para una fecha.

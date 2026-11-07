@@ -141,10 +141,6 @@ class AsistenciaService:
         rounded = round(total_minutes / intervalo) * intervalo
         return dt.replace(hour=rounded // 60, minute=rounded % 60, second=0, microsecond=0)
 
-    @staticmethod
-    async def _empty_list_coro():
-        return []
-
     # ─────────────────────────────────────────────────────────────────────────
     # BULK CONTEXT LOADER
     # ─────────────────────────────────────────────────────────────────────────
@@ -3052,16 +3048,6 @@ class AsistenciaService:
         }
 
 
-    async def get_cached_turno_dia(self, turno_id: int, dia_semana: int, num_semana: int = 1) -> Optional[Dict]:
-        db = self.repository.db
-        rows = await db.fetch_all(
-            "SELECT t.*, td.dia_semana, td.hora_entrada, td.hora_salida, td.es_libre "
-            "FROM turnos t JOIN turno_dias td ON t.id = td.turno_id "
-            "WHERE t.id = ? AND td.dia_semana = ? AND td.num_semana = ?",
-            (turno_id, dia_semana, num_semana)
-        )
-        return dict(rows[0]) if rows else None
-
     async def get_daily_stats(
         self,
         fecha: str,
@@ -3699,12 +3685,3 @@ class AsistenciaService:
 
     # Alias de compatibilidad
     procesar_dia_empleado = procesar_empleado_dia
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# HELPER MODULE-LEVEL
-# ─────────────────────────────────────────────────────────────────────────────
-
-def asignacion_valida(turno: Dict) -> bool:
-    """Verifica si la asignación de turno tiene datos suficientes."""
-    return bool(turno and turno.get('id'))

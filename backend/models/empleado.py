@@ -101,35 +101,3 @@ class Empleado:
             "nombre_completo": self.nombre_completo,
             "rut_formateado": self.rut_formateado
         }
-    
-    @classmethod
-    def from_dict(cls, data: dict) -> "Empleado":
-        """Crea un Empleado desde un diccionario"""
-        return cls(
-            id=data.get("id"),
-            rut=data.get("rut", ""),
-            nombre=data.get("nombre", ""),
-            apellido_paterno=data.get("apellido_paterno", ""),
-            apellido_materno=data.get("apellido_materno", ""),
-            cargo=data.get("cargo"),
-            cargo_id=data.get("cargo_id"),
-            area_id=data.get("area_id"),
-            area=data.get("area"),
-            compania=data.get("compania"),
-            email=data.get("email"),
-            telefono=data.get("telefono"),
-            genero=data.get("genero"),
-            genero_id=data.get("genero_id"),
-            activo=bool(data.get("activo", True)),
-            es_manual=bool(data.get("es_manual", False)),
-            excluido_asistencia=bool(data.get("excluido_asistencia", False)),
-            autorizado_llaves=int(data.get("autorizado_llaves", 0)),
-            fecha_nacimiento=data.get("fecha_nacimiento"),
-            fecha_ingreso=data.get("fecha_ingreso"),
-            fecha_salida=data.get("fecha_salida"),
-            tipo_contrato=data.get("tipo_contrato", "Indefinido"),
-            cant_contratos=data.get("cant_contratos", 1),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at"),
-            fecha_asignacion_turno=data.get("fecha_asignacion_turno")
-        )

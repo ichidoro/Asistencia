@@ -151,17 +151,6 @@ class HoraExtraRepository:
     # LECTURA
     # ══════════════════════════════════════════════════════════════
 
-    async def get_by_periodo(self, fecha_ini: str, fecha_fin: str,
-                             empleado_id: int = None) -> List[Dict]:
-        """Lee todos los registros HE de un periodo."""
-        q = "SELECT * FROM horas_extras WHERE fecha BETWEEN ? AND ?"
-        params: list = [fecha_ini, fecha_fin]
-        if empleado_id:
-            q += " AND empleado_id = ?"
-            params.append(empleado_id)
-        q += " ORDER BY fecha, empleado_id"
-        return await self.db.fetch_all(q, tuple(params))
-
     async def get_estado_previo(self, empleado_id: int, fecha: str) -> Optional[Dict]:
         """
         Lee estado previo para preservación de decisiones humanas.
@@ -215,15 +204,3 @@ class HoraExtraRepository:
             'pendientes': round(resumen['total_pendiente'] / 60, 1),
             'rechazadas': round(resumen['total_rechazado'] / 60, 1),
         }
-
-    async def get_por_empleado_periodo(self, empleado_id: int,
-                                        fecha_ini: str, fecha_fin: str) -> List[Dict]:
-        """HE de un empleado específico en un periodo (para calendario individual)."""
-        rows = await self.db.fetch_all(
-            """SELECT fecha, minutos_bruto, minutos_autorizados, estado, origen, comentario
-               FROM horas_extras 
-               WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
-               ORDER BY fecha""",
-            (empleado_id, fecha_ini, fecha_fin)
-        )
-        return [dict(r) for r in rows] if rows else []

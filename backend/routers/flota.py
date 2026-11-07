@@ -21,16 +21,6 @@ def _now_chile():
     tz = ZoneInfo(settings.TIMEZONE)  # "America/Santiago"
     return datetime.now(tz).replace(tzinfo=None)
 
-def _diff_minutes(f1: str, h1: str, f2: str, h2: str) -> float:
-    """Calcula la diferencia en minutos entre dos timestamps de fecha y hora"""
-    try:
-        dt1 = datetime.strptime(f"{f1} {h1}", "%Y-%m-%d %H:%M:%S")
-        dt2 = datetime.strptime(f"{f2} {h2}", "%Y-%m-%d %H:%M:%S")
-        return max(0.0, (dt2 - dt1).total_seconds() / 60.0)
-    except Exception as e:
-        logger.warning(f"Error parseando fechas/horas para diff: {f1} {h1} vs {f2} {h2} - {e}")
-        return 0.0
-
 @router.get("/maestro/", response_model=List[Dict[str, Any]])
 async def get_maestro(
     db: Database = Depends(get_db),

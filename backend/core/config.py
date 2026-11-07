@@ -162,10 +162,6 @@ class Settings(BaseSettings):
     LOG_FILE: str = "app.log"
     
     @property
-    def db_url(self) -> str:
-        return self.DATABASE_URL
-
-    @property
     def log_file_path(self) -> Path:
         """Ruta al archivo de log principal"""
         self.LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -175,10 +171,6 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         return self.APP_ENV == "development"
         
-    @property
-    def is_production(self) -> bool:
-        return self.APP_ENV == "production"
-    
     @model_validator(mode="after")
     def _exigir_secretos(self):
         if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:

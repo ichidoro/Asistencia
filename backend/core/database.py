@@ -55,9 +55,6 @@ class Result:
     def fetchall(self):
         return self._rows
 
-    def fetchone(self):
-        return self._rows[0] if self._rows else None
-
     def close(self):
         pass
 
@@ -156,10 +153,6 @@ class PostgresDatabase:
         self.pool = None
         self._connected = False
         logger.info("👋 Pool de PostgreSQL cerrado")
-
-    @property
-    def is_connected(self) -> bool:
-        return self._connected
 
     # ───────────── ejecución de bajo nivel ─────────────
     @asynccontextmanager

@@ -2206,21 +2206,6 @@ window.downloadReportPDF = function() {
 };
 
 
-// Helpers
-function generateMonthOptions(selected) {
-    const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    return months.map((m, i) => `<option value="${i + 1}" ${i + 1 === selected ? 'selected' : ''}>${m}</option>`).join('');
-}
-function generateYearOptions(selected) {
-    const start = 2024;
-    const end = 2030;
-    let html = '';
-    for (let y = start; y <= end; y++) {
-        html += `<option value="${y}" ${y === selected ? 'selected' : ''}>${y}</option>`;
-    }
-    return html;
-}
-
 // ==========================================
 // UTILIDADES DE VISTA
 // ==========================================
@@ -3944,52 +3929,6 @@ window.aplicarCuadreHE = async function(empleadoId) {
     }
 };
 
-function getStatusHEBadgeClass(estado) {
-    switch (estado) {
-        case 'APROBADO': return 'bg-success';
-        case 'RECHAZADO': return 'bg-danger';
-        default: return 'bg-warning text-dark';
-    }
-}
-
-// ==========================================
-// UTILIDADES DE BONOS
-// ==========================================
-function renderBonoStatus(empId, bonoName, evaluations) {
-    if (!evaluations || !evaluations[empId] || !evaluations[empId][bonoName]) {
-        return '<span class="text-muted" style="font-size:0.75rem;">—</span>';
-    }
-
-    const b = evaluations[empId][bonoName];
-
-    // No aplica por cargo o contrato
-    if (b.aplica === false) {
-        return '<span class="text-muted" style="font-size:0.75rem;" title="No aplica por cargo/contrato">—</span>';
-    }
-
-    // Pendiente: sin días laborables aún (inicio de mes)
-    if (b.califica && b.monto === 0 && b.motivo && b.motivo.startsWith('Pendiente')) {
-        return `<span class="badge" style="background:#94a3b8;padding:0.4em 0.7em;min-width:55px;font-size:0.85em;" title="${b.motivo}"><i class="bi bi-hourglass-split" aria-hidden="true"></i> …</span>`;
-    }
-
-    const montoFmt   = (b.monto || 0).toLocaleString('es-CL');
-    const completoFmt = (b.monto_completo || b.monto || 0).toLocaleString('es-CL');
-
-    if (!b.califica) {
-        // Perdió el bono
-        return `<span class="badge bg-danger" style="opacity:0.8;padding:0.4em 0.8em;min-width:55px;font-size:0.88em;" title="Motivo: ${b.motivo || ''}"><i class="bi bi-x-lg me-1" aria-hidden="true"></i>NO</span>`;
-    }
-
-    if (b.proporcional) {
-        // Bono proporcional — ámbar
-        const pct = b.factor != null ? Math.round(b.factor * 100) : '';
-        const tooltip = `$${montoFmt} de $${completoFmt} completo&#10;${b.motivo || ''}`;
-        return `<span class="badge" style="background:#f59e0b;color:#1a1a1a;padding:0.4em 0.7em;min-width:55px;font-size:0.88em;font-weight:700;" title="${tooltip}">≈ $${montoFmt}</span>`;
-    }
-
-    // Bono completo — verde
-    return `<span class="badge bg-success" style="padding:0.4em 1em;min-width:55px;font-size:0.95em;" title="Monto: $${montoFmt}&#10;${b.motivo || ''}"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>SÍ</span>`;
-}
 
 
 
@@ -4660,120 +4599,6 @@ function iniciarPollingReproceso(empleadoId, nombre, fechaDesde) {
 
 
 
-
-/**
- * Busca los periodos configurados en el modulo de configuracion,
- * muestra el que esta abierto (y los demas si aplica) para que el usuario
- * pueda filtrar la grilla antes de evaluar y cerrar.
- */
-async function mostrarSelectorPeriodosParaCierre() {
-    let periodos = [];
-    try {
-        const resp = await fetch('/api/configuracion/periodos/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-        });
-        if (resp.ok) {
-            periodos = await resp.json();
-        }
-    } catch (e) {
-        console.error("Error al obtener periodos:", e);
-        return showToast("No se pudo cargar la lista de períodos.", "error");
-    }
-
-    // Filtrar los que están abiertos
-    const periodosAbiertos = periodos.filter(p => p.estado === 'abierto');
-
-    if (periodosAbiertos.length === 0) {
-        return Swal.fire({
-            title: 'No hay períodos abiertos',
-            text: 'Todos los períodos configurados ya se encuentran cerrados en el sistema.',
-            icon: 'info',
-            confirmButtonText: 'Entendido'
-        });
-    }
-
-    // Obtener las áreas accesibles desde el select principal de la grilla
-    const areaSelectDOM = document.getElementById('marcacion-area');
-    let areas = [];
-    if (areaSelectDOM) {
-        areas = Array.from(areaSelectDOM.options)
-            .map(opt => opt.value)
-            .filter(val => val !== "" && val !== "Todas");
-    }
-
-    // Valor pre-seleccionado actual de la grilla
-    const areaActual = stateMarcacionesApp.area || "";
-
-    // Construir las opciones del selector de áreas
-    const areaOptionsHtml = areas.map(a => {
-        const isSelected = a === areaActual ? 'selected' : '';
-        return `<option value="${a}" ${isSelected}>${a}</option>`;
-    }).join('');
-
-    // Renderizar una lista de los períodos abiertos
-    const listHtml = periodosAbiertos.map(p => {
-        const activeBadge = p.activo ? '<span class="badge bg-primary ms-2">Vigente</span>' : '';
-        const fIniFormateada = p.fecha_inicio.split('-').reverse().join('-');
-        const fFinFormateada = p.fecha_fin.split('-').reverse().join('-');
-        return `
-            <div class="d-flex justify-content-between align-items-center p-3 mb-2 border rounded bg-white shadow-sm">
-                <div>
-                    <h6 class="fw-bold mb-1 text-dark">${p.mes_cierre}${activeBadge}</h6>
-                    <small class="text-muted"><i class="bi bi-calendar-range"></i> Tramo: <strong>${fIniFormateada} al ${fFinFormateada}</strong></small>
-                </div>
-                <button class="btn btn-sm btn-warning fw-bold px-3 shadow-sm btn-cierre-action" 
-                        onclick="cierreFiltrarGrillaYIniciarCierre('${p.fecha_inicio}', '${p.fecha_fin}')"
-                        ${!areaActual ? 'disabled' : ''}
-                        title="${!areaActual ? 'Debe seleccionar un área primero' : 'Filtrar y Cerrar'}">
-                    <i class="bi bi-funnel-fill"></i> Filtrar y Cerrar
-                </button>
-            </div>
-        `;
-    }).join('');
-
-    const html = `
-        <div class="modal fade" id="modal-seleccionar-periodo-cierre" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
-                    <div class="modal-header bg-dark text-white border-0" style="border-radius: 12px 12px 0 0;">
-                        <h5 class="modal-title fw-bold"><i class="bi bi-calendar-event text-warning me-2"></i> Seleccionar Período y Área</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body bg-light p-4">
-                        <!-- Selector de Área -->
-                        <div class="card border-0 shadow-sm p-3 mb-4 bg-white">
-                            <label for="cierre-area-select" class="form-label small fw-bold text-muted mb-2">
-                                <i class="bi bi-geo-alt-fill text-danger me-1"></i> Área para el Cierre:
-                            </label>
-                            <select class="form-select form-select-sm border-primary-subtle" id="cierre-area-select" onchange="cierreActualizarSeleccionDeArea(this.value)">
-                                <option value="">-- Seleccione una Área Específica --</option>
-                                ${areaOptionsHtml}
-                            </select>
-                            <div class="form-text text-muted small mt-2">
-                                El cierre se calcula y sella por área. Selecciona el área a cerrar para habilitar el proceso.
-                            </div>
-                        </div>
-
-                        <p class="text-muted small mb-3">
-                            Selecciona el período configurado que deseas cerrar. 
-                            <strong>La grilla se filtrará automáticamente</strong> con el área y fechas seleccionadas.
-                        </p>
-                        <div>
-                            ${listHtml}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const old = document.getElementById('modal-seleccionar-periodo-cierre');
-    if (old) old.remove();
-
-    document.body.insertAdjacentHTML('beforeend', html);
-    const modal = new bootstrap.Modal(document.getElementById('modal-seleccionar-periodo-cierre'));
-    modal.show();
-}
 
 window.cierreFiltrarGrillaYIniciarCierre = async function(fIni, fFin) {
     const areaVal = document.getElementById('cierre-area-select')?.value;
@@ -7980,13 +7805,6 @@ window._loadEstadosAsistencia = async function() {
 // Helpers para obtener datos de estado (con fallback hardcodeado)
 function _getEstadoColor(codigo) {
     return (window._estadosAsistencia[codigo] || {}).color_clase || _fallbackEstadoColor(codigo);
-}
-function _getEstadoIcon(codigo) {
-    const ic = (window._estadosAsistencia[codigo] || {}).icono_bi;
-    return ic ? `<i class="bi ${ic} me-1"></i>` : '';
-}
-function _getEstadoNombre(codigo) {
-    return (window._estadosAsistencia[codigo] || {}).nombre_display || codigo;
 }
 function _fallbackEstadoColor(codigo) {
     const m = { OK:'badge-state-success', INASISTENCIA:'badge-state-danger', ATRASO:'badge-state-warning',

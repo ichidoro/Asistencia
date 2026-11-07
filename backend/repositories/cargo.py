@@ -11,11 +11,6 @@ class CargoRepository:
     def __init__(self, db: Database):
         self.db = db
 
-    async def get_all_cargos(self) -> List[dict]:
-        """Obtener todos los cargos principales"""
-        query = "SELECT id, nombre, created_at FROM cargos ORDER BY nombre ASC"
-        return await self.db.fetch_all(query)
-
     async def get_cargo_by_id(self, cargo_id: int) -> Optional[dict]:
         """Obtener un cargo por su ID"""
         query = "SELECT id, nombre, created_at FROM cargos WHERE id = ?"
