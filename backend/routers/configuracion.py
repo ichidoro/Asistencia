@@ -621,8 +621,12 @@ _COLORES_ESTADO_VALIDOS = {
     'color-pulso-rojo', 'color-pulso-verde', 'color-pulso-azul', 'color-glitter-oro', 'color-glitter-plata',
     'badge-state-success', 'badge-state-danger', 'badge-state-warning', 'badge-state-info',
     'badge-state-neutral', 'bg-dark text-white', 'badge-inasistencia-compensada-he', 'badge-compensatorio',
+    # Rojo intenso (sólido, letras blancas): días que una regla de marcaciones dejó por revisar (06-11-2026)
+    'color-rojo-intenso',
 }
-_RE_SIGLA = re.compile(r"^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$")
+# La sigla admite hasta 7 caracteres para que quepa una palabra completa como REVISAR (06-11-2026)
+SIGLA_MAX = 7
+_RE_SIGLA = re.compile(r"^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,%d}$" % SIGLA_MAX)
 _RE_ICONO = re.compile(r"^bi-[a-z0-9-]{1,60}$")
 _RE_TEXTO_SEGURO = re.compile(r"^[^<>\x00-\x08\x0b\x0c\x0e-\x1f]*$")
 
@@ -663,7 +667,7 @@ async def update_estado_asistencia(
         raise HTTPException(status_code=400, detail="No hay campos válidos para actualizar")
 
     # ── Validación de formato ────────────────────────────────────────────────
-    for campo, maximo in (('nombre_display', 40), ('descripcion', 240), ('short_label', 5)):
+    for campo, maximo in (('nombre_display', 40), ('descripcion', 240), ('short_label', SIGLA_MAX)):
         if campo in updates and updates[campo] is not None:
             val = str(updates[campo]).strip()
             if len(val) > maximo:
@@ -676,7 +680,7 @@ async def update_estado_asistencia(
     if 'short_label' in updates:
         sl = updates['short_label'] or ''
         if sl and not _RE_SIGLA.match(sl):
-            raise HTTPException(status_code=422, detail="La etiqueta admite 1 a 5 letras, números, punto, + o guion")
+            raise HTTPException(status_code=422, detail=f"La etiqueta admite 1 a {SIGLA_MAX} letras, números, punto, + o guion")
         updates['short_label'] = sl.upper()
     if 'icono_bi' in updates:
         ic = (updates['icono_bi'] or '').strip()

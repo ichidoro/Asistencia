@@ -3335,6 +3335,13 @@ tr:hover .emp-name-cell {
     border: none;
 }
 
+/* Rojo intenso (días por revisar de las reglas de marcaciones, 06-11-2026): el rojo «peligro» de la grilla, sólido */
+.color-rojo-intenso {
+    background: #b0352c;
+    color: white;
+    border: none;
+}
+
 /* == COLORES SÓLIDOS NUEVOS (4 adicionales) ==================== */
 .color-naranja,
 .badge-state-orange {

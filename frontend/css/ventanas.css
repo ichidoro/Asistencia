@@ -250,6 +250,20 @@
 .mm-seg-b[aria-checked="true"] { background: #fff; color: var(--vn-navy); box-shadow: 0 1px 2px rgba(16, 26, 61, .12); }
 .mm-seg-b:focus-visible { outline: 2px solid var(--vn-navy); outline-offset: 1px; }
 .mm-seg-b[disabled] { cursor: not-allowed; opacity: .6; }
+/* El nombre de la persona se ve completo (orden del dueño 31-10-2026): «Persona» ocupa todo el ancho de los datos y, en una
+   pantalla angosta, sigue en una segunda línea (es un cuadro de texto de solo lectura que crece con su contenido) */
+#modal-marcacion-manual .mm-datos > div:first-child { grid-column: 1 / -1; }
+#modal-marcacion-manual .mm-datos textarea.form-control {
+  border: 0 !important; background: transparent !important; box-shadow: none !important;
+  padding: 0 !important; height: auto; min-height: 0 !important; resize: none; overflow: hidden; field-sizing: content;
+  font-weight: 600; line-height: 1.3; color: var(--ov-ink) !important; opacity: 1;
+}
+/* Días por revisar (06-11-2026): el cambio que propone el sistema, en rojo, y la parte de abajo bloqueada */
+#marcas-dia-body tr.mm-prop > td { background-color: #fdecea !important; box-shadow: none !important; }
+#marcas-dia-body tr.mm-prop .mm-seg-b[aria-checked="true"] { background: #b0352c; color: #fff; box-shadow: 0 1px 2px rgba(176, 53, 44, .3); }
+.mm-prop-txt { display: none; margin-top: 2px; font: 700 11px/1.2 'Barlow', system-ui, sans-serif; color: #b0352c; }
+#marcas-dia-body tr.mm-prop .mm-prop-txt { display: block; }
+.mm-bloqueo-nota { margin: -6px 0 14px; font-size: 12.5px; color: var(--ov-ink-3, #5b6580); }
 
 /* ── Cierre del período: los pasos arriba, el contenido debajo ───────────── */
 #modal-cierre-wizard .modal-body > .row { flex-direction: column; }

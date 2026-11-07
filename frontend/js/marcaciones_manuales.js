@@ -757,6 +757,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
 
     marcacionesManualesState.currentEmpId = empId;
     marcacionesManualesState.currentDate = dateStr;
+    _mmQuitarBloqueoRevision();   // lo que dejó un día por revisar abierto antes
 
     // Set Title
     const titleEl = marcacionesManualesState.manualModal.querySelector('.modal-title');
@@ -926,6 +927,13 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         if (!inputEntrada.disabled) inputEntrada.focus();
         else if (!inputSalida.disabled) inputSalida.focus();
     }, 100);
+    // El nombre completo en las líneas que necesite: en navegadores sin field-sizing se ajusta el alto cuando la ventana ya se ve
+    if (lblEmp && lblEmp.tagName === 'TEXTAREA') {
+        lblEmp.style.height = '';
+        marcacionesManualesState.manualModal.addEventListener('shown.bs.modal', () => {
+            if (lblEmp.scrollHeight > 0 && lblEmp.clientHeight < lblEmp.scrollHeight) lblEmp.style.height = lblEmp.scrollHeight + 'px';
+        }, { once: true });
+    }
 
     if (marcacionesManualesState.manualInstance) {
         marcacionesManualesState.manualInstance.show();
@@ -1006,18 +1014,50 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         if (!cont) return;
         if (!ev.secuencia) { cont.innerHTML = ''; return; }
         const sec = ev.secuencia.split('').map(c => c === 'E' ? 'ENTRADA' : (c === 'S' ? 'SALIDA' : c)).join(' · ');
-        const puedeConfirmar = !cerrada && ev.en_revision
-            && ev.regla && (ev.regla.opciones_revision || []).includes('CONFIRMAR')
-            && typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.editar');
+        const opciones = (ev.regla && ev.regla.opciones_revision) || [];
+        const puedeEditar = typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.editar');
+        const puedeConfirmar = !cerrada && ev.en_revision && opciones.includes('CONFIRMAR') && puedeEditar;
+        // La marca que el sistema propone cambiar (la misma sugerencia de «Usar sugerencia») ya viene elegida y en rojo, solo si la
+        // regla permite cambiar el tipo de una marca y la cantidad de marcas no deja dudas (orden del dueño, 06-11-2026). Nada se
+        // guarda hasta «Guardar clasificación» y el «Sí» de la pregunta.
+        const mx = host._mx;
+        let propuestas = [];
+        if (mx) mx.enRevision = !!ev.en_revision;
+        if (!cerrada && ev.en_revision && puedeEditar && opciones.includes('RECLASIFICAR') && mx && !mx.marcas.some(m => m.dudoso)) {
+            propuestas = mx.marcas.map(m => (m.sugerido && m.sugerido !== m.tipo_actual) ? m.sugerido : null);
+            if (propuestas.some(Boolean)) {
+                mx.propuestas = propuestas;
+                mx.selects().forEach((sel, i) => { if (propuestas[i]) sel.value = propuestas[i]; });
+                mx.refrescar();
+            } else {
+                propuestas = [];
+            }
+        }
+        const nProp = propuestas.filter(Boolean).length;
+        let txtRev;
+        if (nProp === 1) {
+            const i = propuestas.findIndex(Boolean);
+            txtRev = 'el sistema propone que la marca de las <strong>' + mx.marcas[i].hora + '</strong> sea <strong>'
+                + String(propuestas[i]).toUpperCase() + '</strong> (en rojo). Revísela y presione «Guardar clasificación».';
+        } else if (nProp > 1) {
+            txtRev = 'el sistema propone cambiar ' + nProp + ' marcas (en rojo). Revíselas y presione «Guardar clasificación».';
+        } else {
+            txtRev = 'este día está en <strong>«Días por revisar»</strong>. Corrija las marcas abajo' + (puedeConfirmar ? ', o confirme que está bien.' : '.');
+        }
         cont.innerHTML = `
             <div class="border rounded p-2" style="background:${ev.en_revision ? '#fef2f2' : '#f0fdf4'};">
                 <i class="bi ${ev.en_revision ? 'bi-exclamation-triangle-fill text-danger' : 'bi-check-circle-fill text-success'}"></i>
                 <strong>Regla de marcaciones (${sec}):</strong>
-                ${ev.en_revision ? 'este día está en <strong>«Días por revisar»</strong>. Corrija las marcas abajo, o confirme que está bien.'
+                ${ev.en_revision ? txtRev
                  : ev.confirmado ? 'este día fue revisado y confirmado. Si cambian sus marcas, vuelve a revisión.'
                  : 'día en revisión ya resuelto.'}
                 ${puedeConfirmar ? `<button type="button" class="btn btn-sm btn-outline-success ms-2 py-0" onclick="confirmarDiaRevision(${empId}, '${dateStr}')">Confirmar que está bien</button>` : ''}
             </div>`;
+        // Si la regla solo permite cambiar el tipo de una marca (o confirmar), el día ya tiene todas sus marcas del reloj: la parte de
+        // abajo (escribir marcas a mano) queda vacía y bloqueada; «Habilitar edición» la abre si de verdad faltara una marca
+        if (!cerrada && ev.en_revision && opciones.length && opciones.every(o => o === 'RECLASIFICAR' || o === 'CONFIRMAR')) {
+            _mmAplicarBloqueoRevision();
+        }
     } catch (e) {
         console.warn('No se pudo evaluar la regla del día', e);
     }
@@ -1094,7 +1134,7 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     };
     body.innerHTML = marcas.map((m, i) => `
         <tr data-i="${i}">
-            <td class="fw-semibold">${m.hora}${etiquetaOtroDia(m)}</td>
+            <td class="fw-semibold">${m.hora}${etiquetaOtroDia(m)}<div class="mm-prop-txt">Cambio propuesto</div></td>
             <td>${m.tipo_reloj ? String(m.tipo_reloj).toUpperCase() : '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
             <td><div class="mm-seg" role="radiogroup" aria-label="Tipo de la marca de las ${m.hora}">
                 <button type="button" class="mm-seg-b" role="radio" data-v="Entrada"${cerrada ? ' disabled' : ''}>ENTRADA</button>
@@ -1119,6 +1159,9 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
             tr.querySelector('.marca-etiqueta').innerHTML = col[i] !== undefined
                 ? `<span class="vn-pill">Colación · ${col[i]} min</span>` : '';
             tr.querySelectorAll('.mm-seg-b').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === ts[i] ? 'true' : 'false'));
+            // El cambio que propone el sistema se ve en rojo mientras siga elegido (y sea distinto de lo que rige hoy)
+            const prop = host._mx && host._mx.propuestas ? host._mx.propuestas[i] : null;
+            tr.classList.toggle('mm-prop', !!(prop && ts[i] === prop && ts[i] !== marcas[i].tipo_actual));
         });
         const avisos = [];
         if (ts[0] === 'Salida') avisos.push('La primera marca del día está como SALIDA.');
@@ -1128,6 +1171,8 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         host.querySelector('#marcas-dia-aviso').innerHTML = avisos.length
             ? `<span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> ${avisos.join(' ')}</span>` : '';
     };
+    // La regla del día (cargarReglaDia) usa esto para dejar elegida la marca que el sistema propone cambiar
+    host._mx = { marcas, selects, refrescar, propuestas: [], enRevision: false };
     selects().forEach(sel => sel.addEventListener('change', refrescar));
     body.addEventListener('click', (e) => {
         const b = e.target.closest('.mm-seg-b');
@@ -1142,6 +1187,9 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     host.querySelector('#btn-marcas-guardar').addEventListener('click', async (ev) => {
         const btn = ev.currentTarget;
         const ts = tipos();
+        // Antes de guardar, la pregunta con lo que cambia (orden del dueño, 06-11-2026): sin el «Sí» no se guarda ni se recalcula nada
+        const cambios = marcas.map((m, i) => ({ m, nuevo: ts[i] })).filter(x => x.nuevo !== x.m.tipo_actual);
+        if (!(await _mmConfirmarClasificacion(cambios, dateStr))) return;
         btn.disabled = true;
         try {
             const r = await fetch('/api/asistencia/marcaciones/reclasificar/', {
@@ -1157,6 +1205,8 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
                 return;
             }
             if (typeof showToast === 'function') showToast('Listo. Se guardó el tipo de cada marca y se volvió a calcular el día.', 'success');
+            // Un día por revisar: la grilla confirma en la fila de la persona que quedó corregido (marcaciones_ui.js → mxAvisarCorreccion)
+            if (host._mx && host._mx.enRevision) window._rvUltimaCorreccion = { empId: parseInt(empId), fecha: dateStr };
             closeManualEntryModal();
             if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
             else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
@@ -1221,6 +1271,73 @@ async function quitarMarcaManual(empId, marca) {
     }
 }
 
+/** Pregunta antes de guardar la clasificación: dice qué marca cambia y de qué a qué. Devuelve true solo con el «Sí». */
+async function _mmConfirmarClasificacion(cambios, dateStr) {
+    const T = (t) => String(t || '').toUpperCase();
+    const cuando = (m) => m.hora + (m.fecha && m.fecha !== dateStr ? ' del ' + m.fecha.substring(8, 10) + '-' + m.fecha.substring(5, 7) : '');
+    const hay = cambios.length > 0;
+    const lineas = cambios.map(x => 'La marca de las <b>' + cuando(x.m) + '</b> pasa de <b>' + T(x.m.tipo_actual) + '</b> a <b>' + T(x.nuevo) + '</b>.');
+    const si = hay ? 'Sí, corregir' : 'Sí, recalcular';
+    const html = (hay ? lineas.join('<br>') : 'No cambió el tipo de ninguna marca.')
+        + '<br>Al presionar «' + si + '» se guarda y el día se vuelve a calcular.'
+        + '<br><span style="color:#64748b;font-size:.9em">Con «No» no se guarda nada.</span>';
+    if (typeof Swal === 'undefined') {
+        return window.confirm((hay ? cambios.map(x => 'La marca de las ' + cuando(x.m) + ' pasa de ' + T(x.m.tipo_actual) + ' a ' + T(x.nuevo) + '.').join('\n') : 'No cambió el tipo de ninguna marca.')
+            + '\n¿Guardar y volver a calcular el día?');
+    }
+    const r = await Swal.fire({
+        target: document.querySelector('.modal.show') || 'body',   // dentro de la ventana: Bootstrap no deja salir el foco
+        icon: 'question',
+        title: hay ? '¿Está seguro de la corrección?' : '¿Volver a calcular el día?',
+        html,
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: si,
+        cancelButtonText: 'No',
+        allowOutsideClick: false,
+    });
+    return !!r.isConfirmed;
+}
+
+/** Día por revisar con todas sus marcas del reloj (la regla solo permite cambiar el tipo de una marca o confirmar): la parte de
+ *  abajo, que escribe marcas a mano, queda vacía y bloqueada (variante elegida por el dueño, 06-11-2026). */
+function _mmAplicarBloqueoRevision() {
+    const modal = marcacionesManualesState.manualModal;
+    if (!modal || marcacionesManualesState.bloqueoRevision) return;
+    marcacionesManualesState.bloqueoRevision = true;
+    const avisoFalta = document.getElementById('manual-alert-faltante');
+    if (avisoFalta) {
+        avisoFalta.style.display = 'none';
+        if (!document.getElementById('mm-alert-revision')) {
+            avisoFalta.insertAdjacentHTML('beforebegin', '<div class="alert alert-info py-2 mb-3" id="mm-alert-revision">'
+                + '<i class="bi bi-info-circle-fill me-2" aria-hidden="true"></i>Este día tiene <strong>todas sus marcas del reloj</strong>: no hace falta agregar marcas.</div>');
+        }
+    }
+    const huerfana = document.getElementById('manual-alert-huerfana');
+    if (huerfana) huerfana.style.display = 'none';
+    const ent = document.getElementById('manual-hora-entrada'), sal = document.getElementById('manual-hora-salida');
+    [ent, sal].forEach(i => { if (i) { i.value = ''; i.disabled = true; } });
+    const obs = document.getElementById('manual-observaciones');
+    if (obs) obs.disabled = true;
+    const guardar = modal.querySelector('.modal-footer button[onclick="saveManualEntry()"]');
+    if (guardar) guardar.disabled = true;
+    const fila = ent ? ent.closest('.row') : null;
+    if (fila && !document.getElementById('mm-bloqueo-nota')) {
+        fila.insertAdjacentHTML('afterend', '<div class="mm-bloqueo-nota" id="mm-bloqueo-nota"><i class="bi bi-lock-fill me-1" aria-hidden="true"></i>'
+            + 'Bloqueado: este día no necesita marcas nuevas. Solo si de verdad falta una marca, presione <strong>Habilitar edición</strong>.</div>');
+    }
+}
+
+function _mmQuitarBloqueoRevision() {
+    marcacionesManualesState.bloqueoRevision = false;
+    ['mm-alert-revision', 'mm-bloqueo-nota'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+    const obs = document.getElementById('manual-observaciones');
+    if (obs) obs.disabled = false;
+    const modal = marcacionesManualesState.manualModal;
+    const guardar = modal ? modal.querySelector('.modal-footer button[onclick="saveManualEntry()"]') : null;
+    if (guardar) guardar.disabled = false;
+}
+
 function closeManualEntryModal() {
     if (marcacionesManualesState.manualInstance) {
         marcacionesManualesState.manualInstance.hide();
@@ -1238,6 +1355,16 @@ function closeManualEntryModal() {
  * Blindado: No permite sobreescribir si ya existen ambas marcas en el reloj.
  */
 function unlockManualMarks() {
+    // Día por revisar con la parte de abajo bloqueada: «Habilitar edición» la abre para escribir la marca que de verdad falte
+    if (marcacionesManualesState.bloqueoRevision) {
+        _mmQuitarBloqueoRevision();
+        const ent = document.getElementById('manual-hora-entrada'), sal = document.getElementById('manual-hora-salida');
+        [ent, sal].forEach(i => { if (i) i.disabled = false; });
+        const avisoFalta = document.getElementById('manual-alert-faltante');
+        if (avisoFalta) avisoFalta.style.display = '';
+        if (ent) ent.focus();
+        return;
+    }
     if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: 'info',

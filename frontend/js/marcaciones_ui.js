@@ -6284,6 +6284,8 @@ window.mxPlegarHorario = function (btn) {
         tb.classList.toggle('gh-plegado', plegar);
         btn.setAttribute('aria-expanded', String(!plegar));
         if (plegar) set.delete(tb.dataset.horario); else set.add(tb.dataset.horario);
+        // Las listas de días por revisar se ubican al quedar a la vista (plegadas no tienen medidas)
+        if (!plegar && window.mxBandasAjustar) window.mxBandasAjustar(tb);
     };
     (tb._ghAnim || []).forEach(a => a.cancel());
     if (reducir || !filas.length) { aplicar(); return; }
@@ -6306,14 +6308,204 @@ window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     // Bloque fijo (siempre abierto y sin botón de plegar): los Choferes y «Otros cargos» de la Bolsa flexible
     const fijo = !!g.fijo;
     const n = g.filas.length, plegado = !fijo && !window.mxHorariosDesplegados().has(g.nombre);
+    // Los bloques parten plegados: su título avisa cuántos días por revisar hay dentro y lleva a ellos
+    const nRev = g.filas.reduce((a, r) => a + window.mxDiasEnRevision(r.emp, null).length, 0);
     return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + (fijo ? ' gh-fijo' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
         + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit">'
         + (fijo ? '' : '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>')
-        + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span></div></td></tr>'
+        + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span>'
+        + (nRev ? window.mxAvisoBloqueHtml(nRev) : '') + '</div></td></tr>'
         // El encabezado repetido va bajo el encabezado fijo de arriba (capa 55 < 90) y con su mismo aspecto (clase gh-cab)
         + (i > 0 ? cabecera.split('<tr class="').join('<tr class="gh-cab ').replace(/z-index:\s*1\d\d/g, 'z-index:55') : '')
         + g.filas.map(htmlDe).join('') + '</tbody>';
 };
+
+// ── Días por revisar (Reglas de marcaciones): lista bajo la fila de la persona (versión C mejorada, elegida por el dueño 06-11-2026) ──
+// Cada día dice su regla, sus marcas con tipo y hora (la que el sistema propone cambiar, con borde rojo punteado y «→ SALIDA»), su turno
+// y el botón «Revisar», que abre la misma ventana de corrección. Los días salen de la grilla (revision_marcas); las marcas y la propuesta,
+// del mismo servicio que usa esa ventana (/marcaciones/dia/). Textos con comillas y concatenación: el minificador del servidor (rjsmin)
+// come los espacios de las plantillas anidadas.
+window.MX_DIAS_CORTOS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+window.MX_TXT_CIERRE_BLOQUEADO = 'Mientras queden días por revisar, el cierre del tramo de su área está bloqueado';
+window.mxFechaCortaRev = function (d) {
+    const dt = new Date(d + 'T00:00:00');
+    return window.MX_DIAS_CORTOS[dt.getDay()] + ' ' + d.substring(8, 10) + '-' + d.substring(5, 7);
+};
+window.mxSecuenciaEnPalabras = function (sec) {
+    return String(sec || '').split('').map(c => c === 'E' ? 'ENTRADA' : (c === 'S' ? 'SALIDA' : c)).join(' · ');
+};
+window.mxDiasEnRevision = function (emp, dates) {
+    const dias = (emp && emp.dias) || {};
+    return (dates || Object.keys(dias).sort()).filter(d => d !== 'info' && dias[d] && dias[d].revision_marcas);
+};
+window._rvEsc = function (x) {
+    return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+};
+window.mxAvisoBloqueHtml = function (n) {
+    return '<button type="button" class="rv-grupo" onclick="window.mxIrARevisar(this)" title="' + window.MX_TXT_CIERRE_BLOQUEADO + '">'
+        + '<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>' + n + (n === 1 ? ' día por revisar' : ' días por revisar') + '</button>';
+};
+window.mxBandaRevisionHtml = function (emp, dates) {
+    const fechas = window.mxDiasEnRevision(emp, dates);
+    if (!fechas.length) return '';
+    const e = window._rvEsc;
+    const nombre = window.nombreTitulo(emp.nombre_completo || '');
+    const puedeEditar = typeof AuthService !== 'undefined' && AuthService.hasPermission && AuthService.hasPermission('marcaciones.editar');
+    const items = fechas.map(d => {
+        const di = emp.dias[d];
+        const corta = window.mxFechaCortaRev(d);
+        const sec = window.mxSecuenciaEnPalabras(di.revision_secuencia);
+        const ent = di.hora_entrada_teorica ? String(di.hora_entrada_teorica).substring(0, 5) : '';
+        const sal = di.hora_salida_teorica ? String(di.hora_salida_teorica).substring(0, 5) : '';
+        const reclasifica = (di.revision_opciones || []).indexOf('RECLASIFICAR') >= 0 ? '1' : '';
+        return '<li class="rv-item" data-emp="' + emp.id + '" data-fecha="' + d + '" data-reclasificar="' + reclasifica + '">'
+            + '<span class="rv-dia"><b>' + corta + '</b><span>' + (sec ? 'regla ' + e(sec) : 'regla de marcaciones') + '</span></span>'
+            + '<span class="rv-marcas" data-cargar="1"></span>'
+            + (ent && sal ? '<span class="rv-turno">turno ' + ent + '–' + sal + '</span>' : '')
+            + (puedeEditar ? '<button type="button" class="rv-btn" data-rv-emp="' + emp.id + '" data-rv-fecha="' + d + '" aria-label="'
+                + e('Revisar ' + corta + ', ' + nombre) + '">Revisar</button>' : '')
+            + '</li>';
+    }).join('');
+    const n = fechas.length;
+    return '<tr class="rv-banda" id="rv-banda-' + emp.id + '" data-emp="' + emp.id + '">'
+        + '<td class="rv-nom"><span class="rv-nomtxt" title="' + window.MX_TXT_CIERRE_BLOQUEADO + '">'
+        + '<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>' + n + (n === 1 ? ' día por revisar' : ' días por revisar') + '</span></td>'
+        + '<td class="rv-esp"></td>'
+        + '<td class="rv-dias"><ul class="rv-lista" aria-label="' + e('Días por revisar de ' + nombre) + '">' + items + '</ul></td>'
+        + '</tr>';
+};
+// Columnas de la fila de la lista (las mismas de la grilla) y su ubicación: el nombre fijo a la izquierda y la lista pegada justo
+// después de las columnas que queden fijas (en pantallas anchas también quedan fijas las de resumen)
+window.mxBandasAjustar = function (root) {
+    const cont = root || document.getElementById('marcaciones-view-container');
+    if (!cont) return;
+    const opaco = (c, def) => (!c || c === 'transparent' || c === 'rgba(0, 0, 0, 0)') ? def : c;
+    cont.querySelectorAll('tr.rv-banda').forEach(band => {
+        const fila = document.getElementById('row-empleado-' + band.dataset.emp);
+        if (!fila) return;
+        const celdas = Array.from(fila.children);
+        const nDias = celdas.filter(c => c.classList.contains('col-day')).length;
+        const nEsp = celdas.length - 1 - nDias;
+        const tdNom = band.querySelector('td.rv-nom'), tdEsp = band.querySelector('td.rv-esp'), tdDias = band.querySelector('td.rv-dias');
+        if (tdEsp) { if (nEsp > 0) tdEsp.colSpan = nEsp; else tdEsp.remove(); }
+        if (tdDias) tdDias.colSpan = Math.max(1, nDias);
+        if (!fila.offsetParent) return;                     // bloque plegado: se ubica al abrirlo
+        const fondo = opaco(getComputedStyle(celdas[0]).backgroundColor, '#ffffff');
+        if (tdNom) tdNom.style.background = fondo;
+        if (tdDias) tdDias.style.background = fondo;
+        let fijo = 0;
+        celdas.forEach(c => {
+            if (c.classList.contains('col-day')) return;
+            const cs = getComputedStyle(c);
+            if (cs.position === 'sticky') fijo = Math.max(fijo, (parseFloat(cs.left) || 0) + c.offsetWidth);
+        });
+        if (tdEsp && tdEsp.isConnected && celdas[1]) {
+            const cs1 = getComputedStyle(celdas[1]);
+            const pegada = cs1.position === 'sticky';
+            tdEsp.style.position = pegada ? 'sticky' : '';
+            tdEsp.style.left = pegada ? cs1.left : '';
+            tdEsp.style.zIndex = pegada ? '40' : '';
+            tdEsp.style.background = opaco(cs1.backgroundColor, fondo);
+        }
+        const ul = band.querySelector('.rv-lista');
+        if (ul) ul.style.left = (fijo + 12) + 'px';
+    });
+};
+// Las marcas de cada día por revisar, con la misma propuesta que muestra la ventana de corrección (solo si la regla permite cambiar
+// el tipo de una marca y la cantidad de marcas no deja dudas)
+window.mxBandasCargarMarcas = function (root) {
+    const cont = root || document.getElementById('marcaciones-view-container');
+    if (!cont) return;
+    cont.querySelectorAll('.rv-item .rv-marcas[data-cargar]').forEach(box => {
+        box.removeAttribute('data-cargar');
+        const li = box.closest('.rv-item');
+        const fecha = li.dataset.fecha;
+        fetch('/api/asistencia/marcaciones/dia/?empleado_id=' + encodeURIComponent(li.dataset.emp) + '&fecha=' + encodeURIComponent(fecha))
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data || !Array.isArray(data.marcas) || !box.isConnected) return;
+                const proponer = li.dataset.reclasificar === '1' && !data.fecha_cerrada && !data.marcas.some(m => m.dudoso);
+                box.innerHTML = data.marcas.map(m => {
+                    const tipo = String(m.tipo_actual || m.tipo_reloj || '').toUpperCase();
+                    const sug = String(m.sugerido || '').toUpperCase();
+                    const prop = proponer && sug && sug !== tipo;
+                    const otroDia = (m.fecha && m.fecha !== fecha) ? '<span class="rv-marca-otro">' + m.fecha.substring(8, 10) + '-' + m.fecha.substring(5, 7) + '</span>' : '';
+                    return '<span class="rv-marca' + (prop ? ' rv-prop' : '') + '"' + (prop ? ' title="El sistema propone cambiarla a ' + sug + '"' : '') + '>'
+                        + '<small>' + window._rvEsc(tipo) + '</small><b>' + window._rvEsc(m.hora) + '</b>' + otroDia + (prop ? '<em>→ ' + sug + '</em>' : '') + '</span>';
+                }).join('');
+            })
+            .catch(() => { /* sin las marcas la lista igual dice el día, la regla y el botón */ });
+    });
+};
+// Aviso del bloque: abre el bloque si está plegado y lleva a la primera lista
+window.mxIrARevisar = function (btn) {
+    const tb = btn && btn.closest('tbody.gh-grupo');
+    if (!tb) return;
+    const quieto = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const ir = () => {
+        const band = tb.querySelector('tr.rv-banda');
+        if (!band) return;
+        band.scrollIntoView({ block: 'center', inline: 'nearest', behavior: quieto ? 'auto' : 'smooth' });
+        const b = band.querySelector('.rv-btn');
+        if (b) setTimeout(() => b.focus({ preventScroll: true }), quieto ? 0 : 400);
+    };
+    if (tb.classList.contains('gh-plegado')) {
+        const pl = tb.querySelector('.gh-plegar');
+        if (pl) window.mxPlegarHorario(pl);
+        setTimeout(ir, 60);
+    } else ir();
+};
+// Cuenta de nuevo los días del bloque (tras corregir uno) y actualiza o quita su aviso
+window.mxActualizarAvisoBloque = function (tb) {
+    if (!tb) return;
+    const tit = tb.querySelector('tr.gh-titulo .gh-tit');
+    if (!tit) return;
+    const n = tb.querySelectorAll('tr.rv-banda .rv-item').length;
+    const chip = tit.querySelector('.rv-grupo');
+    if (chip) chip.remove();
+    if (n) tit.insertAdjacentHTML('beforeend', window.mxAvisoBloqueHtml(n));
+};
+// Tras «Sí, corregir» en la ventana: la celda marca el cambio y la fila confirma, en el mismo lugar, que el día quedó corregido
+window.mxAvisarCorreccion = function (empId) {
+    const c = window._rvUltimaCorreccion;
+    if (!c || String(c.empId) !== String(empId)) return;
+    window._rvUltimaCorreccion = null;
+    const fila = document.getElementById('row-empleado-' + empId);
+    if (!fila) return;
+    const celda = fila.querySelector('td.col-day[data-fecha="' + c.fecha + '"]');
+    if (celda) { celda.classList.add('rv-recien'); setTimeout(() => celda.classList.remove('rv-recien'), 1700); }
+    if (celda && celda.classList.contains('rv-celda')) return;     // sigue por revisar: la lista lo sigue mostrando
+    const aviso = '<i class="bi bi-check-circle-fill" aria-hidden="true"></i>' + window.mxFechaCortaRev(c.fecha) + ' corregido · el día se volvió a calcular';
+    const band = document.getElementById('rv-banda-' + empId);
+    if (band && band.querySelector('.rv-lista')) {
+        const li = document.createElement('li');
+        li.className = 'rv-hecho'; li.setAttribute('role', 'status'); li.innerHTML = aviso;
+        band.querySelector('.rv-lista').prepend(li);
+        setTimeout(() => li.remove(), 4500);
+        return;
+    }
+    // No le quedan días por revisar: una fila breve con la confirmación, que se va sola
+    const tmp = document.createElement('tr');
+    tmp.className = 'rv-banda rv-banda-hecho'; tmp.id = 'rv-banda-' + empId; tmp.dataset.emp = String(empId);
+    tmp.innerHTML = '<td class="rv-nom"></td><td class="rv-esp"></td><td class="rv-dias"><ul class="rv-lista"><li class="rv-hecho" role="status">' + aviso + '</li></ul></td>';
+    fila.insertAdjacentElement('afterend', tmp);
+    fila.classList.add('rv-con-banda');
+    window.mxBandasAjustar(fila.closest('tbody') || undefined);
+    setTimeout(() => { tmp.remove(); fila.classList.remove('rv-con-banda'); }, 4500);
+};
+if (!window._rvClickBound) {
+    window._rvClickBound = true;
+    document.addEventListener('click', ev => {
+        const b = ev.target && ev.target.closest && ev.target.closest('.rv-btn[data-rv-emp]');
+        if (!b) return;
+        const emp = parseInt(b.dataset.rvEmp, 10), fecha = b.dataset.rvFecha;
+        const data = (window.stateMarcacionesApp && stateMarcacionesApp.data) || {};
+        const m = data.matrix && (data.matrix[emp] || data.matrix[String(emp)]);
+        const nombre = (m && m.info && m.info.nombre_completo)
+            || ((data.empleados || []).find(x => String(x.id) === String(emp)) || {}).nombre_completo || '';
+        if (typeof openManualEntryModal === 'function') openManualEntryModal(emp, fecha, nombre);
+    });
+}
 
 window.buildStickyCols = function(sh, bonosNombres) {
     const C = window.GRID_COLLAPSED_W;
@@ -6698,11 +6890,18 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp: Object.assign({}, emp, { stats: r }) });
         const _corteC = (window._gridFlags && window._gridFlags.esBolsa) ? window.getCorteLibreta(emp) : null;
         const corteCelda = (_corteC && d === _corteC) ? 'border-left:3px solid #8b5cf6;' : '';
-        return `<td class="col-day text-center p-0 align-middle cell-clickable" tabindex="0" role="button" aria-label="Acciones de asistencia: ${window.nombreTitulo(emp.nombre_completo).replace(/"/g, '&quot;')}, ${window.formatFechaDDMMYYYY(d)}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
+        // Día por revisar (Reglas de marcaciones): la pastilla del estado (sigla y color de Configuración → Estados) lo dice; si la
+        // regla calculó el día y su estado es otro (OK, ATR…), la celda lleva además un marco rojo. La lista bajo la fila explica qué encontró.
+        const enRevision = !!(di && di.revision_marcas);
+        const claseRev = enRevision ? (' rv-celda' + (di.estado !== 'ANOMALIA' ? ' rv-celda-marco' : '')) : '';
+        const nomAria = window.nombreTitulo(emp.nombre_completo).replace(/"/g, '&quot;');
+        const ariaCelda = enRevision
+            ? 'Día por revisar: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d) + '. Una regla de marcaciones dejó este día en revisión.'
+            : 'Acciones de asistencia: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d);
+        return `<td class="col-day text-center p-0 align-middle cell-clickable${claseRev}" tabindex="0" role="button" aria-label="${ariaCelda}" data-fecha="${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
                     data-grid-tooltip data-tip="${tipKey}">
-                    ${di && di.revision_marcas ? `<span title="Día por revisar: una regla de marcaciones pide mirarlo. Clic para abrirlo." style="position:absolute;top:0;right:0;width:0;height:0;border-top:11px solid #dc2626;border-left:11px solid transparent;z-index:5;"></span>` : ''}
                     ${cellContent}
                 </td>`;
     }).join('');
@@ -6714,8 +6913,10 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
     const getStickyWidthStyleLocal = (key) => window.getStickyWidthStyle(key, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
     // Libro mayor de minutos de la persona (lo calcula el servidor con los mismos días de la grilla)
     const L = window.libroDeFila(r);
+    // Días que una regla dejó por revisar en el tramo visible: la lista va en una fila propia, bajo la de la persona
+    const bandaRev = window.mxBandaRevisionHtml ? window.mxBandaRevisionHtml(emp, dates) : '';
 
-    return `<tr id="row-empleado-${emp.id}">
+    return `<tr id="row-empleado-${emp.id}"${bandaRev ? ' class="rv-con-banda"' : ''}>
         <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="position:sticky; left:0; z-index:50; white-space:nowrap;cursor:pointer;font-size:0.75rem; width:260px; min-width:260px; max-width:260px;"
             ondblclick="openCuadreModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
             title="${hasHE ? 'Doble clic → Cuadre del tramo (hay horas extra por decidir)' : 'Doble clic → Cuadre del tramo'}">
@@ -6799,7 +7000,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera')}px;${getStickyWidthStyleLocal('espera')}"></td>`
         ) : ''}
         ${dayCells}
-    </tr>`;
+    </tr>` + bandaRev;
 };
 
 window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
@@ -6983,10 +7184,14 @@ window.reloadSingleEmployeeRow = async function(empId) {
         if (s.soloNegativo && !(r.saldo < 0)) matchesFilter = false;
         if (s.soloConHE && !(r.he_bruto > 0)) matchesFilter = false;
 
+        // La lista de días por revisar va en su propia fila: se quita la vieja y la nueva viene con la fila
+        const bandaVieja = document.getElementById('rv-banda-' + empId);
         if (!matchesFilter) {
             rowEl.style.display = "none";
+            if (bandaVieja) bandaVieja.style.display = 'none';
         } else {
             rowEl.style.display = "";
+            if (bandaVieja) bandaVieja.remove();
 
             const hasBonos = (stateMarcacionesApp.data.bonos_nombres || []).length > 0;
             const bonosNombres = stateMarcacionesApp.data.bonos_nombres || [];
@@ -6998,6 +7203,14 @@ window.reloadSingleEmployeeRow = async function(empId) {
 
             const newRowHtml = window.renderEmployeeRowHtml(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols);
             rowEl.outerHTML = newRowHtml;
+            const filaNueva = document.getElementById('row-empleado-' + empId);
+            const tbNuevo = filaNueva ? filaNueva.closest('tbody') : null;
+            if (tbNuevo && window.mxBandasAjustar) {
+                window.mxBandasAjustar(tbNuevo);
+                window.mxBandasCargarMarcas(tbNuevo);
+                window.mxAvisarCorreccion(empId);
+                window.mxActualizarAvisoBloque(tbNuevo);
+            }
         }
 
         window.recalculateTotalsRow(dates, feriadosArray, getFeriadoDesc);
@@ -7198,6 +7411,7 @@ window.toggleStickyEmpleado = function() {
             btn.title = "Columnas fijadas. Clic para liberar y deslizar del día 1 al 31.";
         }
     }
+    if (window.mxBandasAjustar) window.mxBandasAjustar();
 };
 
 // ─── PUNTO DE ENTRADA (llamado desde marcaciones_ui.js) ──────────────────────
@@ -7565,6 +7779,8 @@ function renderVistaAnalitica(respData, container) {
         const nCol = ref ? [...ref.children].reduce((a, td) => a + (td.colSpan || 1), 0) : 1;
         _tablaGh.querySelectorAll('.gh-titulo > td').forEach(td => { td.colSpan = nCol; });
     }
+    // Listas de días por revisar bajo cada fila: columnas, ubicación y marcas de cada día
+    if (window.mxBandasAjustar) { window.mxBandasAjustar(container); window.mxBandasCargarMarcas(container); }
 
     // ── TOOLTIP VOLANTE (reemplaza Bootstrap Popover) ─────────────────────────
     // Un solo div en el body, pointer-events:none para no interceptar eventos del mouse.
@@ -7850,7 +8066,9 @@ function _analiticaCellBadge(di) {
         const icon = e.icono_bi ? `<i class="bi ${e.icono_bi} me-1"></i>` : '';
         // Para badges cortos usamos short_label o fallback
         const shortLabel = e.short_label || (e.codigo === 'JORNADA_ESPECIAL' ? 'ESP' : (e.codigo.length <= 3 ? e.codigo : e.codigo.substring(0,3)));
-        badgeMap[e.codigo] = [e.color_clase, icon + (e._badgeLabel || shortLabel)];
+        // Sigla de 6 o 7 letras (p. ej. REVISAR): la pastilla le quita aire para que quepa (grilla-hd.css → .st-largo)
+        const largo = String(e._badgeLabel || shortLabel).replace(/<[^>]*>/g, '').length > 5 ? ' st-largo' : '';
+        badgeMap[e.codigo] = [e.color_clase + largo, icon + (e._badgeLabel || shortLabel)];
     });
 
     // Inyectar mappings virtuales para los dos tipos de inasistencia compensada y borrador libreta
@@ -8219,7 +8437,7 @@ window._gridApplyPinCap = function() {
 if (!window._gridPinCapBound) {
     window._gridPinCapBound = true;
     let _t;
-    window.addEventListener('resize', () => { clearTimeout(_t); _t = setTimeout(() => window._gridApplyPinCap(), 150); });
+    window.addEventListener('resize', () => { clearTimeout(_t); _t = setTimeout(() => { window._gridApplyPinCap(); if (window.mxBandasAjustar) window.mxBandasAjustar(); }, 150); });
 }
 
 // Contraer o expandir un grupo de columnas (o cambiar de pestaña) vuelve a dibujar la grilla: los días se deslizan desde

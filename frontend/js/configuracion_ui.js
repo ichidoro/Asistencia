@@ -163,6 +163,7 @@ const COLOR_OPTIONS = [
     { value: 'color-naranja',  label: 'Naranja',       preview: '#f97316' },
     { value: 'color-purpura',  label: 'Púrpura',       preview: '#8b5cf6' },
     { value: 'color-violeta',  label: 'Violeta intenso', preview: '#7c3aed' },
+    { value: 'color-rojo-intenso', label: 'Rojo intenso', preview: '#b0352c' },
     { value: 'color-rosa',     label: 'Rosa',           preview: '#f472b6' },
     { value: 'color-cian',     label: 'Cian',           preview: '#22d3ee' },
     { value: 'color-lima',     label: 'Lima',           preview: '#a3e635' },
@@ -220,7 +221,7 @@ window.refreshEstadosAvisos = function() {
         if (!inp || !aviso) return;
         const dupSig = x.activo && (sig[x.sigla] || []).length > 1 ? sig[x.sigla].filter(c => c !== x.e.codigo) : [];
         const dupCol = x.activo && (col[x.color] || []).length > 1 ? col[x.color].filter(c => c !== x.e.codigo) : [];
-        inp.classList.toggle('is-invalid', dupSig.length > 0 || !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(inp.value.trim() || 'X'));
+        inp.classList.toggle('is-invalid', dupSig.length > 0 || !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,7}$/.test(inp.value.trim() || 'X'));
         let h = '';
         if (dupSig.length) h += '<p class="fcB-nota" style="color:#a3261c"><i class="bi bi-x-octagon-fill" aria-hidden="true"></i> Etiqueta repetida con ' + dupSig.map(nombreDe).map(_escAttr).join(', ') + '. Cámbiela antes de guardar.</p>';
         if (dupCol.length) h += '<p class="fcB-nota"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Mismo color que ' + dupCol.map(nombreDe).map(_escAttr).join(', ') + '.</p>';
@@ -253,7 +254,7 @@ function renderEstadosConfig() {
                 + '<div id="estado-aviso-' + _escAttr(c) + '"></div>'
                 + F.campo('Vista previa', '<div id="preview-' + _escAttr(c) + '">' + _estadoPreviewHtml(e.color_clase, e.icono_bi, e.short_label || _estadoSiglaDefecto(c)) + '</div>', 'Así se ve en la grilla.')
                 + F.campo('Nombre visible', '<input type="text" class="fcB-inp" id="estado-nombre-' + _escAttr(c) + '" maxlength="40" value="' + _escAttr(e.nombre_display || '') + '">', '', 'estado-nombre-' + c)
-                + F.campo('Etiqueta', '<input type="text" class="fcB-inp" style="max-width:120px;text-transform:uppercase" id="estado-short-' + _escAttr(c) + '" maxlength="5" value="' + _escAttr(e.short_label || _estadoSiglaDefecto(c)) + '" oninput="previewEstadoBadge(\'' + _escAttr(c) + '\')">', 'Hasta 5 letras o números. No puede repetirse entre estados activos.', 'estado-short-' + c)
+                + F.campo('Etiqueta', '<input type="text" class="fcB-inp" style="max-width:120px;text-transform:uppercase" id="estado-short-' + _escAttr(c) + '" maxlength="7" value="' + _escAttr(e.short_label || _estadoSiglaDefecto(c)) + '" oninput="previewEstadoBadge(\'' + _escAttr(c) + '\')">', 'Hasta 7 letras o números. No puede repetirse entre estados activos.', 'estado-short-' + c)
                 + F.campo('Color', '<select class="fcB-inp" id="estado-color-' + _escAttr(c) + '" onchange="previewEstadoBadge(\'' + _escAttr(c) + '\')">'
                     + COLOR_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === e.color_clase ? ' selected' : '') + '>' + _escAttr(sinDibujo(o.label)) + '</option>').join('') + '</select>', '', 'estado-color-' + c)
                 + F.campo('Ícono', '<span style="display:inline-grid;place-items:center;width:38px;height:38px;border:1px solid #e6e9f1;border-radius:9px"><i id="estado-icon-preview-' + _escAttr(c) + '" class="bi ' + _escAttr(e.icono_bi || 'bi-circle') + '" aria-hidden="true"></i></span>'
@@ -308,7 +309,7 @@ window.saveEstado = async function(codigo) {
 
     // Validación previa (el servidor vuelve a validar)
     if (!nombre) { showToast('Falta el nombre visible.', 'warning'); return; }
-    if (shortLabel && !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(shortLabel)) { showToast('La etiqueta debe tener de 1 a 5 letras o números (también punto, + o guion).', 'warning'); return; }
+    if (shortLabel && !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,7}$/.test(shortLabel)) { showToast('La etiqueta debe tener de 1 a 7 letras o números (también punto, + o guion).', 'warning'); return; }
     if (icono && !/^bi-[a-z0-9-]+$/.test(icono)) { showToast('El ícono debe escribirse como bi-nombre (por ejemplo, bi-clock).', 'warning'); return; }
     if (/[<>]/.test(`${nombre}${desc}${shortLabel}`)) { showToast('Los textos no pueden llevar los signos < ni >.', 'warning'); return; }
     refreshEstadosAvisos();

@@ -2852,10 +2852,11 @@ class AsistenciaService:
                     } if int(j.get('llamado_minutos') or 0) > 0 else None),
                 }
 
-        # Días por revisar (Reglas de marcaciones): la celda lleva un triángulo mientras
-        # el día tenga el marcador del motor y nadie lo haya confirmado con sus marcas actuales.
+        # Días por revisar (Reglas de marcaciones): la celda y la lista bajo la fila los muestran mientras
+        # el día tenga el marcador del motor y nadie lo haya confirmado con sus marcas actuales. Cada día lleva
+        # la secuencia de su regla y las opciones de revisión que la regla permite (las define el dueño en la pestaña).
         try:
-            from backend.services.reglas_marcas_def import MARCA_REVISION_REGLA, firma_marcas
+            from backend.services.reglas_marcas_def import MARCA_REVISION_REGLA, firma_marcas, secuencia_en_revision
             conf_rows = await db.fetch_all(
                 f"SELECT empleado_id, fecha, firma FROM revisiones_marcas "
                 f"WHERE empleado_id IN ({ids_ph}) AND fecha BETWEEN ? AND ?",
@@ -2863,6 +2864,13 @@ class AsistenciaService:
             confirmadas = {}
             for c in conf_rows:
                 confirmadas.setdefault((c['empleado_id'], c['fecha']), set()).add(c['firma'])
+            opciones_por_secuencia = {}
+            for rr in await db.fetch_all(
+                    "SELECT secuencia, opciones_revision FROM reglas_marcas WHERE tipo_horario = 'CICLO_INTELIGENTE'"):
+                try:
+                    opciones_por_secuencia[str(rr['secuencia'])] = json.loads(rr['opciones_revision'] or '[]')
+                except Exception:
+                    opciones_por_secuencia[str(rr['secuencia'])] = []
             for eid, dias_emp in matrix.items():
                 for f_cel, cel in dias_emp.items():
                     if f_cel == 'info' or not isinstance(cel, dict):
@@ -2871,6 +2879,9 @@ class AsistenciaService:
                     if MARCA_REVISION_REGLA in obs_cel:
                         firma_cel = firma_marcas(cel.get('marcas_consumidas_ids'))
                         cel['revision_marcas'] = 0 if firma_cel in confirmadas.get((eid, f_cel), set()) else 1
+                        sec_cel = secuencia_en_revision(obs_cel)
+                        cel['revision_secuencia'] = sec_cel
+                        cel['revision_opciones'] = opciones_por_secuencia.get(sec_cel, [])
         except Exception as e_rev:
             logger.warning(f"[Matrix] No se pudo marcar los días por revisar: {e_rev}")
 

@@ -40,6 +40,7 @@
 .badge-status.color-negro          { --st-bg: #eceef3; --st-fg: #101a3d; }
 .badge-status.color-purpura        { --st-bg: #efe9fb; --st-fg: #6a3eaf; }
 .badge-status.color-violeta        { --st-bg: #7c3aed; --st-fg: #ffffff; }
+.badge-status.color-rojo-intenso   { --st-bg: #b0352c; --st-fg: #ffffff; }
 /* Estados con clase propia (van después: mandan sobre el color base) */
 .badge-status.badge-he             { --st-bg: #eaeefb; --st-fg: #1b2f8f; }
 .badge-status.badge-pen            { --st-bg: #eef0f5; --st-fg: #69738f; }
@@ -190,3 +191,48 @@ body:not(.estados-chip) .sem-cel td.col-day .st-multi::after {
 }
 @media (prefers-reduced-motion: reduce) { .gh-plegar i { transition: none; } }
 .gh-grupo.gh-fijo .gh-tit { padding-left: 14px; }
+
+/* Días por revisar (Reglas de marcaciones), versión C mejorada elegida por el dueño (06-11-2026; marcaciones_ui.js → mxBandaRevisionHtml).
+   Rojo: el par «peligro» de la grilla (#b0352c sobre #fdecea); la acción, en el azul marino de los demás botones. */
+/* Sigla larga (hasta 7 letras, p. ej. REVISAR): menos aire para que quepa en la pastilla de siempre */
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-status.st-largo { padding: 0 4px !important; max-width: 60px; }
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-status.st-largo > span { letter-spacing: .01em; }
+/* En el teléfono (semana de 7 días en ~44 px cada uno) la sigla larga baja de tamaño para verse entera */
+body:not(.estados-chip) .sem-cel td.col-day .badge-status.st-largo { padding: 0 3px !important; max-width: 100%; }
+body:not(.estados-chip) .sem-cel td.col-day .badge-status.st-largo > span { font-size: 9px !important; letter-spacing: 0 !important; }
+/* Un día por revisar cuyo estado no es el de revisión (regla que calcula y además pide revisar): marco rojo en la celda */
+#marcaciones-view-container .matrix-table-premium td.col-day.rv-celda-marco { box-shadow: inset 0 0 0 2px #b0352c; }
+/* Recién corregido: un anillo azul marino breve en la celda */
+#marcaciones-view-container .matrix-table-premium td.col-day.rv-recien { animation: rvRecien 1.6s ease-out 1; }
+@keyframes rvRecien { 0% { box-shadow: inset 0 0 0 3px #1e2a78; } 100% { box-shadow: inset 0 0 0 0 transparent; } }
+/* La fila de la persona y su lista se leen como una sola: sin línea entre ellas */
+.matrix-table-premium tr.rv-con-banda > td { border-bottom-color: transparent !important; }
+.matrix-table-premium tr.rv-banda > td { border-top: 0 !important; padding: 0 !important; text-align: left !important; vertical-align: top; overflow: visible !important; }
+.matrix-table-premium tr.rv-banda > td.rv-nom { position: sticky; left: 0; z-index: 50; padding: 12px 8px 10px 52px !important; }
+.matrix-table-premium.unpin-sticky-columns tr.rv-banda > td.rv-nom, .matrix-table-premium.gc-unpinned tr.rv-banda > td.rv-nom { position: sticky; }
+.rv-nomtxt { display: inline-flex; align-items: center; gap: 6px; font: 700 12px/1.2 'Barlow', system-ui, sans-serif; color: #b0352c; }
+.rv-lista { position: sticky; left: 272px; display: flex; flex-direction: column; width: max-content; max-width: calc(100vw - 340px); margin: 0; padding: 4px 0 8px; list-style: none; font-family: 'Barlow', system-ui, sans-serif; }
+.rv-item { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 7px 10px 7px 12px; background: #fdecea; border-radius: 8px; }
+.rv-item + .rv-item { border-top: 1px solid #f3c6c1; }
+.rv-dia { display: flex; flex-direction: column; gap: 3px; min-width: 128px; }
+.rv-dia b { font: 700 13px/1 'Barlow', system-ui, sans-serif; letter-spacing: .02em; color: #b0352c; }
+.rv-dia span { font: 500 12px/1 'Barlow', system-ui, sans-serif; color: #5b6580; }
+.rv-marcas { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
+.rv-marca { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 9px; border-radius: 6px; background: #fff; border: 1px solid #e4e7ef; white-space: nowrap; }
+.rv-marca small { font: 700 11px/1 'Barlow', system-ui, sans-serif; letter-spacing: .03em; color: #101a3d; }
+.rv-marca b { font: 600 12.5px/1 'Barlow', system-ui, sans-serif; color: #101a3d; font-variant-numeric: tabular-nums; }
+.rv-marca.rv-prop { border: 1.5px dashed #b0352c; }
+.rv-marca.rv-prop em { font: 700 11px/1 'Barlow', system-ui, sans-serif; font-style: normal; letter-spacing: .03em; color: #b0352c; }
+.rv-marca-otro { font: 500 11px/1 'Barlow', system-ui, sans-serif; color: #5b6580; margin-left: 2px; }
+.rv-turno { font: 500 12px/1 'Barlow', system-ui, sans-serif; color: #5b6580; white-space: nowrap; }
+.rv-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 14px; margin-left: auto; border: 0; border-radius: 7px;
+  background: #1e2a78; color: #fff; font: 700 12px/1 'Barlow', system-ui, sans-serif; cursor: pointer; }
+.rv-btn:hover { background: #17205f; }
+.rv-btn:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; }
+.rv-hecho { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: #e6f5ec; color: #167a46; font: 600 12.5px/1.2 'Barlow', system-ui, sans-serif; }
+/* Aviso en el título del bloque (los bloques parten plegados): cuántos días hay por revisar y lleva a ellos */
+.rv-grupo { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: 1px solid #f3c6c1; border-radius: 999px;
+  background: #fdecea; color: #b0352c; font: 700 12px/1 'Barlow', system-ui, sans-serif; cursor: pointer; }
+.rv-grupo:hover { background: #fbdcd8; }
+.rv-grupo:focus-visible { outline: 2px solid #b0352c; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { #marcaciones-view-container .matrix-table-premium td.col-day.rv-recien { animation: none; } }
