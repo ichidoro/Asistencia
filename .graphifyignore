@@ -1,0 +1,10 @@
+# Archivos que graphify no lee al armar el grafo del código (mismo formato que .gitignore).
+# Bibliotecas externas ya comprimidas: no tienen código nuestro.
+/frontend/js/libs/html5-qrcode.min.js
+/frontend/js/libs/qrcode.min.js
+/frontend/js/chart.js
+/frontend/js/bootstrap.bundle.min.js
+/frontend/js/jspdf.umd.min.js
+/frontend/js/sweetalert2.all.min.js
+# Dashboard compilado: su código original está en dashboard_build/src y el grafo ya lo lee.
+/frontend/js/dashboard_react.js

@@ -330,3 +330,6 @@ _work/
 !frontend/assets/img/icons/*.png
 
 respaldo_*.txt
+
+# Grafo de conocimiento del código (graphify): se genera en cada PC, no va al repo
+graphify-out/
