@@ -1079,7 +1079,7 @@ function renderTurnosTable() {
     const canEdit = F.puede('configuracion.horarios');
     const tipoDe = function (t) {
         const isBolsa = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA');
-        const isLibreta = isBolsa && (t.modalidad_control === 'LIBRETA_180H' || !t.modalidad_control);
+        const isLibreta = isBolsa && t.modalidad_control === 'LIBRETA_180H';   // sin modalidad = reloj, igual que el cálculo
         if (isBolsa) return isLibreta ? (t.permite_viajes_largos ? 'Libreta 180 h, Art. 25 bis (viajes)' : 'Libreta 180 h, Art. 25 bis') : (t.permite_viajes_largos ? 'Bolsa flexible (viajes largos)' : 'Bolsa flexible');
         return t.rotacion_dinamica_diaria ? 'Ciclo inteligente, elige la opción cada día' : 'Ciclo inteligente';
     };

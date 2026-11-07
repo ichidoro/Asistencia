@@ -5974,8 +5974,8 @@ window.getCortesLibreta = function(rows) {
     return [...new Set((rows || []).map(r => window.getCorteLibreta(r && r.emp)).filter(Boolean))].sort();
 };
 window._empEsHorarioLibreta = function(empInfo) {
-    return !!(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'
-        || String(empInfo.modalidad_control || '').toUpperCase() === 'LIBRETA_180H'));
+    // Igual que el cálculo (libreta_corte.es_horario_libreta): solo la modalidad «Libreta» decide, no el tipo de horario
+    return !!(empInfo && String(empInfo.modalidad_control || '').toUpperCase() === 'LIBRETA_180H');
 };
 // true si ese día se controló por reloj (horario de libreta, pero anterior al corte y sin libreta cargada)
 window.esDiaControlPorReloj = function(di, dateStr, empInfo) {

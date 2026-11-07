@@ -144,7 +144,7 @@ Cada jornada muestra **las marcas que usó su cálculo**, no las que caen en su 
 El Dashboard tiene dos pestañas y solo lee (no recalcula ni escribe nada). Respeta el alcance por áreas del usuario.
 Definiciones comunes (`backend/services/dashboard_pendientes.py`):
 - **Área de un día** = la vigente en esa fecha según `historial_areas` validado (igual que el cierre).
-- **Libreta** = horario con `modalidad_control = LIBRETA_180H` desde su fecha «Sin reloj a partir de»; un día de libreta sin registrar queda `PENDIENTE` y no es una falta.
+- **Libreta** = horario con `modalidad_control = LIBRETA_180H` desde su fecha «Sin reloj a partir de» (sin fecha: libreta siempre); un día de libreta sin registrar queda `PENDIENTE` y no es una falta. Rige igual para el cálculo, la sincronización, la purga de marcas del reloj y las pantallas (`libreta_corte.es_horario_libreta`). **El tipo de horario no decide**: una Bolsa Flexible en modalidad «Reloj» se calcula con las marcas del reloj (orden del dueño, 07-11-2026, por si se vuelve a marcar en el reloj; antes toda Bolsa Flexible se trataba como libreta).
 - **Justificado** = tiene `justificacion_id`, o su estado es el nombre de un tipo de justificación, `PERMISO` o una inasistencia compensada.
 - **Programado con reloj** = tiene horas del horario, no es libreta, no está justificado y no es libre ni feriado.
 

@@ -3365,8 +3365,8 @@ class AsistenciaService:
     async def purgar_y_recalcular_libreta_180h(self, fecha_desde: Optional[str] = None) -> Dict[str, Any]:
         """
         Purga todas las marcaciones biométricas de reloj físico (logs_raw donde manual=0 o manual IS NULL), y lo que
-        cuelga de ellas (cambios de tipo y revisiones del día), en los días que cada horario de libreta ('LIBRETA_180H'
-        o Bolsa Flexible) controla con libreta: desde su propia fecha «Sin reloj a partir de» (`libreta_desde`).
+        cuelga de ellas (cambios de tipo y revisiones del día), en los días que cada horario de libreta (modalidad
+        'LIBRETA_180H') controla con libreta: desde su propia fecha «Sin reloj a partir de» (`libreta_desde`).
         `fecha_desde` solo acota el comienzo (nunca antes de la fecha del horario); un horario sin fecha se purga solo
         si se indica `fecha_desde`.
 
@@ -3385,11 +3385,8 @@ class AsistenciaService:
                    t.modalidad_control, t.tipo_programacion, t.libreta_desde
             FROM asignacion_turnos ast
             JOIN turnos t ON ast.turno_id = t.id
-            WHERE (
-                UPPER(COALESCE(t.modalidad_control, 'RELOJ')) = 'LIBRETA_180H'
-                OR UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
-            )
-        """
+            WHERE UPPER(COALESCE(t.modalidad_control, 'RELOJ')) = 'LIBRETA_180H'
+        """  # solo la modalidad decide si es libreta, no el tipo de horario (libreta_corte.es_horario_libreta)
         asig_rows = await db.fetch_all(q_asigs)
         if not asig_rows:
             logger.info("ℹ️ [Libreta 180h] No se encontraron asignaciones en modalidad libreta 180h.")

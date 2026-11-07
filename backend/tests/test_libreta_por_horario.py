@@ -38,6 +38,23 @@ def test_un_horario_de_reloj_nunca_es_libreta():
                                        "libreta_desde": "2026-09-26"}, "2026-10-05") is False
 
 
+def test_una_bolsa_flexible_en_reloj_se_calcula_con_el_reloj():
+    # Orden del dueño (07-11-2026): la opción «Reloj» de la Bolsa Flexible se deja por si se vuelve a marcar en el reloj,
+    # y debe funcionar. Solo la modalidad «Libreta» hace que un día sea de libreta (REGLAS_ASISTENCIA.md, «Libreta»).
+    bolsa_reloj = {"modalidad_control": "RELOJ", "tipo_programacion": "BOLSA_FLEXIBLE", "libreta_desde": None}
+    assert _regimen(bolsa_reloj, "2026-11-07") == REGIMEN_RELOJ
+    assert Q.resolve_control_modality(bolsa_reloj, "2026-11-07") is False
+    sin_modalidad = dict(bolsa_reloj, modalidad_control=None)
+    assert Q.resolve_control_modality(sin_modalidad, "2026-11-07") is False
+
+
+def test_las_pantallas_usan_la_misma_regla():
+    js = (RAIZ / "frontend/js/marcaciones_ui.js").read_text(encoding="utf-8")
+    inicio = js.index("window._empEsHorarioLibreta = function")
+    cuerpo = js[inicio:js.index("};", inicio)]
+    assert "LIBRETA_180H" in cuerpo and "BOLSA_FLEXIBLE" not in cuerpo
+
+
 def test_un_horario_de_libreta_sin_fecha_es_libreta_siempre():
     assert Q.resolve_control_modality(dict(LOGISTICA, libreta_desde=None), "2026-01-01") is True
 

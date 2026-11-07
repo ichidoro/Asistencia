@@ -4299,7 +4299,7 @@ async def purgar_marcas_reloj_libreta_180h(
 ):
     """
     Purga todas las marcas biométricas del reloj físico (logs_raw donde manual=0 o NULL)
-    para empleados con turnos en modalidad 'LIBRETA_180H' o Bolsa Flexible, en los días que su horario controla con libreta.
+    para empleados con turnos en modalidad 'LIBRETA_180H', en los días que su horario controla con libreta.
     Recalcula la asistencia para todos los días afectados garantizando que días sin libreta digital
     permanezcan estrictamente como PENDIENTE sin marcas de reloj.
     """

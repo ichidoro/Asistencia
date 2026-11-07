@@ -317,9 +317,9 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     if (btnMarcacion180h) {
         const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
         const di = stateMarcacionesApp.data && stateMarcacionesApp.data.matriz && stateMarcacionesApp.data.matriz[empId] ? stateMarcacionesApp.data.matriz[empId][dateStr] : null;
-        const isBolsa = Boolean(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'));
+        // Solo la modalidad «Libreta» del horario abre la libreta: una Bolsa Flexible en «Reloj» se marca con el reloj (07-11-2026)
         const isLibreta = Boolean(
-            (empInfo && (empInfo.modalidad_control === 'LIBRETA_180H' || (empInfo.modalidad_control && empInfo.modalidad_control.toUpperCase() === 'LIBRETA_180H') || isBolsa)) ||
+            (empInfo && empInfo.modalidad_control && empInfo.modalidad_control.toUpperCase() === 'LIBRETA_180H') ||
             (di && (di.modalidad_control === 'LIBRETA_180H' || di.origen === 'LIBRETA_180H' || di.slots_96))
         );
 

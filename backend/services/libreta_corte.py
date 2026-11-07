@@ -16,7 +16,6 @@ _RE_FECHA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 REGIMEN_LIBRETA = "LIBRETA_180H"
 REGIMEN_RELOJ = "RELOJ"
-TIPOS_BOLSA = ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA")
 
 
 def normalizar_fecha_corte(valor: Any) -> Optional[str]:
@@ -39,10 +38,13 @@ def fecha_libreta_del_horario(turno: Optional[Dict[str, Any]]) -> Optional[str]:
     return normalizar_fecha_corte((turno or {}).get('libreta_desde'))
 
 
-def es_horario_libreta(modalidad_control: Optional[str], tipo_programacion: Optional[str]) -> bool:
-    """Un horario es "de libreta" si su modalidad es LIBRETA_180H o es de Bolsa Flexible."""
-    return ((modalidad_control or REGIMEN_RELOJ).strip().upper() == REGIMEN_LIBRETA
-            or (tipo_programacion or "").strip().upper() in TIPOS_BOLSA)
+def es_horario_libreta(modalidad_control: Optional[str], tipo_programacion: Optional[str] = None) -> bool:
+    """Un horario es "de libreta" solo si su modalidad de control es LIBRETA_180H (REGLAS_ASISTENCIA.md, «Libreta»).
+
+    El tipo de horario no decide: una Bolsa Flexible en modalidad «Reloj» se calcula con las marcas del reloj, por si se
+    vuelve a marcar en el reloj (orden del dueño, 07-11-2026). Antes toda Bolsa Flexible se trataba como libreta.
+    `tipo_programacion` se conserva en la firma solo para no cambiar a quienes la llaman."""
+    return (modalidad_control or REGIMEN_RELOJ).strip().upper() == REGIMEN_LIBRETA
 
 
 def regimen_del_dia(
