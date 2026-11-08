@@ -57,8 +57,9 @@
         background-color: var(--bg-color) !important;
     }
 
-    /* Formularios */
-    input, select, textarea, .form-control, .form-select {
+    /* Formularios. Las casillas y los botones de opción quedan fuera: con el fondo blanco forzado, la casilla
+       marcada se veía vacía (su ✓ es blanco sobre el color del tema). Se ven igual que en modo claro. */
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea, .form-control, .form-select {
         background-color: var(--ui-white) !important;
         color: var(--ui-ink-deep) !important;
         border-color: var(--ui-line) !important;
@@ -69,8 +70,8 @@
     .text-dark { color: var(--ui-ink-deep) !important; }
     label, p, span, h1, h2, h3, h4, h5, h6, li, a { color: inherit !important; }
 
-    /* Badges y pills */
-    .badge { color: inherit !important; }
+    /* Badges y pills: conservan su propio color de texto (con «inherit» forzado, el texto tomaba el color
+       del fondo y la etiqueta se veía vacía). Se ven igual que en modo claro. */
 
     /* Dropdowns */
     .dropdown-menu, .dropdown-item {
