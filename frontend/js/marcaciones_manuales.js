@@ -752,7 +752,10 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     // Reset Form
     const lblFecha = document.getElementById('manual-fecha-display');
     if (lblFecha) {
-        lblFecha.value = window.formatFechaDDMMYYYY(dateStr);
+        // Con el día de la semana (p. ej. «lunes 12-10-2026»): la fecha sola no dice si era un día hábil, sábado o domingo
+        const [fy, fm, fd] = String(dateStr).split('-').map(n => parseInt(n, 10));
+        const diaSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][new Date(fy, fm - 1, fd).getDay()];
+        lblFecha.value = (diaSemana ? diaSemana + ' ' : '') + window.formatFechaDDMMYYYY(dateStr);
     }
 
     const lblEmp = document.getElementById('manual-empleado-display');
