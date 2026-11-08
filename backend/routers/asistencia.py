@@ -1859,7 +1859,7 @@ async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usad
         tipica = await _colacion_tipica(db, hd.get("turno_asignado_id"), horario["entrada"])
     fhs = [str(r["fecha_hora"])[:19] for r in usadas]
     p = propuesta_tres_marcas(fhs, horario["entrada"], horario["salida"], int(vc.get("min", 20)), int(vc.get("max", 150)),
-                              col_horario, tipica)
+                              col_horario, tipica, tipos=[r["tipo"] for r in usadas])
     if not p:
         return None
     marcas_dt = [datetime.strptime(x, "%Y-%m-%d %H:%M:%S") for x in fhs]

@@ -539,6 +539,38 @@ def test_propuesta_tres_marcas_con_el_horario():
     assert p(['2026-06-11 07:00:00', '2026-06-11 15:30:00'], '07:00', '15:30') is None
 
 
+def test_entrada_entrada_salida_falta_la_salida_a_colacion():
+    """Regla 9 (E·E·S): con los tipos del reloj, la del medio es la vuelta de colación → faltó la salida a colación, a la
+    hora de la vuelta − los minutos de colación del horario; la segunda opción es que la del medio no se usa."""
+    from backend.services.reglas_marcas_def import propuesta_tres_marcas
+    ees = ['Entrada', 'Entrada', 'Salida']
+    p = lambda m, e, s, col, tip=None: propuesta_tres_marcas(m, e, s, 20, 150, col, tip, tipos=ees)
+    resumen = lambda r: [(o['clave'], o['tipos'], o['marca']) for o in r['opciones']]
+    tip = {'sale': 13 * 60, 'vuelve': 13 * 60 + 31}
+    esperado = lambda h, medio: [('FALTA_SALIDA_COLACION', ees, {'tipo': 'Salida', 'hora': h}),
+                                 ('SOBRA_MEDIO', ['Entrada', 'No se usa', 'Salida'], None)]
+    # La del medio a la hora en que vuelven de colación
+    r = p(['2026-05-27 06:46:10', '2026-05-27 13:30:05', '2026-05-27 15:33:00'], '07:00', '15:30', 30, tip)
+    assert resumen(r) == esperado('13:00', '13:30')
+    assert 'volvió a las 13:30' in r['opciones'][0]['motivo'] and '30 min' in r['opciones'][0]['motivo']
+    # Vuelve antes de la hora en que suelen salir: igual falta la salida a colación (el reloj dijo ENTRADA)
+    r = p(['2026-08-12 06:52:00', '2026-08-12 12:59:00', '2026-08-12 15:39:00'], '07:00', '15:30', 30, tip)
+    assert resumen(r) == esperado('12:29', '12:59')
+    # Sale del turno antes de su horario: la salida del turno no se reemplaza por la del horario
+    r = p(['2026-10-30 06:49:00', '2026-10-30 13:32:00', '2026-10-30 14:23:00'], '07:00', '15:30', 30, tip)
+    assert resumen(r) == esperado('13:02', '13:32')
+    # Horario con 60 min de colación
+    r = p(['2026-09-03 07:59:00', '2026-09-03 16:33:00', '2026-09-03 18:23:00'], '08:00', '17:00', 60)
+    assert r['opciones'][0]['marca'] == {'tipo': 'Salida', 'hora': '15:33'}
+    # La salida a colación quedaría antes de la llegada, o el horario no tiene minutos de colación: decide la persona
+    assert p(['2026-08-07 06:12:00', '2026-08-07 06:21:00', '2026-08-07 15:11:00'], '11:30', '20:00', 30) is None
+    assert p(['2026-05-27 06:46:10', '2026-05-27 13:30:05', '2026-05-27 15:33:00'], '07:00', '15:30', 0) is None
+    # Sin los tipos, la propuesta sigue siendo la de siempre (reglas 6 y 27)
+    r = propuesta_tres_marcas(['2026-08-12 06:52:00', '2026-08-12 12:59:00', '2026-08-12 15:39:00'], '07:00', '15:30',
+                              20, 150, 30, tip)
+    assert r['combinacion'] == 6 and r['opciones'][0]['clave'] == 'SOBRA_MEDIO'
+
+
 def test_ventana_de_tres_marcas_con_opciones_y_un_solo_guardar():
     """La ventana muestra las opciones completas (la primera elegida), lo que paga cada una, «Otra cosa» y un solo Guardar;
     la colación de su horario sale de las marcas reales (mediana), sin horas escritas en el código."""
