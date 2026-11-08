@@ -317,21 +317,29 @@ class QuantumPhaseTopology:
                 continue
         ordenadas.sort()
 
+        fecha_sig = (dt_base + timedelta(days=1)).strftime("%Y-%m-%d")
+        ent_sig, sal_sig = _bordes_ciclos(fecha_sig, ciclos_dia_siguiente)
+
         # Inicio: el día natural; en un ciclo de noche, desde la primera ENTRADA del día que es suya por el borde más cercano.
+        # También es suya una ENTRADA anterior que deja la jornada abierta hasta la noche: es la última marca del día y la que
+        # le sigue es una SALIDA de la madrugada siguiente cuyo borde más cercano es la SALIDA de esta noche (llegó antes a
+        # cubrir parte de otro ciclo y siguió con la noche). Sin márgenes: el mismo criterio del borde más cercano.
         start_dt = dt_base
         if nocturno:
             start_dt = dt_in
             ent_hoy, _ = _bordes_ciclos(fecha_str, ciclos_dia)
             otras = [e for e in ent_hoy if e != dt_in]
-            for dt, es_e in ordenadas:
+            for k, (dt, es_e) in enumerate(ordenadas):
                 if dt < dt_base or dt >= dt_in:
                     continue
                 if es_e and _es_el_borde_mas_cercano(dt, dt_in, otras):
                     start_dt = dt
                     break
-
-        fecha_sig = (dt_base + timedelta(days=1)).strftime("%Y-%m-%d")
-        ent_sig, sal_sig = _bordes_ciclos(fecha_sig, ciclos_dia_siguiente)
+                sig = ordenadas[k + 1] if k + 1 < len(ordenadas) else None
+                if (es_e and sig is not None and not sig[1] and sig[0] > fin_dia and dt_out is not None
+                        and _es_el_borde_mas_cercano(sig[0], dt_out, ent_sig + sal_sig)):
+                    start_dt = dt
+                    break
 
         # Una noche sin marcas antes de la medianoche no se queda con una ENTRADA de la madrugada que está más cerca del
         # comienzo de un ciclo del día siguiente que del suyo: esa ENTRADA empieza la jornada del día siguiente.
@@ -1034,8 +1042,8 @@ class QuantumShiftWeekMatcher:
             entradas_cand = [m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_E]
             salidas_cand = [m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_S]
             # La llegada es la primera marca del día solo si es una ENTRADA. Si el día empieza con una SALIDA, la llegada falta
-            # y la ENTRADA que viene después es la vuelta de colación: el ciclo se elige por la última SALIDA (caso RIQUELME
-            # 12-10-2026: 12:47 S · 13:17 E · 16:35 S elegía Tarde por la vuelta de las 13:17; calza con Mañana, que sale a las 15:00).
+            # y la ENTRADA que viene después es la vuelta de colación: el ciclo se elige por la última SALIDA (p. ej. S · E · S con la
+            # vuelta de colación cerca de la entrada de la tarde y la última SALIDA cerca de la salida de la mañana: es la mañana).
             ordenadas = sorted(marcas_cand, key=lambda m: str(m.get('fecha_hora', '')))
             empieza_con_salida = bool(ordenadas) and str(ordenadas[0].get('tipo', '')).strip().lower() in _TIPOS_S
             if empieza_con_salida:
@@ -1043,6 +1051,28 @@ class QuantumShiftWeekMatcher:
             else:
                 first_m = entradas_cand[0] if entradas_cand else (marcas_cand[0] if marcas_cand else None)
             last_m = salidas_cand[-1] if salidas_cand else (marcas_cand[-1] if len(marcas_cand) > 1 else None)
+
+            # Jornada que queda abierta hoy (la última marca del día es una ENTRADA) y que no se juntó con una noche: un ciclo
+            # que cruza la medianoche también se mide con la primera SALIDA de la madrugada siguiente que no usa otro día y que
+            # viene antes de la siguiente ENTRADA de la persona (p. ej. llegó antes a cubrir parte de la tarde y salió al
+            # terminar la noche: elegía la tarde por la llegada y esa SALIDA quedaba sin usar). Sin números nuevos: el mismo cálculo
+            # de distancia a los bordes del horario.
+            salida_madrugada = None
+            if (tiene_nocturno and not marcas_madrugada_next and ordenadas
+                    and str(ordenadas[-1].get('tipo', '')).strip().lower() in _TIPOS_E):
+                for l in sorted((x for x in logs if str(x.get('fecha_hora', ''))[:10] == next_day_str),
+                                key=lambda x: str(x.get('fecha_hora', ''))):
+                    t_l = str(l.get('tipo', '')).strip().lower()
+                    if t_l in _TIPOS_E:
+                        break
+                    if t_l in _TIPOS_S:
+                        salida_madrugada = l
+                        break
+
+            def _cfg_cruza(cfg):
+                return bool(cfg.get('cruza_medianoche')) or bool(
+                    cfg.get('hora_entrada') and cfg.get('hora_salida') and QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida'))
+                    < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
 
             # Rotación diaria: cada día la persona elige una opción, también la libre. Una opción que trabaja compite solo si
             # lo trabajado entra en sus horas; si no entra en ninguna, eligió la libre y lo trabajado es jornada especial
@@ -1074,8 +1104,9 @@ class QuantumShiftWeekMatcher:
                         d_in = abs(QuantumPhaseTopology.circular_distance(p_ent_teo, p_m))
 
                 d_out = None
-                if last_m and p_sal_teo is not None:
-                    dt_s = MultiBlockTensorSolver.parse_dt(last_m)
+                salida_ciclo = salida_madrugada if (salida_madrugada is not None and _cfg_cruza(cfg_sem)) else last_m
+                if salida_ciclo and p_sal_teo is not None:
+                    dt_s = MultiBlockTensorSolver.parse_dt(salida_ciclo)
                     if dt_s:
                         p_s = QuantumPhaseTopology.time_to_phase(dt_s)
                         d_out = abs(QuantumPhaseTopology.circular_distance(p_sal_teo, p_s))
@@ -2200,7 +2231,7 @@ class QuantumMatrixEngine:
         if reglas_marcas is None:
             reglas_marcas = REGLAS_MARCAS_ACTIVAS
         # Las reglas son para días con turno: un día hábil o un feriado en que la persona tenía turno (se usa su horario;
-        # decisión del dueño, 08-11-2026, caso RIQUELME 12-10-2026). Un día libre de su turno no tiene horario y queda fuera.
+        # decisión del dueño, 08-11-2026). Un día libre de su turno no tiene horario y queda fuera.
         con_turno = not es_libre_dia and (horas_teoricas > 0 or bool(is_holiday and hora_ent_teo and hora_sal_teo))
         if (reglas_marcas and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE' and con_turno
                 and bloque_p and not segment_res['bloques_extras'] and not segment_res['emergencia_detectada']):

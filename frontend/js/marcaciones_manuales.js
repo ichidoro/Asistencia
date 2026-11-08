@@ -950,7 +950,8 @@ function _mmPintarDia(data) {
     const set = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
     const hm = (h) => String(h || '').slice(0, 5);
     const minHm = (m) => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-    const h = (data && data.horario) || {};
+    // El ciclo que eligió el cálculo (no la mezcla que se usa para proponer la marca que falta en un día de una sola marca)
+    const h = (data && (data.horario_dia || data.horario)) || {};
     set('mm-h-jornada', h.entrada && h.salida ? hm(h.entrada) + ' – ' + hm(h.salida) : '—');
     set('mm-h-colacion', !data ? '—' : (data.colacion_min ? data.colacion_min + ' min' : 'Sin colación'));
     const tip = data && data.colacion_tipica;
@@ -1048,6 +1049,7 @@ async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
         _mmPintarDia(data);
         _mmQuitarHorasDelHorario(data.marcas);
         host._horario = data.horario || null;
+        host._horarioDia = data.horario_dia || null;   // el ciclo que eligió el cálculo (línea de tiempo)
         renderPanelMarcasDia(host, empId, dateStr, data);
         cargarReglaDia(empId, dateStr, host, !!data.fecha_cerrada, reqId);
     } catch (e) {
@@ -1460,7 +1462,7 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         const iCol = Object.keys(col).map(Number).sort((a, b) => a - b);
         const absDe = (m) => _marcasAbs({ fecha: m.fecha || dateStr, hora: m.hora });
         const tramoCol = iCol.length >= 2 ? [absDe(marcas[iCol[0]]), absDe(marcas[iCol[1]])] : null;
-        _mmLineaTiempo(host.querySelector('#mm-tl'), host._horario, dateStr, filasTl, tramoCol);
+        _mmLineaTiempo(host.querySelector('#mm-tl'), host._horarioDia || host._horario, dateStr, filasTl, tramoCol);
         const avisos = [];
         if (ts[0] === 'Salida') avisos.push('La primera marca del día está como SALIDA.');
         if (ts.length > 1 && ts[ts.length - 1] === 'Entrada') avisos.push('La última marca del día está como ENTRADA.');

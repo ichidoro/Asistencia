@@ -2030,7 +2030,9 @@ async def marcaciones_del_dia(
         "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),
         "horario": horario,
         "propuesta": propuesta,
-        # «Horario del día» y «Cálculo» de la ventana: lo que hoy tiene guardado el día
+        # «Horario del día» y «Cálculo» de la ventana: lo que hoy tiene guardado el día (el ciclo que eligió el cálculo;
+        # «horario» puede mezclar dos ciclos para proponer la marca que falta en un día de una sola marca)
+        "horario_dia": {"entrada": (hd or {}).get("hora_entrada_teorica"), "salida": (hd or {}).get("hora_salida_teorica")},
         "colacion_min": col_horario,
         "colacion_tipica": tipica,
         "bolsa": tp in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA"),

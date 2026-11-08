@@ -169,8 +169,8 @@ def _registro_limpio():
 
 
 def test_las_reglas_entran_en_feriados_con_turno_y_no_en_dias_libres(monkeypatch):
-    """Un feriado en que la persona tenía turno entra en las reglas con su horario (decisión del dueño, caso RIQUELME
-    12-10-2026); un día libre de su turno no tiene horario y queda fuera."""
+    """Un feriado en que la persona tenía turno entra en las reglas con su horario (decisión del dueño,
+    08-11-2026); un día libre de su turno no tiene horario y queda fuera."""
     monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 10, 19, 12, 0))
     qme.REGLAS_MARCAS_ACTIVAS = {"SES": {"secuencia": "SES", "lectura": "NINGUNA", "colacion": "TURNO", "accion": "SOLO_REVISA",
                                          "opciones_revision": ["AGREGAR_ENTRADA", "RECLASIFICAR"]}}
@@ -507,12 +507,12 @@ def test_propuesta_tres_marcas_con_el_horario():
     r = p(['2026-08-11 07:54:39', '2026-08-11 15:19:20', '2026-08-11 15:41:55'], '08:00', '17:30')
     assert resumen(r) == [('FALTA_SALIDA', ['Entrada', 'Salida', 'Entrada'], {'tipo': 'Salida', 'hora': '17:30'})]
     # Están la entrada y la salida (ninguna pausa es colación: 154 min > 150): la del medio no se usa, siempre
-    galvez = ['2026-06-11 07:01:30', '2026-06-11 12:56:55', '2026-06-11 15:30:21']
-    assert resumen(p(galvez, '07:00', '15:30')) == [('SOBRA_MEDIO', ['Entrada', 'No se usa', 'Salida'], None)]
+    marcas_medio = ['2026-06-11 07:01:30', '2026-06-11 12:56:55', '2026-06-11 15:30:21']
+    assert resumen(p(marcas_medio, '07:00', '15:30')) == [('SOBRA_MEDIO', ['Entrada', 'No se usa', 'Salida'], None)]
     # … y, con la colación de su horario (30 min) y a qué hora sale (13:00) y vuelve (13:31) su horario, la marca de
     # colación que calza: 12:56 está más cerca de la salida → faltó la vuelta, a las 13:26
     tip = {'sale': 13 * 60, 'vuelve': 13 * 60 + 31}
-    r = p(galvez, '07:00', '15:30', 30, tip)
+    r = p(marcas_medio, '07:00', '15:30', 30, tip)
     assert resumen(r) == [('SOBRA_MEDIO', ['Entrada', 'No se usa', 'Salida'], None),
                           ('FALTA_VUELTA', ['Entrada', 'Salida', 'Salida'], {'tipo': 'Entrada', 'hora': '13:26'})]
     assert 'salió a las 12:56' in r['opciones'][1]['motivo'] and '13:00' in r['opciones'][1]['motivo']
@@ -520,8 +520,8 @@ def test_propuesta_tres_marcas_con_el_horario():
     r = p(['2026-06-11 07:01:30', '2026-06-11 13:35:00', '2026-06-11 15:30:21'], '07:00', '15:30', 30, tip)
     assert resumen(r)[1] == ('FALTA_SALIDA_COLACION', ['Entrada', 'Entrada', 'Salida'], {'tipo': 'Salida', 'hora': '13:05'})
     # Sin datos de su horario o sin minutos de colación: solo «no se usa»
-    assert len(p(galvez, '07:00', '15:30', 30, None)['opciones']) == 1
-    assert len(p(galvez, '07:00', '15:30', 0, tip)['opciones']) == 1
+    assert len(p(marcas_medio, '07:00', '15:30', 30, None)['opciones']) == 1
+    assert len(p(marcas_medio, '07:00', '15:30', 0, tip)['opciones']) == 1
     # Pausa de 148 min que termina a la hora de salida: la última ES la salida → sobra la del medio (no falta nada)
     assert p(['2026-04-27 07:01:00', '2026-04-27 14:03:00', '2026-04-27 16:31:00'], '07:00', '16:30')['combinacion'] == 6
     # Pausa al comienzo y salida a la hora: falta la ENTRADA aunque la segunda pausa también mida como colación
@@ -604,7 +604,7 @@ def test_el_calculo_no_lee_las_marcas_que_no_se_usan():
 
 def test_el_ciclo_no_se_elige_por_la_vuelta_de_colacion():
     """Opción cada día: si el día empieza con una SALIDA (falta la llegada), la ENTRADA siguiente es la vuelta de colación y
-    no sirve para elegir el ciclo; se elige por la última SALIDA (caso RIQUELME 12-10-2026: Mañana, no Tarde)."""
+    no sirve para elegir el ciclo; se elige por la última SALIDA (S · E · S que calza con la mañana, no con la tarde)."""
     from backend.services.quantum_matrix_engine import QuantumShiftWeekMatcher
     ciclos = {1: {0: {"hora_entrada": "23:00", "hora_salida": "07:00", "cruza_medianoche": 1, "es_libre": 0}},
               2: {0: {"hora_entrada": "07:00", "hora_salida": "15:00", "es_libre": 0}},
@@ -618,3 +618,23 @@ def test_el_ciclo_no_se_elige_por_la_vuelta_de_colacion():
     assert elegir([marca(1, "14:58:00", "Entrada"), marca(2, "19:30:00", "Salida"), marca(3, "20:00:00", "Entrada"),
                    marca(4, "23:02:00", "Salida")]) == 3
     assert elegir([marca(1, "06:58:00", "Entrada"), marca(2, "15:01:00", "Salida")]) == 2
+
+
+def test_jornada_abierta_se_mide_con_la_salida_de_la_madrugada_siguiente():
+    """Si el día queda abierto (la última marca es una ENTRADA), cada ciclo que cruza la medianoche también se mide con la
+    primera SALIDA de la madrugada siguiente que viene antes de la siguiente ENTRADA: quien llegó antes a cubrir parte de la
+    tarde y salió al terminar la noche queda en la noche, no en la tarde con la SALIDA sin usar."""
+    from backend.services.quantum_matrix_engine import QuantumShiftWeekMatcher
+    dia = {1: {0: {"hora_entrada": "23:00", "hora_salida": "07:00", "es_libre": 0}},
+           2: {0: {"hora_entrada": "07:00", "hora_salida": "15:00", "es_libre": 0}},
+           3: {0: {"hora_entrada": "15:00", "hora_salida": "23:00", "es_libre": 0}}}
+    m = lambda i, fh, t: {"id": i, "fecha_hora": fh, "tipo": t}
+    elegir = lambda logs: QuantumShiftWeekMatcher.resolve_winner_week(
+        empleado_id=1, fecha_str="2026-06-22", dt=datetime(2026, 6, 22), dia_semana=0, logs=logs, turnos_dict=dia,
+        total_sems=3, rotacion_dinamica=False)
+    assert elegir([m(1, "2026-06-22 18:37:00", "Entrada"), m(2, "2026-06-23 07:05:00", "Salida")]) == 1
+    # Si la madrugada siguiente empieza con una ENTRADA, esa SALIDA posterior es de otra jornada: no cuenta
+    assert elegir([m(1, "2026-06-22 18:37:00", "Entrada"), m(2, "2026-06-23 06:50:00", "Entrada"),
+                   m(3, "2026-06-23 15:05:00", "Salida")]) == 3
+    # Un día que cierra con su SALIDA el mismo día sigue como siempre
+    assert elegir([m(1, "2026-06-22 14:58:00", "Entrada"), m(2, "2026-06-22 23:03:00", "Salida")]) == 3
