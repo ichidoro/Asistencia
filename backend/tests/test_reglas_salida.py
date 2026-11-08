@@ -168,6 +168,26 @@ def _registro_limpio():
     qme.REGLAS_MARCAS_REBOTE = None
 
 
+def test_las_reglas_entran_en_feriados_con_turno_y_no_en_dias_libres(monkeypatch):
+    """Un feriado en que la persona tenía turno entra en las reglas con su horario (decisión del dueño, caso RIQUELME
+    12-10-2026); un día libre de su turno no tiene horario y queda fuera."""
+    monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 10, 19, 12, 0))
+    qme.REGLAS_MARCAS_ACTIVAS = {"SES": {"secuencia": "SES", "lectura": "NINGUNA", "colacion": "TURNO", "accion": "SOLO_REVISA",
+                                         "opciones_revision": ["AGREGAR_ENTRADA", "RECLASIFICAR"]}}
+    logs = [{"id": 1, "fecha_hora": f"{FECHA} 12:47:02", "tipo": S, "manual": 0, "observaciones": None},
+            {"id": 2, "fecha_hora": f"{FECHA} 13:17:08", "tipo": E, "manual": 0, "observaciones": None},
+            {"id": 3, "fecha_hora": f"{FECHA} 16:35:42", "tipo": S, "manual": 0, "observaciones": None}]
+    dia = lambda **k: Q.solve_attendance_day(fecha=FECHA, empleado_id=1, logs=[dict(l) for l in logs], turno_config=TURNO,
+                                             global_ajustes={"reglas_marcas_repetidas_minutos": "20"},
+                                             todos_ciclos_dia=[DIA], consumidas_previas=set(), **k)
+    habil = dia(dia_config=DIA)
+    assert MARCA_REVISION_REGLA in (habil["observaciones"] or "")
+    feriado = dia(dia_config=DIA, is_holiday=True)
+    assert MARCA_REVISION_REGLA in (feriado["observaciones"] or "")
+    libre = dia(dia_config=dict(DIA, es_libre=1, horas_teoricas=0))
+    assert MARCA_REVISION_REGLA not in (libre["observaciones"] or "")
+
+
 def test_revisar_antes_de_calcular_termina_calculado_por_el_motor(monkeypatch):
     """Para cada secuencia de hasta 5 marcas con una regla «Revisar antes de calcular» válida: el motor deja el día
     sin horas; después de la corrección que permiten sus opciones (un día bien marcado) el motor lo calcula."""
@@ -580,3 +600,21 @@ def test_el_calculo_no_lee_las_marcas_que_no_se_usan():
     assert "Una marca manual no se marca como «No se usa»" in router
     js = open(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()
     assert "mm-seg-nsu" in js and "opciones.includes('NO_SE_USA')" in js
+
+
+def test_el_ciclo_no_se_elige_por_la_vuelta_de_colacion():
+    """Opción cada día: si el día empieza con una SALIDA (falta la llegada), la ENTRADA siguiente es la vuelta de colación y
+    no sirve para elegir el ciclo; se elige por la última SALIDA (caso RIQUELME 12-10-2026: Mañana, no Tarde)."""
+    from backend.services.quantum_matrix_engine import QuantumShiftWeekMatcher
+    ciclos = {1: {0: {"hora_entrada": "23:00", "hora_salida": "07:00", "cruza_medianoche": 1, "es_libre": 0}},
+              2: {0: {"hora_entrada": "07:00", "hora_salida": "15:00", "es_libre": 0}},
+              3: {0: {"hora_entrada": "15:00", "hora_salida": "23:00", "es_libre": 0}}}
+    marca = lambda i, h, t: {"id": i, "fecha_hora": f"2026-10-12 {h}", "tipo": t}
+    elegir = lambda logs: QuantumShiftWeekMatcher.resolve_winner_week(
+        empleado_id=1, fecha_str="2026-10-12", dt=datetime(2026, 10, 12), dia_semana=0, logs=logs, turnos_dict=ciclos,
+        total_sems=3, rotacion_dinamica=True)
+    assert elegir([marca(1, "12:47:02", "Salida"), marca(2, "13:17:08", "Entrada"), marca(3, "16:35:42", "Salida")]) == 2
+    # Con la llegada marcada, manda la llegada como siempre
+    assert elegir([marca(1, "14:58:00", "Entrada"), marca(2, "19:30:00", "Salida"), marca(3, "20:00:00", "Entrada"),
+                   marca(4, "23:02:00", "Salida")]) == 3
+    assert elegir([marca(1, "06:58:00", "Entrada"), marca(2, "15:01:00", "Salida")]) == 2

@@ -1033,7 +1033,15 @@ class QuantumShiftWeekMatcher:
             # Buscar primer evento de entrada y último evento de salida en el horizonte candidato
             entradas_cand = [m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_E]
             salidas_cand = [m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_S]
-            first_m = entradas_cand[0] if entradas_cand else (marcas_cand[0] if marcas_cand else None)
+            # La llegada es la primera marca del día solo si es una ENTRADA. Si el día empieza con una SALIDA, la llegada falta
+            # y la ENTRADA que viene después es la vuelta de colación: el ciclo se elige por la última SALIDA (caso RIQUELME
+            # 12-10-2026: 12:47 S · 13:17 E · 16:35 S elegía Tarde por la vuelta de las 13:17; calza con Mañana, que sale a las 15:00).
+            ordenadas = sorted(marcas_cand, key=lambda m: str(m.get('fecha_hora', '')))
+            empieza_con_salida = bool(ordenadas) and str(ordenadas[0].get('tipo', '')).strip().lower() in _TIPOS_S
+            if empieza_con_salida:
+                first_m = None
+            else:
+                first_m = entradas_cand[0] if entradas_cand else (marcas_cand[0] if marcas_cand else None)
             last_m = salidas_cand[-1] if salidas_cand else (marcas_cand[-1] if len(marcas_cand) > 1 else None)
 
             # Rotación diaria: cada día la persona elige una opción, también la libre. Una opción que trabaja compite solo si
@@ -2191,7 +2199,10 @@ class QuantumMatrixEngine:
         reglas_marcas = REGLAS_MARCAS_ENSAYO.get()
         if reglas_marcas is None:
             reglas_marcas = REGLAS_MARCAS_ACTIVAS
-        if (reglas_marcas and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE'
+        # Las reglas son para días con turno: un día hábil o un feriado en que la persona tenía turno (se usa su horario;
+        # decisión del dueño, 08-11-2026, caso RIQUELME 12-10-2026). Un día libre de su turno no tiene horario y queda fuera.
+        con_turno = not es_libre_dia and (horas_teoricas > 0 or bool(is_holiday and hora_ent_teo and hora_sal_teo))
+        if (reglas_marcas and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE' and con_turno
                 and bloque_p and not segment_res['bloques_extras'] and not segment_res['emergencia_detectada']):
             hoy_regla = _get_now_local().strftime("%Y-%m-%d")
             fin_jornada = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
