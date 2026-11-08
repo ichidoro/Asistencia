@@ -1120,13 +1120,22 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     const marcas = data.marcas;
     const cerrada = !!data.fecha_cerrada;
     const dudoso = marcas.some(m => m.dudoso);
+    // Doble toque: el cálculo deja fuera esa marca antes de aplicar la regla. Se muestra en gris y no cuenta para la colación
+    // ni para los avisos, así la ventana ve las mismas marcas que la regla.
+    const usada = marcas.map(m => !m.doble_toque);
+    const nUsadas = usada.filter(Boolean).length;
+    const txtDobleToque = (dt) => {
+        const s = Number(dt.segundos) || 0;
+        const sep = s >= 60 ? Math.floor(s / 60) + ' min' + (s % 60 ? ' ' + (s % 60) + ' s' : '') : s + ' s';
+        return `No se usa · doble toque, ${sep} después de la de las ${String(dt.hora).slice(0, 8)}`;
+    };
     // Quitar una marca manual (nunca las del reloj): solo quien tenga el permiso que asigna el administrador al rol
     const puedeQuitar = typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.eliminar_manual');
     host.style.display = 'block';
     host.innerHTML = `
         <div class="border rounded p-2" style="background:#f8fafc;">
             <div class="d-flex justify-content-between align-items-center mb-1">
-                <strong><i class="bi bi-list-check"></i> Marcaciones del día (${marcas.length})</strong>
+                <strong><i class="bi bi-list-check"></i> Marcaciones del día (${marcas.length}${nUsadas !== marcas.length ? ' · se usan ' + nUsadas : ''})</strong>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-marcas-sugerir"${cerrada ? ' disabled' : ''}>Usar sugerencia</button>
             </div>
             <div class="small text-muted mb-2">Elija cuál marca es ENTRADA y cuál es SALIDA. La colación se detecta sola cuando una SALIDA y la ENTRADA siguiente quedan a mitad del día, entre ${MARCAS_COLACION_MIN} y ${MARCAS_COLACION_MAX} minutos.</div>
@@ -1149,13 +1158,13 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         return `<div class="small text-muted fw-normal">${d}-${mo} · ${m.fecha > dateStr ? 'día siguiente' : 'día anterior'}</div>`;
     };
     body.innerHTML = marcas.map((m, i) => `
-        <tr data-i="${i}">
+        <tr data-i="${i}"${usada[i] ? '' : ' class="text-muted" style="opacity:.6;"'}>
             <td class="fw-semibold">${m.hora}${etiquetaOtroDia(m)}<div class="mm-prop-txt">Cambio propuesto</div></td>
             <td>${m.tipo_reloj ? String(m.tipo_reloj).toUpperCase() : '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
             <td><div class="mm-seg" role="radiogroup" aria-label="Tipo de la marca de las ${m.hora}">
-                <button type="button" class="mm-seg-b" role="radio" data-v="Entrada"${cerrada ? ' disabled' : ''}>ENTRADA</button>
-                <button type="button" class="mm-seg-b" role="radio" data-v="Salida"${cerrada ? ' disabled' : ''}>SALIDA</button>
-            </div><select class="form-select form-select-sm marca-tipo visually-hidden" tabindex="-1" aria-hidden="true"${cerrada ? ' disabled' : ''}>
+                <button type="button" class="mm-seg-b" role="radio" data-v="Entrada"${cerrada || !usada[i] ? ' disabled' : ''}>ENTRADA</button>
+                <button type="button" class="mm-seg-b" role="radio" data-v="Salida"${cerrada || !usada[i] ? ' disabled' : ''}>SALIDA</button>
+            </div><select class="form-select form-select-sm marca-tipo visually-hidden" tabindex="-1" aria-hidden="true"${cerrada || !usada[i] ? ' disabled' : ''}>
                 <option value="Entrada"${m.tipo_actual === 'Entrada' ? ' selected' : ''}>Entrada</option>
                 <option value="Salida"${m.tipo_actual === 'Salida' ? ' selected' : ''}>Salida</option>
             </select></td>
@@ -1169,15 +1178,21 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     const selects = () => Array.from(body.querySelectorAll('select.marca-tipo'));
     const tipos = () => selects().map(sel => sel.value);
     const refrescar = () => {
-        const ts = tipos();
-        const col = _marcasColacion(marcas, ts);
+        const tsTodas = tipos();
+        // Colación y avisos solo con las marcas que usa el cálculo (sin el doble toque)
+        const idx = marcas.map((m, i) => i).filter(i => usada[i]);
+        const ts = idx.map(i => tsTodas[i]);
+        const colU = _marcasColacion(idx.map(i => marcas[i]), ts);
+        const col = {};
+        Object.keys(colU).forEach(k => { col[idx[k]] = colU[k]; });
         body.querySelectorAll('tr').forEach((tr, i) => {
-            tr.querySelector('.marca-etiqueta').innerHTML = col[i] !== undefined
-                ? `<span class="vn-pill">Colación · ${col[i]} min</span>` : '';
-            tr.querySelectorAll('.mm-seg-b').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === ts[i] ? 'true' : 'false'));
+            tr.querySelector('.marca-etiqueta').innerHTML = !usada[i]
+                ? `<span class="small">${txtDobleToque(marcas[i].doble_toque)}</span>`
+                : (col[i] !== undefined ? `<span class="vn-pill">Colación · ${col[i]} min</span>` : '');
+            tr.querySelectorAll('.mm-seg-b').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === tsTodas[i] ? 'true' : 'false'));
             // El cambio que propone el sistema se ve en rojo mientras siga elegido (y sea distinto de lo que rige hoy)
             const prop = host._mx && host._mx.propuestas ? host._mx.propuestas[i] : null;
-            tr.classList.toggle('mm-prop', !!(prop && ts[i] === prop && ts[i] !== marcas[i].tipo_actual));
+            tr.classList.toggle('mm-prop', !!(prop && tsTodas[i] === prop && tsTodas[i] !== marcas[i].tipo_actual));
         });
         const avisos = [];
         if (ts[0] === 'Salida') avisos.push('La primera marca del día está como SALIDA.');

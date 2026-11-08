@@ -444,3 +444,27 @@ def test_con_una_marca_sola_se_propone_el_ciclo_que_calza_con_su_tipo():
     assert ciclo_para_marca_sola(ciclos, "23:40", "Salida")["hora_entrada"] == "15:00"   # cruza la medianoche
     assert ciclo_para_marca_sola([], "15:21", "Salida") is None
     assert ciclo_para_marca_sola(ciclos, "15:21", "") is None
+
+
+def test_ventana_marca_el_doble_toque_igual_que_el_calculo():
+    """La ventana muestra como «no se usa» la marca que el cálculo deja fuera por doble toque (dos marcas a menos del
+    rebote), aunque sean de distinto tipo: así ve las mismas marcas que la regla."""
+    from backend.routers.asistencia import marcas_doble_toque
+    rows = [
+        {"id": 1, "fecha_hora": "2026-08-31 06:58:08", "tipo": "Entrada", "manual": 0},
+        {"id": 2, "fecha_hora": "2026-08-31 13:28:29", "tipo": "Salida", "manual": 0},
+        {"id": 3, "fecha_hora": "2026-08-31 13:53:09", "tipo": "Entrada", "manual": 0},
+        {"id": 4, "fecha_hora": "2026-08-31 13:54:57", "tipo": "Salida", "manual": 0},
+    ]
+    dt = marcas_doble_toque(rows, 180)
+    assert list(dt) == [4]
+    assert dt[4] == {"hora": "13:53:09", "segundos": 108}
+    # Con una SALIDA escrita después, el doble toque sigue fuera y quedan ENTRADA·SALIDA·ENTRADA·SALIDA
+    rows.append({"id": 5, "fecha_hora": "2026-08-31 16:30:00", "tipo": "Salida", "manual": 1})
+    assert list(marcas_doble_toque(rows, 180)) == [4]
+    # Fuera del rebote no se descarta nada
+    assert marcas_doble_toque(rows, 60) == {}
+    router = open(os.path.join(os.path.dirname(__file__), "..", "routers", "asistencia.py"), encoding="utf-8").read()
+    assert '"doble_toque": doble_toque.get(r["id"])' in router
+    js = open(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()
+    assert "No se usa · doble toque" in js and "se usan " in js

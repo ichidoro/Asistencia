@@ -1799,6 +1799,24 @@ async def _marcas_del_dia(db, empleado_id: int, fecha: str) -> List[Dict[str, An
                                         usadas.get(ayer, set()) | usadas.get(manana, set()))
 
 
+def marcas_doble_toque(rows: List[Dict[str, Any]], segundos: float) -> Dict[Any, Dict[str, Any]]:
+    """Las marcas que el cálculo descarta como doble toque, con la misma limpieza que usa el motor
+    (TensorMarkDeduplicator.deduplicate_and_sort). Devuelve {id descartada: {"hora": hora de la que se usó, "segundos": separación}}
+    para que la ventana muestre lo mismo que ve la regla."""
+    from backend.services.quantum_matrix_engine import TensorMarkDeduplicator
+    descartadas: List[Any] = []
+    TensorMarkDeduplicator.deduplicate_and_sort([dict(r) for r in rows], bounce_seconds=segundos, descartadas=descartadas)
+    out: Dict[Any, Dict[str, Any]] = {}
+    for desc, cons in descartadas:
+        try:
+            t_d = datetime.strptime(str(desc["fecha_hora"])[:19], "%Y-%m-%d %H:%M:%S")
+            t_c = datetime.strptime(str(cons["fecha_hora"])[:19], "%Y-%m-%d %H:%M:%S")
+        except (KeyError, ValueError):
+            continue
+        out[desc.get("id")] = {"hora": str(cons["fecha_hora"])[11:19], "segundos": int(abs((t_d - t_c).total_seconds()))}
+    return out
+
+
 def sugerir_clasificacion_marcas(horas: List[str]) -> List[Dict[str, Any]]:
     """
     Sugerencia de Entrada/Salida para las marcas de un día (ya ordenadas), y cuáles serían de colación.
@@ -1837,11 +1855,26 @@ async def marcaciones_del_dia(
     current_user.verificar_acceso_area(emp.area, "este empleado")
     # Las marcas de la jornada, no solo las del día del calendario: un turno que cruza la medianoche cierra con una marca de mañana
     rows = await _marcas_del_dia(service.repository.db, empleado_id, fecha)
-    sug = sugerir_clasificacion_marcas([str(r["fecha_hora"]) for r in rows])
     # Horario asignado de ese día (lo guarda el cálculo en la asistencia): la ventana lo propone al escribir la marca que falta
     hd = await service.repository.db.fetch_one(
         "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id FROM asistencias WHERE empleado_id = ? AND fecha = ?",
         (empleado_id, fecha))
+    # Doble toque: las marcas que el cálculo deja fuera antes de aplicar la regla. La sugerencia y la colación se calculan
+    # solo con las que se usan, igual que el cálculo.
+    doble_toque: Dict[Any, Dict[str, Any]] = {}
+    try:
+        from backend.services.quantum_matrix_engine import _rebote_defecto
+        tp = None
+        if hd and hd.get("turno_asignado_id"):
+            t = await service.repository.db.fetch_one("SELECT tipo_programacion FROM turnos WHERE id = ?", (hd["turno_asignado_id"],))
+            tp = (t or {}).get("tipo_programacion")
+        doble_toque = marcas_doble_toque(rows, _rebote_defecto(tp or ""))
+    except Exception as e:
+        logger.warning(f"Doble toque en la ventana ({empleado_id} {fecha}): {e}")
+    usadas = [r for r in rows if r["id"] not in doble_toque]
+    sug_usadas = iter(sugerir_clasificacion_marcas([str(r["fecha_hora"]) for r in usadas]))
+    sug = [({"tipo": r["tipo"], "colacion": False, "dudoso": len(usadas) % 2 == 1 or len(usadas) < 2}
+            if r["id"] in doble_toque else next(sug_usadas)) for r in rows]
     horario = {"entrada": (hd or {}).get("hora_entrada_teorica"), "salida": (hd or {}).get("hora_salida_teorica")}
     # Con UNA sola marca, el ciclo del día no es seguro (el cálculo lo elige por la marca más cercana, sin mirar su tipo).
     # La propuesta usa el ciclo del horario asignado que calza con esa marca según lo que falte.
@@ -1871,6 +1904,7 @@ async def marcaciones_del_dia(
             "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],
             "corregida": (r["tipo"] != r["tipo_original"]), "manual": bool(r["manual"]), "equipo": r.get("equipo"),
             "sugerido": s["tipo"], "colacion": s["colacion"], "colacion_min": s.get("colacion_min"), "dudoso": s["dudoso"],
+            "doble_toque": doble_toque.get(r["id"]),
         } for r, s in zip(rows, sug)],
     }
 
