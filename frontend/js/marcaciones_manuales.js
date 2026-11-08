@@ -737,6 +737,8 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
 
     marcacionesManualesState.currentEmpId = empId;
     marcacionesManualesState.currentDate = dateStr;
+    marcacionesManualesState.guardarOpcion = null;   // la opción elegida de un día de 3 marcas (ver _mmOpcionesTres)
+    _mmPintarDia(null);
     _mmQuitarBloqueoRevision();   // lo que dejó un día por revisar abierto antes
     _mmPermitirEscribirMarcas(true);
 
@@ -881,7 +883,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         if (btnUnlock) btnUnlock.style.display = 'none';
     } else if (isValidTime(horaEntrada) && isValidTime(horaSalida)) {
         alertDiv.className = 'alert alert-info py-2 mb-3 mt-2';
-        alertDiv.innerHTML = '<strong><i class="bi bi-shield-check"></i> Marcaciones Completas.</strong> Esta jornada cuenta con marcaciones biométricas válidas de Entrada y Salida. Si desea condonar un atraso o salida anticipada, utilice la función oficial de <strong>Perdonazo</strong>.';
+        alertDiv.innerHTML = '<strong><i class="bi bi-shield-check"></i> Marcaciones completas</strong> Para perdonar un atraso o una salida antes, use Perdonazo.';
         alertDiv.style.display = 'block';
         if (btnUnlock) btnUnlock.style.display = 'none';
     } else if (hasLockedMarks && (!isValidTime(horaEntrada) || !isValidTime(horaSalida))) {
@@ -902,6 +904,8 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     // El aviso amarillo fijo ("Ingrese la marcación faltante...") solo corresponde cuando de verdad falta una marca
     const avisoFalta = document.getElementById('manual-alert-faltante');
     if (avisoFalta) avisoFalta.style.display = (isValidTime(horaEntrada) && isValidTime(horaSalida) && !segundaJornada) ? 'none' : '';
+    // Si el aviso de arriba ya dice qué marca falta (o que está completo), el aviso general sobra
+    if (avisoFalta && alertDiv.style.display === 'block') avisoFalta.style.display = 'none';
 
     // Panel con TODAS las marcaciones del día para elegir cuál es Entrada / Salida (y ver cuál sería la colación)
     cargarPanelMarcacionesDia(empId, dateStr, alertDiv);
@@ -937,6 +941,68 @@ function _marcasMinutos(hora) {
     return parseInt(h, 10) * 60 + parseInt(m, 10);
 }
 
+/** Columna izquierda: «Horario del día» (jornada, colación y a qué hora sale a colación su horario) y «Cálculo» (lo que hoy
+ *  tiene guardado el día). Sin datos (al abrir) queda en «—». */
+function _mmPintarDia(data) {
+    const set = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+    const hm = (h) => String(h || '').slice(0, 5);
+    const minHm = (m) => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    const h = (data && data.horario) || {};
+    set('mm-h-jornada', h.entrada && h.salida ? hm(h.entrada) + ' – ' + hm(h.salida) : '—');
+    set('mm-h-colacion', !data ? '—' : (data.colacion_min ? data.colacion_min + ' min' : 'Sin colación'));
+    const tip = data && data.colacion_tipica;
+    set('mm-h-sale', tip ? minHm(tip.sale) + ' en su horario' : (data && data.bolsa ? '— (Bolsa Flexible)' : '—'));
+    const c = data && data.calculo;
+    const min = (v) => (v ? v + ' min' : '—');
+    set('mm-c-horas', c ? String(Number(c.horas).toFixed(2)).replace('.', ',') : '—');
+    set('mm-c-atraso', c ? min(c.atraso_min) : '—');
+    set('mm-c-sal', c ? min(c.salida_adelantada_min) : '—');
+    set('mm-c-deuda', c ? min(c.deuda_min) : '—');
+    _mmCalculoPropuesta(null);
+}
+
+/** «Cálculo → con propuesta»: lo que pagaría la opción elegida (o nada). */
+function _mmCalculoPropuesta(res) {
+    const set = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+    set('mm-c-modo', res ? 'hoy → con la opción' : 'hoy');
+    const min = (v) => (v ? v + ' min' : '—');
+    set('mm-c-horas-p', res ? '→ ' + String(Number(res.horas).toFixed(2)).replace('.', ',') : '');
+    set('mm-c-atraso-p', res && res.atraso_min !== undefined ? '→ ' + min(res.atraso_min) : '');
+    set('mm-c-sal-p', res && res.salida_adelantada_min !== undefined ? '→ ' + min(res.salida_adelantada_min) : '');
+    set('mm-c-deuda-p', res ? '→ ' + min(res.deuda_min) : '');
+}
+
+/** Línea de tiempo de las marcaciones: la jornada del horario, la colación detectada y cada marca en su hora (las que no se
+ *  usan, huecas). `filas`: [{abs, hora, estado}] con estado 'usa' | 'prop' | 'manual' | 'nueva' | 'no'. */
+function _mmLineaTiempo(cont, horario, dateStr, filas, colacion) {
+    if (!cont) return;
+    const absDe = (fecha, hora) => _marcasAbs({ fecha, hora });
+    let ini = null, fin = null;
+    if (horario && horario.entrada && horario.salida) {
+        ini = absDe(dateStr, String(horario.entrada).slice(0, 8));
+        fin = absDe(dateStr, String(horario.salida).slice(0, 8));
+        if (fin <= ini) fin += 24 * 60;
+    }
+    const ts = filas.map(f => f.abs).concat(ini !== null ? [ini, fin] : []);
+    if (!ts.length) { cont.innerHTML = ''; return; }
+    const lo = Math.min(...ts), hi = Math.max(...ts), ancho = Math.max(hi - lo, 60);
+    const pct = (a) => ((a - lo) / ancho) * 100;
+    let h = '<div class="mm-tl-barra"></div>';
+    if (ini !== null) h += `<div class="mm-tl-jornada" style="left:${pct(ini)}%;width:${pct(fin) - pct(ini)}%"></div>`;
+    if (colacion) h += `<div class="mm-tl-colacion" style="left:${pct(colacion[0])}%;width:${Math.max(pct(colacion[1]) - pct(colacion[0]), 0.8)}%"></div>`;
+    let ultimo = -100;
+    filas.slice().sort((a, b) => a.abs - b.abs).forEach(f => {
+        const x = pct(f.abs);
+        h += `<span class="mm-tl-m mm-tl-${f.estado}" style="left:${x}%" title="${f.hora}"></span>`;
+        if (x - ultimo >= 7 && f.estado !== 'no') {   // dos horas encimadas: se rotula solo la primera
+            const al = x < 4 ? ' mm-tl-ini' : (x > 96 ? ' mm-tl-fin' : '');
+            h += `<span class="mm-tl-h mm-tl-h-${f.estado}${al}" style="left:${x}%">${String(f.hora).slice(0, 5)}</span>`;
+            ultimo = x;
+        }
+    });
+    cont.innerHTML = h;
+}
+
 /** Minutos de una marca con su fecha: así el hueco entre dos marcas que cruzan la medianoche no sale negativo. */
 function _marcasAbs(m) {
     if (!m.fecha) return _marcasMinutos(m.hora);
@@ -962,8 +1028,10 @@ async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
     if (!host) {
         host = document.createElement('div');
         host.id = 'manual-panel-marcas';
-        host.className = 'mb-3';
-        if (anchorEl) anchorEl.insertAdjacentElement('afterend', host);
+        // Ventana en dos columnas: las marcaciones arriba de la columna derecha
+        const colMarcas = document.getElementById('mm-col-marcas');
+        if (colMarcas) colMarcas.appendChild(host);
+        else if (anchorEl) anchorEl.insertAdjacentElement('afterend', host);
     }
     host.style.display = 'none';
     host.innerHTML = '';
@@ -974,6 +1042,7 @@ async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
         if (!r.ok) return;
         const data = await r.json();
         if (host.dataset.req !== reqId || !data.marcas || data.marcas.length === 0) return; // el modal ya cambió de día
+        _mmPintarDia(data);
         _mmQuitarHorasDelHorario(data.marcas);
         host._horario = data.horario || null;
         renderPanelMarcasDia(host, empId, dateStr, data);
@@ -1009,6 +1078,7 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         const titulo = (regla.numero ? 'Regla ' + regla.numero + ' · ' : 'Regla de marcaciones · ') + sec;
         const mx = host._mx;
         if (mx) mx.enRevision = !!ev.en_revision;
+        if (ev.en_revision && !cerrada) _mmAvisoIzq('alert-danger', 'En revisión · ' + titulo.split(' · ')[0], regla.sin_calcular ? 'Sin horas hasta corregir sus marcas.' : 'Ya tiene sus horas calculadas.');
         // Día de 3 marcas con propuesta del servidor: una o dos opciones con el día ya resuelto y un solo «Guardar»
         if (activo && mx && mx.propuesta && mx.propuesta.opciones
             && _mmOpcionesTres(cont, host, empId, dateStr, mx.propuesta, opciones, titulo)) return;
@@ -1098,85 +1168,118 @@ function _mmOpcionPermitida(op, mx, opciones) {
     return true;
 }
 
-/** El día como quedaría con la opción: las marcas que se usan con su tipo y la marca nueva con su hora editable. */
-function _mmLineaOpcion(op, mx, i) {
-    const items = mx.marcas.filter(m => op.tipos[String(m.id)] && op.tipos[String(m.id)] !== 'No se usa')
-        .map(m => ({ fh: (m.fecha || '') + ' ' + m.hora, html: m.hora.slice(0, 5) + ' ' + String(op.tipos[String(m.id)]).toUpperCase() }));
-    if (op.marca) items.push({
-        fh: op.marca.fecha_hora,
-        html: `<input type="time" class="form-control form-control-sm d-inline-block mm-op-hora" data-i="${i}" value="${op.marca.hora}" aria-label="Hora de la ${op.marca.tipo} que se escribe" style="width:7.5rem;"> <strong>${String(op.marca.tipo).toUpperCase()}</strong> <span class="small text-muted">(se escribe)</span>`,
-    });
-    items.sort((a, b) => (a.fh < b.fh ? -1 : a.fh > b.fh ? 1 : 0));
-    return items.map(x => x.html).join(' · ');
+/** Aviso de la columna izquierda (el mismo lugar que «Marcaciones completas» o «Falta una marca»). */
+function _mmAvisoIzq(clase, titulo, texto) {
+    const a = document.getElementById('manual-alert-huerfana');
+    if (!a) return;
+    a.className = 'alert mb-0 ' + clase;
+    a.innerHTML = '<strong>' + titulo + '</strong> ' + (texto || '');
+    a.style.display = 'block';
+    const f = document.getElementById('manual-alert-faltante');
+    if (f) f.style.display = 'none';
 }
 
-/** Día de 3 marcas en revisión: una o dos opciones completas (la primera elegida), «Otra cosa» para corregir en la tabla y
- *  un solo «Guardar». Devuelve false si la regla no permite ninguna opción (la ventana sigue como antes). */
+/** Día de 3 marcas en revisión: una o dos opciones completas (la primera elegida) y «Otra cosa». La tabla de marcas muestra
+ *  en rojo cómo queda cada marca con la opción elegida y, si la opción escribe una marca, una fila nueva en azul; la línea
+ *  de tiempo y «Cálculo» se actualizan. Se guarda con el «Guardar» del pie. Devuelve false si la regla no permite ninguna
+ *  opción (la ventana sigue como antes). */
 function _mmOpcionesTres(cont, host, empId, dateStr, P, opciones, titulo) {
     const mx = host._mx;
     const ops = (P.opciones || []).filter(op => _mmOpcionPermitida(op, mx, opciones));
     if (!ops.length) return false;
-    const fmtH = (h) => String(h).replace('.', ',');
-    const paga = (op) => op.resultado ? ` <span class="small text-muted">· paga ${fmtH(op.resultado.horas)} h${op.resultado.deuda_min ? ' · ' + op.resultado.deuda_min + ' min de deuda' : ''}</span>` : '';
-    const tabla = [host.querySelector('table'), host.querySelector('#marcas-dia-aviso'), host.querySelector('#btn-marcas-guardar'),
-                   host.querySelector('#btn-marcas-sugerir'), host.querySelector('.small.text-muted.mb-2')].filter(Boolean);
-    const mostrarTabla = (si) => tabla.forEach(el => { (el.closest('.text-end') || el).style.display = si ? '' : 'none'; });
+    const fmtH = (h) => String(Number(h).toFixed(2)).replace('.', ',');
+    const body = host.querySelector('#marcas-dia-body');
+    const soloTabla = [host.querySelector('#marcas-dia-aviso'), host.querySelector('.mm-pie-marcas'), host.querySelector('#btn-marcas-sugerir')].filter(Boolean);
+    const guardarPie = document.querySelector('#modal-marcacion-manual .modal-footer button[onclick="saveManualEntry()"]');
+    _mmAvisoIzq('alert-danger', 'En revisión · ' + titulo.split(' · ')[0], 'Sin horas hasta corregir sus marcas.');
     cont.innerHTML = `
-        <div class="border rounded p-2" style="background:#fef2f2;">
-            <i class="bi bi-exclamation-triangle-fill text-danger"></i> <strong>${titulo}:</strong>
-            ${ops.length > 1 ? 'el sistema propone la primera; elija la que corresponda.' : 'el sistema propone esta corrección.'}
-            La hora que se escribe se puede cambiar.
-            <div class="mt-2" role="radiogroup" aria-label="Qué pasó este día">
-                ${ops.map((op, i) => `
-                <label class="d-flex gap-2 align-items-start border rounded p-2 mb-2 bg-white mm-op" style="cursor:pointer;">
-                    <input type="radio" class="form-check-input mt-1" name="mm-op" value="${i}"${i === 0 ? ' checked' : ''}>
-                    <span><strong>${op.titulo}</strong>${i === 0 ? ' <span class="badge bg-primary">propuesta</span>' : ''}${paga(op)}
-                    <span class="d-block mt-1">${_mmLineaOpcion(op, mx, i)}</span></span>
-                </label>`).join('')}
-                <label class="d-flex gap-2 align-items-start border rounded p-2 mb-2 bg-white mm-op" style="cursor:pointer;">
-                    <input type="radio" class="form-check-input mt-1" name="mm-op" value="otra">
-                    <span><strong>Otra cosa:</strong> lo corrijo yo en la tabla</span>
-                </label>
-            </div>
-            <div class="text-end"><button type="button" class="btn btn-sm btn-primary" id="mm-op-guardar">Guardar</button></div>
-        </div>`;
-    mostrarTabla(false);
+        <div class="mm-ops-tit">¿Qué pasó este día? ${ops.length > 1 ? 'El sistema propone la primera.' : 'El sistema propone esta corrección.'}</div>
+        <div class="mm-ops" role="radiogroup" aria-label="Qué pasó este día">
+            ${ops.map((op, i) => `
+            <label class="mm-op${i === 0 ? ' mm-op-sel' : ''}">
+                <input type="radio" name="mm-op" value="${i}"${i === 0 ? ' checked' : ''}>
+                <span class="mm-op-txt">
+                    <span class="mm-op-t">${op.titulo}</span>
+                    <span class="mm-op-m">${i === 0 ? '<span class="mm-op-prop">Propuesta</span>' : ''}${op.marca ? `${String(op.marca.tipo).toUpperCase()} <input type="time" class="mm-op-hora" data-i="${i}" value="${op.marca.hora}" aria-label="Hora de la ${op.marca.tipo} que se escribe">` : ''}${op.resultado ? `<span>paga ${fmtH(op.resultado.horas)} h</span>` : ''}</span>
+                </span>
+            </label>`).join('')}
+        </div>
+        <label class="mm-op-otra"><input type="radio" name="mm-op" value="otra"> Otra cosa: lo corrijo yo en la tabla o escribiendo la marca</label>`;
     _mmPermitirEscribirMarcas(false);
-    _mmAplicarBloqueoRevision('Elija arriba qué pasó este día y presione <strong>Guardar</strong>.');
-    const btn = cont.querySelector('#mm-op-guardar');
-    cont.querySelectorAll('input[name="mm-op"]').forEach(r => r.addEventListener('change', () => {
-        const otra = r.value === 'otra' && r.checked;
-        if (r.value === 'otra' && !r.checked) return;
-        mostrarTabla(otra);
-        btn.closest('.text-end').style.display = otra ? 'none' : '';
-        if (otra) {
+    _mmAplicarBloqueoRevision('Elija en «¿Qué pasó este día?» y presione <strong>Guardar</strong>.');
+    // La tabla muestra «NO SE USA» cuando la regla lo permite (así se ve la marca que la opción deja sin usar)
+    if (opciones.includes('NO_SE_USA')) host.querySelectorAll('.mm-seg-nsu').forEach(b => b.classList.remove('d-none'));
+
+    const segs = (activos) => body.querySelectorAll('tr[data-i] .mm-seg-b').forEach(b => {
+        if (!activos) { b.dataset.antes = b.disabled ? '1' : ''; b.disabled = true; }
+        else if (b.dataset.antes !== undefined) { b.disabled = b.dataset.antes === '1'; delete b.dataset.antes; }
+    });
+    const quitarFilaNueva = () => { body.querySelectorAll('tr.mm-fila-nueva').forEach(tr => tr.remove()); mx.nueva = null; };
+    // La opción elegida, en la tabla: tipos en rojo, la marca nueva como fila azul en su lugar
+    const aplicar = (op, i) => {
+        quitarFilaNueva();
+        mx.propuestas = mx.marcas.map(m => { const t = op.tipos[String(m.id)]; return (t && t !== m.tipo_actual) ? t : null; });
+        mx.selects().forEach((sel, k) => { const t = op.tipos[String(mx.marcas[k].id)]; sel.value = t || mx.marcas[k].tipo_actual; });
+        if (op.marca) {
+            const inp = cont.querySelector(`.mm-op-hora[data-i="${i}"]`);
+            const hora = ((inp && inp.value) || op.marca.hora).slice(0, 5) + ':00';
+            mx.nueva = { fecha: op.marca.fecha, hora };
+            const tr = document.createElement('tr');
+            tr.className = 'mm-fila-nueva';
+            tr.innerHTML = `<td class="mm-hora">${hora}</td><td class="mm-reloj">—</td><td><span class="mm-nueva-tipo">${String(op.marca.tipo).toUpperCase()}</span></td><td class="mm-nota"><span class="mm-tag mm-tag-nueva">Se escribe</span></td>`;
+            const despues = Array.from(body.querySelectorAll('tr[data-i]')).find(r => _marcasAbs(mx.marcas[parseInt(r.dataset.i, 10)]) > _marcasAbs(mx.nueva));
+            body.insertBefore(tr, despues || null);
+        }
+        mx.refrescar();
+        _mmCalculoPropuesta(op.resultado || null);
+    };
+    const elegir = (valor) => {
+        cont.querySelectorAll('.mm-op').forEach(l => l.classList.toggle('mm-op-sel', l.querySelector('input').value === valor));
+        if (valor === 'otra') {
+            quitarFilaNueva();
+            mx.propuestas = [];
+            mx.selects().forEach((sel, k) => { sel.value = mx.marcas[k].tipo_actual; });
+            mx.refrescar();
+            _mmCalculoPropuesta(null);
+            segs(true);
+            soloTabla.forEach(el => { el.style.display = ''; });
             if (opciones.includes('NO_SE_USA')) host.querySelectorAll('.mm-seg-nsu').forEach(b => b.classList.remove('d-none'));
             const lbl = host.querySelector('#btn-marcas-guardar');
             if (lbl) lbl.textContent = 'Guardar el cambio de tipo';
             _mmPermitirEscribirMarcas(opciones.includes('AGREGAR_ENTRADA') || opciones.includes('AGREGAR_SALIDA'));
-        } else {
-            _mmPermitirEscribirMarcas(false);
+            marcacionesManualesState.guardarOpcion = null;
+            if (guardarPie) guardarPie.disabled = true;
+            return;
         }
-    }));
-    // Al tocar la hora, esa opción queda elegida
-    cont.querySelectorAll('.mm-op-hora').forEach(inp => inp.addEventListener('focus', () => {
-        const r = cont.querySelector(`input[name="mm-op"][value="${inp.dataset.i}"]`);
-        if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
-    }));
-    btn.addEventListener('click', async () => {
-        const elegido = cont.querySelector('input[name="mm-op"]:checked');
-        if (!elegido || elegido.value === 'otra') return;
-        const op = ops[parseInt(elegido.value, 10)];
+        const k = parseInt(valor, 10);
+        segs(false);
+        soloTabla.forEach(el => { el.style.display = 'none'; });
+        _mmPermitirEscribirMarcas(false);
+        aplicar(ops[k], k);
+        marcacionesManualesState.guardarOpcion = () => guardar(ops[k], k);
+        if (guardarPie) guardarPie.disabled = false;
+    };
+    cont.querySelectorAll('input[name="mm-op"]').forEach(r => r.addEventListener('change', () => { if (r.checked) elegir(r.value); }));
+    // Al tocar la hora, esa opción queda elegida; al cambiarla, la fila nueva y la línea de tiempo la siguen
+    cont.querySelectorAll('.mm-op-hora').forEach(inp => {
+        inp.addEventListener('focus', () => {
+            const r = cont.querySelector(`input[name="mm-op"][value="${inp.dataset.i}"]`);
+            if (r && !r.checked) { r.checked = true; elegir(r.value); }
+        });
+        inp.addEventListener('change', () => { const k = parseInt(inp.dataset.i, 10); aplicar(ops[k], k); _mmCalculoPropuesta(null); });
+    });
+
+    async function guardar(op, i) {
         let hora = null;
         if (op.marca) {
-            const inp = cont.querySelector(`.mm-op-hora[data-i="${elegido.value}"]`);
+            const inp = cont.querySelector(`.mm-op-hora[data-i="${i}"]`);
             hora = inp && inp.value ? inp.value.slice(0, 5) : '';
             if (!/^\d{2}:\d{2}$/.test(hora)) { Avisos.falta('Falta la hora de la ' + op.marca.tipo.toUpperCase() + ' que se escribe.', { campos: inp ? [inp] : [] }); return; }
         }
         const cambios = mx.marcas.map(m => ({ m, nuevo: op.tipos[String(m.id)] })).filter(x => x.nuevo && x.nuevo !== x.m.tipo_actual);
         const extra = op.marca ? 'Y se escribe la ' + String(op.marca.tipo).toUpperCase() + ' de las <b>' + hora + '</b>.' : '';
         if (!(await _mmConfirmarClasificacion(cambios, dateStr, extra))) return;
-        btn.disabled = true;
+        if (guardarPie) guardarPie.disabled = true;
         try {
             if (cambios.length) {
                 const r = await fetch('/api/asistencia/marcaciones/reclasificar/', {
@@ -1185,7 +1288,7 @@ function _mmOpcionesTres(cont, host, empId, dateStr, P, opciones, titulo) {
                                            marcas: mx.marcas.map(m => ({ id: m.id, tipo: op.tipos[String(m.id)] || m.tipo_actual })) })
                 });
                 const resp = await r.json().catch(() => ({}));
-                if (!r.ok) { Avisos.error(resp.detail || 'No se pudo guardar el tipo de las marcas. No se cambió nada.'); btn.disabled = false; return; }
+                if (!r.ok) { Avisos.error(resp.detail || 'No se pudo guardar el tipo de las marcas. No se cambió nada.'); if (guardarPie) guardarPie.disabled = false; return; }
             }
             if (op.marca) {
                 // El motivo queda en la marca (auditoría): el de la propuesta, o el mismo con la hora que indicó quien revisó
@@ -1196,21 +1299,23 @@ function _mmOpcionesTres(cont, host, empId, dateStr, P, opciones, titulo) {
                 if (r2.status !== 200) {
                     Avisos.error((cambios.length ? 'Se guardó el tipo de las marcas, pero no la ' + op.marca.tipo.toUpperCase() + ': ' : 'No se guardó la marca: ')
                         + (resp2.detail || 'error') + '. Vuelva a abrir el día para completarlo.');
-                    btn.disabled = false;
+                    if (guardarPie) guardarPie.disabled = false;
                     return;
                 }
             }
             if (typeof showToast === 'function') showToast('Listo. Se guardó la corrección y se volvió a calcular el día.', 'success');
             window._rvUltimaCorreccion = { empId: parseInt(empId), fecha: dateStr };
+            marcacionesManualesState.guardarOpcion = null;
             closeManualEntryModal();
             if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
             else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
             if (typeof window.actualizarPorRevisar === 'function') window.actualizarPorRevisar();
         } catch (e) {
             Avisos.sinConexion();
-            btn.disabled = false;
+            if (guardarPie) guardarPie.disabled = false;
         }
-    });
+    }
+    elegir('0');
     return true;
 }
 
@@ -1269,34 +1374,36 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     const puedeQuitar = typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.eliminar_manual');
     host.style.display = 'block';
     host.innerHTML = `
-        <div class="border rounded p-2" style="background:#f8fafc;">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <strong><i class="bi bi-list-check"></i> Marcaciones del día (${marcas.length}${nUsadas !== marcas.length ? ' · se usan ' + nUsadas : ''})</strong>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-marcas-sugerir"${cerrada ? ' disabled' : ''}>Usar sugerencia</button>
+        <section class="mm-card mm-card-marcas">
+            <div class="mm-card-h">
+                <span class="mm-card-t">Marcaciones del día · ${marcas.length}${nUsadas !== marcas.length ? ' · se usan ' + nUsadas : ''}</span>
+                <button type="button" class="mm-link" id="btn-marcas-sugerir"${cerrada ? ' disabled' : ''}>Usar sugerencia</button>
             </div>
-            <div class="small text-muted mb-2">Elija cuál marca es ENTRADA y cuál es SALIDA. La colación se detecta sola cuando una SALIDA y la ENTRADA siguiente quedan a mitad del día, entre ${MARCAS_COLACION_MIN} y ${MARCAS_COLACION_MAX} minutos.</div>
-            <div id="marcas-regla-info" class="small mb-2"></div>
-            <table class="table table-sm align-middle mb-1" style="font-size:.9rem;">
-                <thead><tr><th>Hora</th><th>El reloj dijo</th><th>Es</th><th></th>${puedeQuitar ? '<th></th>' : ''}</tr></thead>
+            <div class="mm-ayuda" title="Elija cuál marca es ENTRADA y cuál es SALIDA.">La colación se detecta sola: una SALIDA y la ENTRADA siguiente, entre ${MARCAS_COLACION_MIN} y ${MARCAS_COLACION_MAX} min.</div>
+            <div class="mm-tl" id="mm-tl" aria-hidden="true"></div>
+            <table class="table mm-tabla mb-0">
+                <colgroup><col class="mm-c-hora"><col class="mm-c-reloj"><col class="mm-c-es"><col class="mm-c-nota"></colgroup>
+                <thead><tr><th>Hora</th><th>Reloj</th><th>Es</th><th></th></tr></thead>
                 <tbody id="marcas-dia-body"></tbody>
             </table>
-            <div id="marcas-dia-aviso" class="small mb-2"></div>
-            <div class="text-end">
-                <button type="button" class="btn btn-sm btn-primary" id="btn-marcas-guardar"${cerrada ? ' disabled' : ''}>Guardar clasificación</button>
+            <div id="marcas-dia-aviso" class="mm-aviso"></div>
+            <div id="marcas-regla-info"></div>
+            <div class="mm-pie-marcas text-end"${cerrada ? ' style="display:none"' : ''}>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-marcas-guardar"${cerrada ? ' disabled' : ''}>Guardar clasificación</button>
             </div>
-            ${cerrada ? '<div class="small text-danger mt-1">El período está cerrado: no se puede modificar.</div>' : ''}
-        </div>`;
+            ${cerrada ? '<div class="mm-cerrado"><i class="bi bi-lock-fill" aria-hidden="true"></i> El período está cerrado: no se puede modificar.</div>' : ''}
+        </section>`;
     const body = host.querySelector('#marcas-dia-body');
     // Turno que cruza la medianoche: la Salida de las 00:08 del día siguiente es de esta jornada y se avisa con su fecha
     const etiquetaOtroDia = (m) => {
         if (!m.fecha || m.fecha === dateStr) return '';
         const [, mo, d] = m.fecha.split('-');
-        return `<div class="small text-muted fw-normal">${d}-${mo} · ${m.fecha > dateStr ? 'día siguiente' : 'día anterior'}</div>`;
+        return `<div class="mm-otro-dia">${d}-${mo} · ${m.fecha > dateStr ? 'día siguiente' : 'día anterior'}</div>`;
     };
     body.innerHTML = marcas.map((m, i) => `
-        <tr data-i="${i}"${dobleT[i] ? ' class="text-muted"' : ''}>
-            <td class="fw-semibold">${m.hora}${etiquetaOtroDia(m)}<div class="mm-prop-txt">Cambio propuesto</div></td>
-            <td>${m.tipo_reloj ? String(m.tipo_reloj).toUpperCase() : '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
+        <tr data-i="${i}"${dobleT[i] ? ' class="mm-fila-no"' : ''}>
+            <td class="mm-hora">${m.hora}${etiquetaOtroDia(m)}<div class="mm-prop-txt">Cambio propuesto</div></td>
+            <td class="mm-reloj">${m.tipo_reloj ? String(m.tipo_reloj).toUpperCase() : '—'}</td>
             <td><div class="mm-seg" role="radiogroup" aria-label="Tipo de la marca de las ${m.hora}">
                 <button type="button" class="mm-seg-b" role="radio" data-v="Entrada"${cerrada || dobleT[i] ? ' disabled' : ''}>ENTRADA</button>
                 <button type="button" class="mm-seg-b" role="radio" data-v="Salida"${cerrada || dobleT[i] ? ' disabled' : ''}>SALIDA</button>
@@ -1306,8 +1413,7 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
                 <option value="Salida"${m.tipo_actual === 'Salida' ? ' selected' : ''}>Salida</option>
                 ${!m.manual ? `<option value="${NSU}"${m.tipo_actual === NSU ? ' selected' : ''}>${NSU}</option>` : ''}
             </select></td>
-            <td class="marca-etiqueta"></td>
-            ${puedeQuitar ? `<td class="text-end">${m.manual ? `<button type="button" class="btn btn-sm btn-outline-danger btn-quitar-marca" title="Quitar esta marcación manual"${cerrada ? ' disabled' : ''}><i class="bi bi-trash"></i> Quitar</button>` : ''}</td>` : ''}
+            <td class="mm-nota">${puedeQuitar && m.manual ? `<button type="button" class="mm-quitar btn-quitar-marca" title="Quitar esta marcación manual"${cerrada ? ' disabled' : ''}><i class="bi bi-trash" aria-hidden="true"></i> Quitar</button>` : ''}<span class="marca-etiqueta"></span></td>
         </tr>`).join('');
     body.querySelectorAll('.btn-quitar-marca').forEach((btn) => {
         btn.addEventListener('click', () => quitarMarcaManual(empId, marcas[parseInt(btn.closest('tr').dataset.i)]));
@@ -1324,24 +1430,41 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         const colU = _marcasColacion(idx.map(i => marcas[i]), ts);
         const col = {};
         Object.keys(colU).forEach(k => { col[idx[k]] = colU[k]; });
-        body.querySelectorAll('tr').forEach((tr, i) => {
-            tr.style.opacity = usada(i) ? '' : '.6';
-            tr.querySelector('.marca-etiqueta').innerHTML = dobleT[i]
-                ? `<span class="small">${txtDobleToque(marcas[i].doble_toque)}</span>`
-                : (tsTodas[i] === NSU ? '<span class="small">No se usa · el cálculo no la lee (queda guardada)</span>'
-                : (col[i] !== undefined ? `<span class="vn-pill">Colación · ${col[i]} min</span>` : ''));
+        body.querySelectorAll('tr[data-i]').forEach((tr) => {
+            const i = parseInt(tr.dataset.i, 10);
+            tr.classList.toggle('mm-fila-no', !usada(i));
+            const tag = (cls, txt, title) => `<span class="mm-tag ${cls}" title="${title || txt}">${txt}</span>`;
+            const tags = [];
+            if (dobleT[i]) tags.push(tag('mm-tag-gris', 'No se usa · doble toque', txtDobleToque(marcas[i].doble_toque)));
+            else if (tsTodas[i] === NSU) tags.push(tag('mm-tag-gris', 'No se usa', 'El cálculo no la lee; la marca queda guardada'));
+            else if (col[i] !== undefined) tags.push(tag('mm-tag-colacion', 'Colación · ' + col[i] + ' min'));
+            if (marcas[i].manual) tags.push(tag('mm-tag-manual', 'Manual'));
+            else if (marcas[i].corregida && tsTodas[i] === marcas[i].tipo_actual && !dobleT[i]) tags.push(tag('mm-tag-manual', 'Corregida', 'Una persona cambió el tipo que dijo el reloj'));
+            tr.querySelector('.marca-etiqueta').innerHTML = tags.join('');
             tr.querySelectorAll('.mm-seg-b').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === tsTodas[i] ? 'true' : 'false'));
             // El cambio que propone el sistema se ve en rojo mientras siga elegido (y sea distinto de lo que rige hoy)
             const prop = host._mx && host._mx.propuestas ? host._mx.propuestas[i] : null;
             tr.classList.toggle('mm-prop', !!(prop && tsTodas[i] === prop && tsTodas[i] !== marcas[i].tipo_actual));
         });
+        // Línea de tiempo con el estado de cada marca (y la marca nueva de la opción elegida, si hay)
+        const filasTl = marcas.map((m, i) => {
+            const tr = body.querySelector(`tr[data-i="${i}"]`);
+            const estado = !usada(i) ? 'no' : (tr && tr.classList.contains('mm-prop') ? 'prop' : (m.manual ? 'manual' : 'usa'));
+            return { abs: _marcasAbs({ fecha: m.fecha || dateStr, hora: m.hora }), hora: m.hora, estado };
+        });
+        const nueva = host._mx && host._mx.nueva;
+        if (nueva) filasTl.push({ abs: _marcasAbs({ fecha: nueva.fecha || dateStr, hora: nueva.hora }), hora: nueva.hora, estado: 'nueva' });
+        const iCol = Object.keys(col).map(Number).sort((a, b) => a - b);
+        const absDe = (m) => _marcasAbs({ fecha: m.fecha || dateStr, hora: m.hora });
+        const tramoCol = iCol.length >= 2 ? [absDe(marcas[iCol[0]]), absDe(marcas[iCol[1]])] : null;
+        _mmLineaTiempo(host.querySelector('#mm-tl'), host._horario, dateStr, filasTl, tramoCol);
         const avisos = [];
         if (ts[0] === 'Salida') avisos.push('La primera marca del día está como SALIDA.');
         if (ts.length > 1 && ts[ts.length - 1] === 'Entrada') avisos.push('La última marca del día está como ENTRADA.');
         for (let i = 1; i < ts.length; i++) if (ts[i] === ts[i - 1]) { avisos.push('Hay dos marcas seguidas del mismo tipo: revise que alternen ENTRADA y SALIDA.'); break; }
         if (ts.length % 2 === 1 || ts.length < 2) avisos.push('La cantidad de marcas que se usan es impar o hay una sola: falta una o sobra una.');
         host.querySelector('#marcas-dia-aviso').innerHTML = avisos.length
-            ? `<span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> ${avisos.join(' ')}</span>` : '';
+            ? `<i class="bi bi-exclamation-triangle" aria-hidden="true"></i> ${avisos.join(' ')}` : '';
     };
     // La regla del día (cargarReglaDia) usa esto para dejar elegida la marca que el sistema propone cambiar
     host._mx = { marcas, selects, refrescar, propuestas: [], enRevision: false, propuesta: data.propuesta || null };
@@ -1480,15 +1603,17 @@ function _mmAplicarBloqueoRevision(texto) {
     if (!modal || marcacionesManualesState.bloqueoRevision) return;
     marcacionesManualesState.bloqueoRevision = true;
     const avisoFalta = document.getElementById('manual-alert-faltante');
+    const huerfana = document.getElementById('manual-alert-huerfana');
+    // Día en revisión: el aviso rojo de la izquierda («En revisión · Regla N») ya lo dice; no se agrega otro aviso
+    const enRevision = huerfana && huerfana.classList.contains('alert-danger') && huerfana.style.display !== 'none';
     if (avisoFalta) {
         avisoFalta.style.display = 'none';
-        if (!document.getElementById('mm-alert-revision')) {
+        if (!enRevision && !document.getElementById('mm-alert-revision')) {
             avisoFalta.insertAdjacentHTML('beforebegin', '<div class="alert alert-info py-2 mb-3" id="mm-alert-revision">'
                 + '<i class="bi bi-info-circle-fill me-2" aria-hidden="true"></i>' + (texto || 'Este día tiene <strong>todas sus marcas del reloj</strong>: no hace falta agregar marcas.') + '</div>');
         }
     }
-    const huerfana = document.getElementById('manual-alert-huerfana');
-    if (huerfana) huerfana.style.display = 'none';
+    if (huerfana && !enRevision) huerfana.style.display = 'none';
     const ent = document.getElementById('manual-hora-entrada'), sal = document.getElementById('manual-hora-salida');
     [ent, sal].forEach(i => { if (i) { i.value = ''; i.disabled = true; } });
     const obs = document.getElementById('manual-observaciones');
@@ -1650,6 +1775,8 @@ function unlockManualMarks() {
  * Guarda la marcación manual llamando al backend
  */
 async function saveManualEntry() {
+    // Día de 3 marcas con una opción elegida: el «Guardar» del pie guarda esa opción (tipos y marca nueva)
+    if (typeof marcacionesManualesState.guardarOpcion === 'function') { await marcacionesManualesState.guardarOpcion(); return; }
     const empId = marcacionesManualesState.currentEmpId;
     const dateStr = marcacionesManualesState.currentDate;
     const obs = document.getElementById('manual-observaciones').value;

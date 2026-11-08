@@ -1849,13 +1849,14 @@ async def _colacion_tipica(db, turno_id, hora_entrada) -> Optional[Dict[str, Any
     return {"sale": int(statistics.median(sale)), "vuelve": int(statistics.median(vuelve)), "dias": len(sale)}
 
 
-async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usadas, hd, horario, col_horario: int):
+async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usadas, hd, horario, col_horario: int, tipica=None):
     """Opciones para la ventana (ver propuesta_tres_marcas), con el tipo de cada marca por id, la marca nueva con su fecha y
     lo que pagaría cada una: el día se calcula en memoria con esas marcas (collect_only, no se guarda nada)."""
     from backend.repositories.reglas_marcas import ReglasMarcasRepository
     db = service.repository.db
     vc = await ReglasMarcasRepository(db).ventana_colacion()
-    tipica = await _colacion_tipica(db, hd.get("turno_asignado_id"), horario["entrada"]) if hd.get("turno_asignado_id") else None
+    if tipica is None and hd.get("turno_asignado_id"):
+        tipica = await _colacion_tipica(db, hd.get("turno_asignado_id"), horario["entrada"])
     fhs = [str(r["fecha_hora"])[:19] for r in usadas]
     p = propuesta_tres_marcas(fhs, horario["entrada"], horario["salida"], int(vc.get("min", 20)), int(vc.get("max", 150)),
                               col_horario, tipica)
@@ -1905,12 +1906,15 @@ async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usad
         fila = next((c for c in (r.get("_collect") or []) if str(c.get("fecha")) == fecha), None)
         if not fila and r.get("sin_cambio"):
             # Con esas marcas el día da lo mismo que ya está guardado: el cálculo no lo devuelve, se lee lo guardado
-            fila = await db.fetch_one("SELECT horas_trabajadas, estado, minutos_deuda FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+            fila = await db.fetch_one("SELECT horas_trabajadas, estado, minutos_deuda, minutos_atraso, minutos_salida_adelantada "
+                                      "FROM asistencias WHERE empleado_id = ? AND fecha = ?",
                                       (empleado_id, fecha))
         if not fila:
             return None
         return {"horas": round(float(fila.get("horas_trabajadas") or 0), 2), "estado": fila.get("estado"),
-                "deuda_min": round(float(fila.get("minutos_deuda") or 0))}
+                "deuda_min": round(float(fila.get("minutos_deuda") or 0)),
+                "atraso_min": round(float(fila.get("minutos_atraso") or 0)),
+                "salida_adelantada_min": round(float(fila.get("minutos_salida_adelantada") or 0))}
 
     for op in opciones:
         try:
@@ -1961,15 +1965,16 @@ async def marcaciones_del_dia(
     rows = await _marcas_del_dia(service.repository.db, empleado_id, fecha)
     # Horario asignado de ese día (lo guarda el cálculo en la asistencia): la ventana lo propone al escribir la marca que falta
     hd = await service.repository.db.fetch_one(
-        "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id, observaciones FROM asistencias "
+        "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id, observaciones, estado, horas_trabajadas, "
+        "minutos_atraso, minutos_salida_adelantada, minutos_deuda FROM asistencias "
         "WHERE empleado_id = ? AND fecha = ?", (empleado_id, fecha))
     # Doble toque: las marcas que el cálculo deja fuera antes de aplicar la regla. La sugerencia y la colación se calculan
     # solo con las que se usan, igual que el cálculo.
     doble_toque: Dict[Any, Dict[str, Any]] = {}
     col_horario = 0
+    tp = None
     try:
         from backend.services.quantum_matrix_engine import _rebote_defecto
-        tp = None
         if hd and hd.get("turno_asignado_id"):
             t = await service.repository.db.fetch_one("SELECT tipo_programacion, minutos_colacion_auto FROM turnos WHERE id = ?",
                                                       (hd["turno_asignado_id"],))
@@ -1988,10 +1993,17 @@ async def marcaciones_del_dia(
     # Tres marcas que se usan (falta una o sobra una), en un día que una regla dejó en revisión: una o dos opciones completas
     # según el horario del día y la colación de su mismo horario (reglas_marcas_def.propuesta_tres_marcas), cada una con lo
     # que pagaría (simulación sin guardar nada).
+    # A qué hora sale y vuelve de colación su horario (marcas reales; Ciclo Inteligente): la ventana lo muestra en «Horario del día»
+    tipica = None
+    if hd and hd.get("turno_asignado_id") and tp == "CICLO_INTELIGENTE" and horario["entrada"]:
+        try:
+            tipica = await _colacion_tipica(service.repository.db, hd["turno_asignado_id"], horario["entrada"])
+        except Exception as e:
+            logger.warning(f"Colación típica ({empleado_id} {fecha}): {e}")
     propuesta = None
     if len(usadas) == 3 and hd and secuencia_en_revision(hd.get("observaciones")):
         try:
-            propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario)
+            propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario, tipica)
         except Exception as e:
             logger.warning(f"Propuesta de tres marcas ({empleado_id} {fecha}): {e}")
     # Con UNA sola marca, el ciclo del día no es seguro (el cálculo lo elige por la marca más cercana, sin mirar su tipo).
@@ -2018,6 +2030,14 @@ async def marcaciones_del_dia(
         "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),
         "horario": horario,
         "propuesta": propuesta,
+        # «Horario del día» y «Cálculo» de la ventana: lo que hoy tiene guardado el día
+        "colacion_min": col_horario,
+        "colacion_tipica": tipica,
+        "bolsa": tp in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA"),
+        "calculo": ({"estado": hd.get("estado"), "horas": round(float(hd.get("horas_trabajadas") or 0), 2),
+                     "atraso_min": round(float(hd.get("minutos_atraso") or 0)),
+                     "salida_adelantada_min": round(float(hd.get("minutos_salida_adelantada") or 0)),
+                     "deuda_min": round(float(hd.get("minutos_deuda") or 0))} if hd else None),
         "marcas": [{
             "id": r["id"], "hora": str(r["fecha_hora"])[11:19], "fecha": str(r["fecha_hora"])[:10],
             "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],

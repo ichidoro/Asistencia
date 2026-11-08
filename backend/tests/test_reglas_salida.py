@@ -530,9 +530,30 @@ def test_ventana_de_tres_marcas_con_opciones_y_un_solo_guardar():
     servicio = open(os.path.join(base, "services", "asistencia_service.py"), encoding="utf-8").read()
     assert "transformar_logs solo se usa para simular (collect_only=True)" in servicio
     js = open(os.path.join(base, "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()
-    for texto in ("function _mmOpcionesTres(", "Otra cosa:", "id=\"mm-op-guardar\"", "Hora indicada por quien revisó",
-                  "_mmOpcionPermitida(op, mx, opciones)"):
+    for texto in ("function _mmOpcionesTres(", "Otra cosa:", "marcacionesManualesState.guardarOpcion", "Hora indicada por quien revisó",
+                  "_mmOpcionPermitida(op, mx, opciones)", "function _mmPintarDia(", "function _mmLineaTiempo(", "mm-fila-nueva"):
         assert texto in js, texto
+
+
+def test_ventana_ingreso_manual_en_dos_columnas_conserva_todo():
+    """La ventana «Corregir marcas del día» en dos columnas mantiene todos sus elementos (los usa marcaciones_manuales.js) y
+    suma «Horario del día» y «Cálculo»."""
+    base = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
+    html = open(os.path.join(base, "index.html"), encoding="utf-8").read()
+    i = html.index('id="modal-marcacion-manual"')
+    modal = html[i:html.index('<!-- Modal de Decisión', i)]
+    for ident in ("manual-empleado-display", "manual-area-display", "manual-cargo-display", "manual-turno-display",
+                  "manual-fecha-display", "manual-alert-faltante", "manual-alert-huerfana", "manual-hora-entrada",
+                  "manual-hora-salida", "divTramosBolsa", "manual-minutos-conduccion", "manual-minutos-espera",
+                  "manual-observaciones", "btn-unlock-manual", "mm-col-marcas", "mm-h-jornada", "mm-h-colacion", "mm-h-sale",
+                  "mm-c-horas", "mm-c-atraso", "mm-c-sal", "mm-c-deuda"):
+        assert f'id="{ident}"' in modal, ident
+    assert "modal-xl" in modal and 'class="mm-grid"' in modal
+    assert 'onclick="saveManualEntry()"' in modal and 'onclick="closeManualEntryModal()"' in modal
+    css = open(os.path.join(base, "css", "ventanas.css"), encoding="utf-8").read()
+    assert "#modal-marcacion-manual .mm-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr)" in css
+    router = open(os.path.join(base, "..", "backend", "routers", "asistencia.py"), encoding="utf-8").read()
+    assert '"calculo": ({"estado": hd.get("estado")' in router and '"colacion_tipica": tipica' in router
 
 
 def test_no_se_usa_es_una_salida_de_la_revision():

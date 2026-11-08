@@ -351,13 +351,13 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
             sale, vuelve = int(tip['sale']), int(tip['vuelve'])
             if _dist_reloj(m[1], sale) <= _dist_reloj(m[1], vuelve):
                 opciones.append(opcion(
-                    'FALTA_VUELTA', f'{hora(m[1])} fue la salida a colación: faltó la vuelta', ['Entrada', 'Salida', 'Salida'],
+                    'FALTA_VUELTA', 'Faltó la vuelta de colación', ['Entrada', 'Salida', 'Salida'],
                     {'tipo': 'Entrada', 'hora': hora(m[1] + col)},
                     f'Regla de marcaciones: faltó la vuelta de colación (salió a las {hora(m[1])}; en su horario salen a '
                     f'colación a las {hora(sale)}; {col} min de colación)'))
             else:
                 opciones.append(opcion(
-                    'FALTA_SALIDA_COLACION', f'{hora(m[1])} fue la vuelta de colación: faltó la salida', ['Entrada', 'Entrada', 'Salida'],
+                    'FALTA_SALIDA_COLACION', 'Faltó la salida a colación', ['Entrada', 'Entrada', 'Salida'],
                     {'tipo': 'Salida', 'hora': hora(m[1] - col)},
                     f'Regla de marcaciones: faltó la salida a colación (volvió a las {hora(m[1])}; en su horario vuelven de '
                     f'colación a las {hora(vuelve)}; {col} min de colación)'))

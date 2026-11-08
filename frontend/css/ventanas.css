@@ -673,3 +673,112 @@ span.tw-mt { display: block; }
 @media (prefers-reduced-motion: reduce) {
   .tw-barra, .tw-areas .form-check-label { transition: none; }
 }
+
+/* ── Corregir marcas del día en dos columnas (diseño aprobado por el dueño, 08-11-2026) ─────────────────────────────────
+   Izquierda: persona, aviso, horario y cálculo. Derecha: marcaciones y escribir una marca a mano. Todo en una línea,
+   alturas fijas y la misma escala de espacios (8 · 12 · 16). En pantallas angostas las columnas se apilan. */
+#modal-marcacion-manual .mm-dialog { max-width: 1080px; }
+#modal-marcacion-manual .mm-body { padding: 20px; background: #fff; }
+#modal-marcacion-manual .mm-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+#modal-marcacion-manual .mm-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+#modal-marcacion-manual .mm-col > * { min-width: 0; }
+#modal-marcacion-manual .mm-card { background: var(--ov-sunk); border: 1px solid var(--ov-line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+#modal-marcacion-manual .mm-card-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 20px; margin-bottom: 12px; }
+#modal-marcacion-manual .mm-card-t { font: 600 12px/1 "Barlow", system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--ov-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-card-a { font-size: 11.5px; color: var(--ov-ink-3); white-space: nowrap; }
+#modal-marcacion-manual .mm-link { border: 0; background: none; padding: 0; font: 600 12.5px "Barlow", system-ui, sans-serif; color: var(--vn-navy); white-space: nowrap; }
+#modal-marcacion-manual .mm-link:disabled { color: var(--ov-ink-4); }
+#modal-marcacion-manual .mm-link:focus-visible { outline: 2px solid var(--vn-navy); outline-offset: 2px; border-radius: 4px; }
+/* Persona: los datos de siempre, sin el recuadro propio (ya están en una tarjeta) */
+#modal-marcacion-manual .mm-card .mm-datos { padding: 0; border: 0; background: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; }
+#modal-marcacion-manual .mm-datos input.form-control, #modal-marcacion-manual .mm-datos textarea.form-control { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-datos textarea.form-control { height: 19px !important; field-sizing: fixed; }
+/* Avisos de la izquierda: una tarjeta de estado del mismo alto */
+#modal-marcacion-manual .mm-avisos { display: flex; flex-direction: column; gap: 8px; }
+#modal-marcacion-manual .mm-avisos .alert { margin: 0 !important; padding: 10px 14px !important; border-radius: 12px; font-size: 12.5px; line-height: 1.45; }
+#modal-marcacion-manual .mm-avisos .alert strong { display: block; font-weight: 600; }
+/* Horario del día */
+#modal-marcacion-manual .mm-dl { display: grid; grid-template-columns: 120px minmax(0, 1fr); row-gap: 10px; margin: 0; align-items: center; }
+#modal-marcacion-manual .mm-dl dt { font-weight: 400; font-size: 12.5px; color: var(--ov-ink-3); }
+#modal-marcacion-manual .mm-dl dd { margin: 0; font-weight: 600; color: var(--ov-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+/* Cálculo: cuatro casillas iguales */
+#modal-marcacion-manual .mm-tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+#modal-marcacion-manual .mm-tile { display: flex; flex-direction: column; justify-content: center; height: 60px; padding: 8px 12px; background: #fff; border: 1px solid var(--ov-line); border-radius: 10px; min-width: 0; }
+#modal-marcacion-manual .mm-tile > span { font-size: 11.5px; color: var(--ov-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-tile > b { font-weight: 600; font-size: 14px; color: var(--ov-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+#modal-marcacion-manual .mm-tile em { font-style: normal; font-size: 11.5px; color: var(--vn-green); margin-left: 6px; }
+/* Marcaciones del día */
+#modal-marcacion-manual .mm-ayuda { font-size: 12px; color: var(--ov-ink-3); margin: -4px 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-tl { position: relative; height: 44px; margin: 0 8px 6px; }
+#modal-marcacion-manual .mm-tl:empty { display: none; }
+#modal-marcacion-manual .mm-tl-barra { position: absolute; left: 0; right: 0; top: 10px; height: 10px; border-radius: 5px; background: var(--ov-line-2); }
+#modal-marcacion-manual .mm-tl-jornada { position: absolute; top: 10px; height: 10px; border-radius: 5px; background: var(--vn-navy-soft); box-shadow: inset 0 0 0 1px #cfd6f3; }
+#modal-marcacion-manual .mm-tl-colacion { position: absolute; top: 10px; height: 10px; background: var(--vn-amber-soft); box-shadow: inset 0 0 0 1px #f3d2a8; }
+#modal-marcacion-manual .mm-tl-m { position: absolute; top: 8px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 2px solid #fff; background: var(--vn-navy); box-shadow: 0 0 0 1px rgba(16, 26, 61, .12); }
+#modal-marcacion-manual .mm-tl-prop { background: #b0352c; }
+#modal-marcacion-manual .mm-tl-manual { background: #5b6fd6; }
+#modal-marcacion-manual .mm-tl-nueva { background: #fff; border-color: var(--vn-navy); box-shadow: none; }
+#modal-marcacion-manual .mm-tl-no { background: #fff; border: 2px dashed var(--ov-ink-4); box-shadow: none; }
+#modal-marcacion-manual .mm-tl-h { position: absolute; top: 27px; transform: translateX(-50%); font: 500 11.5px "Barlow", system-ui, sans-serif; color: var(--ov-ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#modal-marcacion-manual .mm-tl-h.mm-tl-ini { transform: translateX(-7px); }
+#modal-marcacion-manual .mm-tl-h.mm-tl-fin { transform: translateX(calc(-100% + 7px)); }
+#modal-marcacion-manual .mm-tl-h-prop { color: #b0352c; font-weight: 600; }
+#modal-marcacion-manual .mm-tl-h-nueva { color: var(--vn-navy); font-weight: 600; }
+#modal-marcacion-manual .mm-tabla { table-layout: fixed; width: 100%; margin: 0; font-size: 13px; }
+#modal-marcacion-manual .mm-tabla col.mm-c-hora { width: 17%; }
+#modal-marcacion-manual .mm-tabla col.mm-c-reloj { width: 15%; }
+#modal-marcacion-manual .mm-tabla col.mm-c-es { width: 44%; }
+#modal-marcacion-manual .mm-tabla col.mm-c-nota { width: 24%; }
+#modal-marcacion-manual .mm-tabla th { height: 30px; padding: 0 8px; vertical-align: middle; font: 600 11px "Barlow", system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--ov-ink-3); background: transparent; border-bottom: 0; }
+#modal-marcacion-manual .mm-tabla td { height: 46px; padding: 4px 8px; vertical-align: middle; border-top: 1px solid var(--ov-line); background: transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-tabla td.mm-hora { font-weight: 600; font-variant-numeric: tabular-nums; }
+#modal-marcacion-manual .mm-tabla td.mm-reloj { color: var(--ov-ink-2); }
+#modal-marcacion-manual .mm-tabla .mm-otro-dia { font-size: 11px; font-weight: 500; color: var(--ov-ink-3); }
+#modal-marcacion-manual .mm-tabla .mm-seg { display: flex; width: 100%; }
+#modal-marcacion-manual .mm-tabla .mm-seg-b { flex: 1 1 0; min-width: 0; padding: 5px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-tabla tr.mm-fila-no td { color: var(--ov-ink-4); }
+#modal-marcacion-manual .mm-tabla tr.mm-fila-no .mm-seg { opacity: .55; }
+#modal-marcacion-manual .mm-tabla tr.mm-fila-nueva td { background: var(--vn-navy-soft) !important; }
+#modal-marcacion-manual .mm-nueva-tipo { font: 600 11.5px "Barlow", system-ui, sans-serif; letter-spacing: .04em; color: var(--vn-navy); }
+#modal-marcacion-manual .mm-nota .marca-etiqueta { display: inline-flex; gap: 6px; max-width: 100%; overflow: hidden; vertical-align: middle; }
+#modal-marcacion-manual .mm-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font: 600 11px "Barlow", system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#modal-marcacion-manual .mm-tag-colacion { background: var(--vn-amber-soft); color: var(--vn-amber); }
+#modal-marcacion-manual .mm-tag-gris { background: var(--ov-line-2); color: var(--ov-ink-3); }
+#modal-marcacion-manual .mm-tag-manual { background: var(--vn-navy-soft); color: var(--vn-navy); }
+#modal-marcacion-manual .mm-tag-nueva { background: #fff; color: var(--vn-navy); box-shadow: inset 0 0 0 1px #cfd6f3; }
+#modal-marcacion-manual .mm-quitar { margin-right: 6px; height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid #f5c6c2; background: #fff; color: #b0352c; font: 600 11.5px "Barlow", system-ui, sans-serif; white-space: nowrap; }
+#modal-marcacion-manual .mm-quitar:focus-visible { outline: 2px solid #b0352c; outline-offset: 1px; }
+#modal-marcacion-manual .mm-aviso:not(:empty) { margin-top: 10px; font-size: 12px; color: var(--vn-amber); }
+#modal-marcacion-manual .mm-pie-marcas { margin-top: 12px; }
+#modal-marcacion-manual .mm-cerrado { margin-top: 10px; font-size: 12.5px; color: var(--ov-ink-3); }
+/* Opciones de un día de 3 marcas: tarjetas iguales y «Otra cosa» */
+#modal-marcacion-manual .mm-ops-tit { margin: 14px 0 8px; font-size: 12.5px; font-weight: 600; color: var(--ov-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-ops { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+#modal-marcacion-manual .mm-op { display: flex; align-items: center; gap: 12px; min-height: 60px; margin: 0; padding: 8px 14px; border: 1px solid var(--ov-line); border-radius: 12px; background: #fff; cursor: pointer; min-width: 0; }
+#modal-marcacion-manual .mm-op.mm-op-sel { border: 2px solid var(--vn-navy); background: var(--vn-sel); padding: 7px 13px; }
+#modal-marcacion-manual .mm-op input[type="radio"], #modal-marcacion-manual .mm-op-otra input[type="radio"] { width: 18px; height: 18px; flex: none; accent-color: var(--vn-navy); }
+#modal-marcacion-manual .mm-op-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#modal-marcacion-manual .mm-op-t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#modal-marcacion-manual .mm-op-m { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ov-ink-3); white-space: nowrap; min-width: 0; }
+#modal-marcacion-manual .mm-op-prop { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: var(--vn-navy-soft); color: var(--vn-navy); font-weight: 600; font-size: 11px; }
+#modal-marcacion-manual .mm-op-hora { height: 28px; width: 6.4rem; padding: 0 6px; border: 1px solid var(--ov-line-strong); border-radius: 6px; font: 600 12px "Barlow", system-ui, sans-serif; color: var(--ov-ink); background: #fff; }
+#modal-marcacion-manual .mm-op-otra { display: flex; align-items: center; gap: 12px; height: 44px; margin: 8px 0 0; padding: 0 14px; border: 1px dashed var(--ov-line-strong); border-radius: 12px; color: var(--ov-ink-2); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Escribir una marca a mano */
+#modal-marcacion-manual .mm-escribir .form-label, #modal-marcacion-manual #divTramosBolsa .form-label { font-size: 11.5px; font-weight: 500; color: var(--ov-ink-3); margin-bottom: 5px; white-space: nowrap; }
+#modal-marcacion-manual .mm-escribir .form-control, #modal-marcacion-manual #divTramosBolsa .form-control { height: 38px; }
+#modal-marcacion-manual #manual-observaciones { resize: none; min-height: 38px; white-space: nowrap; overflow: hidden; }
+#modal-marcacion-manual .mm-nota-bolsa { height: 38px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ov-ink-3); white-space: nowrap; }
+#modal-marcacion-manual .mm-bloqueo-nota { margin: 8px 0 0; }
+#modal-marcacion-manual .modal-footer .btn { height: 38px; white-space: nowrap; }
+@media (max-width: 991.98px) {
+  #modal-marcacion-manual .mm-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 575.98px) {
+  #modal-marcacion-manual .mm-body { padding: 12px; }
+  #modal-marcacion-manual .mm-tabla col.mm-c-hora { width: 24%; }
+  #modal-marcacion-manual .mm-tabla col.mm-c-reloj { width: 0; }
+  #modal-marcacion-manual .mm-tabla td.mm-reloj, #modal-marcacion-manual .mm-tabla th:nth-child(2) { padding: 0; font-size: 0; border-left: 0; }
+  #modal-marcacion-manual .mm-tabla .mm-seg-b { font-size: 10px; letter-spacing: 0; }
+  #modal-marcacion-manual .mm-tabla col.mm-c-es { width: 50%; }
+  #modal-marcacion-manual .mm-tabla col.mm-c-nota { width: 26%; }
+}
