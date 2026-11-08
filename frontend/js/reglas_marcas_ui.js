@@ -391,7 +391,11 @@ const ReglasMarcasModule = (() => {
     }
 
     // ── Días de ejemplo y ensayo ─────────────────────────────────────────────
-    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, (r.opciones_revision || []).slice().sort().join('|'), r.eleccion_colacion || 'PARECIDA'].join('~');
+    // Lo que se envía al guardar y al ensayar: «Confirmar» no va en una regla que deja el día sin calcular
+    // (el servidor lo rechaza); así el ensayo prueba exactamente lo que se guardaría.
+    const opcionesAEnviar = (r) => (r.accion === 'SOLO_REVISA' || r.lectura === 'NINGUNA')
+        ? (r.opciones_revision || []).filter(o => o !== 'CONFIRMAR') : (r.opciones_revision || []);
+    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, opcionesAEnviar(r).slice().sort().join('|'), r.eleccion_colacion || 'PARECIDA'].join('~');
 
     async function cargarEjemplos(r) {
         if (ejemplos[r.id]) return;
@@ -415,7 +419,7 @@ const ReglasMarcasModule = (() => {
             const res = await fetch(API + r.id + '/ensayo/', {
                 method: 'POST', headers: headers(),
                 body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion,
-                                       opciones_revision: r.opciones_revision || [],
+                                       opciones_revision: opcionesAEnviar(r),
                                        eleccion_colacion: r.eleccion_colacion || 'PARECIDA' })
             });
             const body = await res.json().catch(() => ({}));
@@ -910,8 +914,7 @@ const ReglasMarcasModule = (() => {
     }
 
     async function guardar(r) {
-        // «Confirmar» no se guarda en una regla que deja el día sin calcular (el servidor también lo rechaza)
-        if (r.accion === 'SOLO_REVISA' || r.lectura === 'NINGUNA') r.opciones_revision = (r.opciones_revision || []).filter(o => o !== 'CONFIRMAR');
+        r.opciones_revision = opcionesAEnviar(r);
         try {
             const res = await fetch(API + r.id + '/', {
                 method: 'PUT', headers: headers(),

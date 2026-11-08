@@ -302,3 +302,5 @@ def test_la_pantalla_de_reglas_apaga_confirmar_sin_calculo():
     js = _js('reglas_marcas_ui.js')
     assert "o[0] === 'CONFIRMAR' && sinCalcular" in js
     assert "API + 'vigilante/'" in js
+    # el ensayo envía lo mismo que se guardaría (sin «Confirmar» en una regla que no calcula)
+    assert js.count('opcionesAEnviar(r)') >= 3 and 'opciones_revision: opcionesAEnviar(r)' in js
