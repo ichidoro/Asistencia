@@ -1724,6 +1724,26 @@ async def _armar_salida_manual(service: AsistenciaService, empleado_id: int, fec
 _COLACION_MIN, _COLACION_MAX = 20, 150  # minutos entre una salida y la siguiente entrada para considerarlas colación
 
 
+def ciclo_para_marca_sola(ciclos: List[Dict[str, Any]], hora: str, tipo: str) -> Optional[Dict[str, Any]]:
+    """De los ciclos del horario para ese día, el que mejor calza con una marca sola según su TIPO: una SALIDA se
+    compara con la salida de cada ciclo y una ENTRADA con la entrada (distancia en el reloj de 24 horas). Sirve para
+    proponer la marca que falta. Devuelve None si no hay ciclos o el tipo no se reconoce."""
+    clave = 'hora_salida' if str(tipo or '').strip().lower().startswith('s') else (
+        'hora_entrada' if str(tipo or '').strip().lower().startswith('e') else None)
+    if not clave or not ciclos:
+        return None
+
+    def minutos(h):
+        hh, mm = str(h)[:5].split(':')
+        return int(hh) * 60 + int(mm)
+    m = minutos(hora)
+
+    def distancia(c):
+        d = abs(minutos(c[clave]) - m)
+        return min(d, 1440 - d)
+    return min(ciclos, key=distancia)
+
+
 def _min_abs(fh: str) -> int:
     """Minutos de una marca contados desde el año 1 (fecha + hora): sirve para medir huecos que cruzan la medianoche."""
     fh = str(fh)
@@ -1820,12 +1840,32 @@ async def marcaciones_del_dia(
     sug = sugerir_clasificacion_marcas([str(r["fecha_hora"]) for r in rows])
     # Horario asignado de ese día (lo guarda el cálculo en la asistencia): la ventana lo propone al escribir la marca que falta
     hd = await service.repository.db.fetch_one(
-        "SELECT hora_entrada_teorica, hora_salida_teorica FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+        "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id FROM asistencias WHERE empleado_id = ? AND fecha = ?",
         (empleado_id, fecha))
+    horario = {"entrada": (hd or {}).get("hora_entrada_teorica"), "salida": (hd or {}).get("hora_salida_teorica")}
+    # Con UNA sola marca, el ciclo del día no es seguro (el cálculo lo elige por la marca más cercana, sin mirar su tipo).
+    # La propuesta usa el ciclo del horario asignado que calza con esa marca según lo que falte.
+    if len(rows) == 1 and hd and hd.get("turno_asignado_id"):
+        try:
+            dia_semana = datetime.strptime(fecha, "%Y-%m-%d").weekday()
+            ciclos = await service.repository.db.fetch_all(
+                "SELECT hora_entrada, hora_salida FROM turno_dias WHERE turno_id = ? AND dia_semana = ? "
+                "AND COALESCE(es_libre, 0) = 0 AND hora_entrada IS NOT NULL AND hora_salida IS NOT NULL",
+                (hd["turno_asignado_id"], dia_semana))
+            ciclos = [dict(c) for c in ciclos]
+            hora_sola = str(rows[0]["fecha_hora"])[11:16]
+            # Si falta la ENTRADA, la marca que hay es la SALIDA: ciclo cuya salida calza. Si falta la SALIDA, la marca
+            # que hay es la ENTRADA: ciclo cuya entrada calza. Así sirve aunque el reloj la haya rotulado al revés.
+            como_salida = ciclo_para_marca_sola(ciclos, hora_sola, "Salida")
+            como_entrada = ciclo_para_marca_sola(ciclos, hora_sola, "Entrada")
+            if como_salida and como_entrada:
+                horario = {"entrada": como_salida["hora_entrada"], "salida": como_entrada["hora_salida"]}
+        except Exception as e:
+            logger.warning(f"Ciclo para la marca sola ({empleado_id} {fecha}): {e}")
     return {
         "success": True,
         "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),
-        "horario": {"entrada": (hd or {}).get("hora_entrada_teorica"), "salida": (hd or {}).get("hora_salida_teorica")},
+        "horario": horario,
         "marcas": [{
             "id": r["id"], "hora": str(r["fecha_hora"])[11:19], "fecha": str(r["fecha_hora"])[:10],
             "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],

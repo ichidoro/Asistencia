@@ -302,7 +302,11 @@ def test_la_ventana_usa_las_opciones_de_la_regla_y_no_guarda_horas_del_horario()
     raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     with open(os.path.join(raiz, 'backend', 'routers', 'asistencia.py'), encoding='utf-8') as f:
         router = f.read()
-    assert '"horario": {"entrada": (hd or {}).get("hora_entrada_teorica")' in router
+    assert 'horario = {"entrada": (hd or {}).get("hora_entrada_teorica")' in router and '"horario": horario' in router
+    # con una sola marca, la hora sale del ciclo que calza con el tipo de esa marca
+    assert "ciclo_para_marca_sola(" in router and "FROM turno_dias WHERE turno_id = ? AND dia_semana = ?" in router
+    # falta la ENTRADA → la marca es la SALIDA; falta la SALIDA → la marca es la ENTRADA (aunque el reloj la rotule al revés)
+    assert '"entrada": como_salida["hora_entrada"], "salida": como_entrada["hora_salida"]' in router
 
 
 def test_la_pantalla_de_reglas_apaga_confirmar_sin_calculo():
@@ -421,3 +425,22 @@ def test_el_orden_propuesto_da_lo_mismo_que_la_lectura_alternada(monkeypatch):
                                            "colacion": "MEDIDA", "accion": "CALCULA"}}
         b = _motor(monkeypatch, sec)
         assert (a["estado"], a["horas_trabajadas"], a["minutos_colacion"]) == (b["estado"], b["horas_trabajadas"], b["minutos_colacion"]), sec
+
+
+# ── Propuesta de la marca que falta con un horario de varios ciclos ──────────────────────────────────────
+
+def test_con_una_marca_sola_se_propone_el_ciclo_que_calza_con_su_tipo():
+    """Horario con tres ciclos el mismo día (como los de Mantención): Noche 23:00–07:00, Mañana 07:00–15:00,
+    Tarde 15:00–23:00. Una SALIDA se compara con la salida de cada ciclo y una ENTRADA con la entrada,
+    en el reloj de 24 horas."""
+    from backend.routers.asistencia import ciclo_para_marca_sola
+    ciclos = [{"hora_entrada": "23:00", "hora_salida": "07:00"},
+              {"hora_entrada": "07:00", "hora_salida": "15:00"},
+              {"hora_entrada": "15:00", "hora_salida": "23:00"}]
+    assert ciclo_para_marca_sola(ciclos, "15:21", "Salida")["hora_entrada"] == "07:00"   # salió de la Mañana
+    assert ciclo_para_marca_sola(ciclos, "15:21", "Entrada")["hora_entrada"] == "15:00"  # entró a la Tarde
+    assert ciclo_para_marca_sola(ciclos, "22:50", "Entrada")["hora_entrada"] == "23:00"  # entró a la Noche
+    assert ciclo_para_marca_sola(ciclos, "06:55", "Salida")["hora_entrada"] == "23:00"   # salió de la Noche
+    assert ciclo_para_marca_sola(ciclos, "23:40", "Salida")["hora_entrada"] == "15:00"   # cruza la medianoche
+    assert ciclo_para_marca_sola([], "15:21", "Salida") is None
+    assert ciclo_para_marca_sola(ciclos, "15:21", "") is None
