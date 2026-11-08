@@ -17,7 +17,8 @@ from loguru import logger
 
 from backend.core.database import Database
 from backend.services.reglas_marcas_def import (
-    MARCA_REVISION_REGLA, firma_marcas, numerar_sin_numero, secuencia_en_revision, validar_regla,
+    MARCA_REVISION_REGLA, firma_marcas, no_calcula, numerar_sin_numero, opciones_efectivas,
+    secuencia_en_revision, tiene_salida, validar_regla,
 )
 
 CLAVE_REBOTE = 'reglas_marcas_rebote_segundos'
@@ -406,7 +407,8 @@ class ReglasMarcasRepository:
     # ── Días por revisar ─────────────────────────────────────────────────────
     # Un día está «por revisar» cuando sus observaciones traen el marcador que
     # escribe el motor y no existe una confirmación cuya firma (las marcas que el
-    # día usó) siga coincidiendo. Siempre tramo abierto, nunca hoy, nunca días
+    # día usó) siga coincidiendo. Un día sin calcular (ANOMALIA) sigue en la lista
+    # aunque alguien lo haya confirmado: confirmar no le da horas. Siempre tramo abierto, nunca hoy, nunca días
     # cubiertos por un cierre de área, de turno o global.
 
     _SQL_POR_REVISAR = """
@@ -424,11 +426,11 @@ class ReglasMarcasRepository:
           JOIN empleados e ON e.id = a.empleado_id
          WHERE a.fecha >= ? AND a.fecha < ?
            AND a.observaciones LIKE ?
-           AND NOT EXISTS (
+           AND (a.estado = 'ANOMALIA' OR NOT EXISTS (
                 SELECT 1 FROM revisiones_marcas rv
                  WHERE rv.empleado_id = a.empleado_id AND rv.fecha = a.fecha
                    AND rv.firma = (SELECT COALESCE(STRING_AGG(j.v, ',' ORDER BY j.v::bigint), '')
-                                     FROM jsonb_array_elements_text(a.marcas_consumidas_ids::jsonb) j(v)))
+                                     FROM jsonb_array_elements_text(a.marcas_consumidas_ids::jsonb) j(v))))
            AND NOT EXISTS (
                 SELECT 1 FROM cierres_periodos cp
                  WHERE cp.fecha_inicio <= a.fecha AND cp.fecha_fin >= a.fecha
@@ -460,16 +462,33 @@ class ReglasMarcasRepository:
             out.append(d)
         return out
 
+    async def _regla_de(self, secuencia: str) -> Optional[Dict[str, Any]]:
+        rr = await self.db.fetch_one(
+            "SELECT numero, secuencia, lectura, colacion, accion, opciones_revision, activa "
+            "FROM reglas_marcas WHERE tipo_horario = 'CICLO_INTELIGENTE' AND secuencia = ?", (secuencia,))
+        if not rr:
+            return None
+        regla = dict(rr)
+        try:
+            regla['opciones_revision'] = json.loads(regla.get('opciones_revision') or '[]')
+        except Exception:
+            regla['opciones_revision'] = []
+        return regla
+
     async def confirmar_dia(self, empleado_id: int, fecha: str, usuario_id: int,
                             username: str, motivo: str) -> Dict[str, Any]:
         a = await self.db.fetch_one(
-            "SELECT observaciones, marcas_consumidas_ids FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+            "SELECT observaciones, marcas_consumidas_ids, estado FROM asistencias WHERE empleado_id = ? AND fecha = ?",
             (empleado_id, fecha))
         if not a:
             return {'error': 'Ese día no tiene asistencia calculada.'}
         sec = secuencia_en_revision(a.get('observaciones'))
         if not sec:
             return {'error': 'Ese día no está en revisión por una regla de marcaciones.'}
+        regla = await self._regla_de(sec) or {}
+        if 'CONFIRMAR' not in opciones_efectivas(regla, a.get('estado')):
+            return {'error': 'Este día quedó sin calcular: confirmarlo no lo resuelve. '
+                             'Corrija las marcas con las opciones de la regla.'}
         firma = firma_marcas(a.get('marcas_consumidas_ids'))
         if not firma:
             return {'error': 'No se pudo leer qué marcas usó el día; recalcúlelo primero.'}
@@ -492,21 +511,67 @@ class ReglasMarcasRepository:
             r = await self.db.fetch_one(
                 "SELECT username, created_at FROM revisiones_marcas WHERE empleado_id = ? AND fecha = ? AND firma = ?",
                 (empleado_id, fecha, firma))
-            confirmado = bool(r)
-        regla = None
-        if sec:
-            rr = await self.db.fetch_one(
-                "SELECT secuencia, lectura, colacion, accion, opciones_revision, activa "
-                "FROM reglas_marcas WHERE tipo_horario = 'CICLO_INTELIGENTE' AND secuencia = ?", (sec,))
-            if rr:
-                regla = dict(rr)
-                try:
-                    regla['opciones_revision'] = json.loads(regla.get('opciones_revision') or '[]')
-                except Exception:
-                    regla['opciones_revision'] = []
+            # Confirmar no resuelve un día sin calcular: sigue en revisión hasta corregir sus marcas
+            confirmado = bool(r) and str(a.get('estado') or '').upper() != 'ANOMALIA'
+        estado = (a or {}).get('estado')
+        regla = await self._regla_de(sec) if sec else None
+        if regla:
+            regla['opciones_efectivas'] = opciones_efectivas(regla, estado)
+            regla['sin_calcular'] = no_calcula(regla) or str(estado or '').upper() == 'ANOMALIA'
         return {'en_revision': bool(sec) and not confirmado, 'confirmado': confirmado,
-                'secuencia': sec, 'regla': regla,
+                'secuencia': sec, 'regla': regla, 'estado': estado,
                 'ventana_colacion': await self.ventana_colacion()}
+
+    # ── Vigilante (solo lectura) ─────────────────────────────────────────────
+    # Busca en el tramo abierto días que quedaron en un estado imposible de resolver:
+    #  · confirmados pero sin calcular (ANOMALIA): salieron de la lista y siguen bloqueando el cierre;
+    #  · en revisión sin camino de salida: su regla no ofrece nada que deje el día bien marcado;
+    #  · reglas guardadas que hoy no pasarían la validación.
+    async def vigilante(self) -> Dict[str, Any]:
+        from datetime import datetime as _dt
+        desde = await self.inicio_tramo_abierto()
+        hasta = _dt.now().strftime('%Y-%m-%d')
+        confirmados = await self.db.fetch_all(
+            """SELECT a.empleado_id, a.fecha, a.observaciones
+                 FROM asistencias a
+                 JOIN revisiones_marcas rv ON rv.empleado_id = a.empleado_id AND rv.fecha = a.fecha
+                WHERE a.fecha >= ? AND a.fecha < ? AND a.estado = 'ANOMALIA' AND a.observaciones LIKE ?
+                  AND rv.firma = (SELECT COALESCE(STRING_AGG(j.v, ',' ORDER BY j.v::bigint), '')
+                                    FROM jsonb_array_elements_text(a.marcas_consumidas_ids::jsonb) j(v))
+                ORDER BY a.fecha""",
+            (desde, hasta, f'%{MARCA_REVISION_REGLA}%'))
+        reglas: Dict[str, Any] = {}
+        sin_salida = []
+        for d in await self.dias_por_revisar(desde=desde, hasta=hasta):
+            sec = d.get('secuencia') or ''
+            if sec not in reglas:
+                reglas[sec] = await self._regla_de(sec)
+            regla = reglas[sec]
+            ops = opciones_efectivas(regla or {}, d.get('estado'))
+            if not regla or ('CONFIRMAR' not in ops and not tiene_salida(sec, ops)):
+                sin_salida.append({'empleado_id': d['empleado_id'], 'fecha': str(d['fecha'])[:10],
+                                   'secuencia': sec, 'numero': (regla or {}).get('numero')})
+        invalidas = []
+        for r in await self.db.fetch_all(
+                "SELECT id, numero, secuencia, lectura, colacion, accion, opciones_revision, eleccion_colacion "
+                "FROM reglas_marcas WHERE tipo_horario = 'CICLO_INTELIGENTE' ORDER BY numero"):
+            regla = dict(r)
+            try:
+                regla['opciones_revision'] = json.loads(regla.get('opciones_revision') or '[]')
+            except Exception:
+                regla['opciones_revision'] = []
+            motivo = validar_regla(regla)
+            if motivo:
+                invalidas.append({'id': regla['id'], 'numero': regla.get('numero'),
+                                  'secuencia': regla['secuencia'], 'motivo': motivo})
+        return {
+            'desde': desde,
+            'confirmados_sin_calcular': [{'empleado_id': r['empleado_id'], 'fecha': str(r['fecha'])[:10],
+                                          'secuencia': secuencia_en_revision(r.get('observaciones'))}
+                                         for r in confirmados],
+            'en_revision_sin_salida': sin_salida,
+            'reglas_invalidas': invalidas,
+        }
 
     async def pendientes_para_cierre(self, fecha_inicio: str, fecha_fin: str,
                                      area: str) -> List[Dict[str, Any]]:

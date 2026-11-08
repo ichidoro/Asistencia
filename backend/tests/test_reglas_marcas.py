@@ -64,7 +64,7 @@ def test_validacion_rechaza_valores_desconocidos():
 def test_validacion_combinaciones_coherentes():
     # no leer → solo revisión
     assert validar_regla(_base(lectura='NINGUNA', accion='CALCULA')) != ''
-    assert validar_regla(_base(lectura='NINGUNA', accion='SOLO_REVISA',
+    assert validar_regla(_base(secuencia='EESS', lectura='NINGUNA', accion='SOLO_REVISA',
                                opciones_revision=['RECLASIFICAR'])) == ''
     # calcula sin aviso → sin opciones
     assert validar_regla(_base(opciones_revision=['CONFIRMAR'])) != ''

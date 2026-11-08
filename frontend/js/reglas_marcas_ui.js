@@ -255,6 +255,7 @@ const ReglasMarcasModule = (() => {
             + '<div class="text-muted mb-2" style="font-size:.86rem;">El cálculo usa <strong>solo las reglas encendidas</strong> (' + activas + ' de ' + data.reglas.length + '). '
             + 'Tramo abierto desde el ' + esc(data.tramo_abierto_desde || '') + ': ' + Number(data.total_jornadas_tramo_abierto || 0).toLocaleString('es-CL') + ' días con marcas del reloj.</div>'
             + '<div id="rm-corrida-aviso"></div>'
+            + '<div id="rm-vigilante" class="mb-2"></div>'
             + '<div id="rm-por-revisar" class="mb-2"></div>'
             + '<div id="rm-ajustes" class="mb-3"></div>'
             + (data.reglas.length
@@ -272,6 +273,28 @@ const ReglasMarcasModule = (() => {
         if (data.reglas.length) { renderLista(); renderEditor(); }
         if (data.corrida_en_curso && data.corrida_en_curso.estado === 'en_curso') seguirCorrida(data.corrida_en_curso.id);
         cargarPorRevisar();
+        cargarVigilante();
+    }
+
+    // ── Vigilante (solo lectura): estados sin salida. No muestra nada si todo está bien. ──
+    async function cargarVigilante() {
+        const el = $('rm-vigilante');
+        if (!el || tipo !== 'CICLO_INTELIGENTE') return;
+        try {
+            const res = await fetch(API + 'vigilante/', { headers: headers() });
+            if (!res.ok) return;
+            const v = await res.json();
+            const nConf = (v.confirmados_sin_calcular || []).length, nSin = (v.en_revision_sin_salida || []).length;
+            const inval = v.reglas_invalidas || [];
+            if (!nConf && !nSin && !inval.length) { el.innerHTML = ''; return; }
+            const li = [];
+            if (nConf) li.push('<li><strong>' + nConf + ' ' + (nConf === 1 ? 'día confirmado sigue' : 'días confirmados siguen') + ' sin horas</strong> y bloquean el cierre: '
+                + v.confirmados_sin_calcular.map(d => esc(d.fecha)).join(', ') + '. Corrija sus marcas.</li>');
+            if (nSin) li.push('<li><strong>' + nSin + ' ' + (nSin === 1 ? 'día por revisar no tiene' : 'días por revisar no tienen') + ' cómo resolverse</strong> con las opciones de su regla: '
+                + v.en_revision_sin_salida.map(d => esc(d.fecha) + (d.numero ? ' (regla ' + d.numero + ')' : '')).join(', ') + '.</li>');
+            inval.forEach(r => li.push('<li><strong>Regla ' + esc(r.numero || '') + ' (' + esc(palabras(r.secuencia)) + ')</strong>: ' + esc(r.motivo) + '</li>'));
+            el.innerHTML = '<div class="alert alert-warning py-2 mb-0" style="font-size:.86rem;"><div class="fw-semibold mb-1"><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Hay que ajustar esto</div><ul class="mb-0 ps-3">' + li.join('') + '</ul></div>';
+        } catch (e) { /* el vigilante solo informa: si falla, no estorba */ }
     }
 
     function bandejaSinRegla() {
@@ -669,9 +692,20 @@ const ReglasMarcasModule = (() => {
             + '<div><div class="text-muted mb-1" style="font-size:.78rem;">Hora de corte de cada horario <span class="rmx-src">Configuración → Horarios → Mínimo para descontar</span></div>' + tablaCortes() + '</div>');
 
         // Paso 4: aviso
+        // «Confirmar» solo sirve si el día ya tiene sus horas («Avisar, pero calcular igual»). Si el día queda sin
+        // calcular, confirmarlo lo sacaría de la lista sin horas y seguiría bloqueando el cierre: se apaga y se quita.
+        const sinCalcular = r.accion === 'SOLO_REVISA' || !calcula;
+        // Una regla guardada antes con «Confirmar» se arregla al guardar (no al mirarla): el botón «Guardar» queda activo
+        const quitarConfirmar = edit && sinCalcular && (r.opciones_revision || []).includes('CONFIRMAR');
+        const porGuardar = _hayCambios(r) || quitarConfirmar;
         const opcionesHtml = (r.accion !== 'CALCULA')
             ? '<div><div class="text-muted mb-1" style="font-size:.78rem;">Al revisar, la persona podrá (el sistema nunca inventa una marca):</div><div class="rmx-ops rmx-c2">'
-              + OPCIONES.map(o => opcion('rmx-op-' + o[0], o[0], (r.opciones_revision || []).includes(o[0]), o[1], '', '', Object.assign({ check: true }, dis))).join('') + '</div></div>'
+              + OPCIONES.map(o => {
+                  const bloqueada = o[0] === 'CONFIRMAR' && sinCalcular;
+                  return opcion('rmx-op-' + o[0], o[0], !bloqueada && (r.opciones_revision || []).includes(o[0]), o[1],
+                      bloqueada ? 'Solo con «Avisar, pero calcular igual»: aquí el día queda sin horas y confirmarlo no lo resuelve.' : '', '',
+                      Object.assign({ check: true }, dis, bloqueada ? { disabled: true, apagada: true } : {}));
+              }).join('') + '</div></div>'
             : '';
         const cuerpo4 = '<div class="rmx-ops rmx-c3">'
             + opcion('rmx-p4', 'CALCULA', r.accion === 'CALCULA', 'No avisar', 'El resultado se ve en la grilla.', '', Object.assign({}, dis, calcula ? {} : { disabled: true, apagada: true }))
@@ -707,8 +741,8 @@ const ReglasMarcasModule = (() => {
         const barra = '<div class="rmx-barra"><p><b>En una frase:</b> ' + esc(fraseRegla(r)) + '</p><div class="d-flex gap-2 flex-wrap">'
             + '<button type="button" class="rmx-btn rmx-btn-sec" id="rm-ver-dias">Ver los días</button>'
             // Paso 1 «Guardar» y paso 2 «Correr»: el 1 está gris solo cuando no hay nada nuevo que guardar (pedido del dueño, 27-10-2026).
-            + (edit ? '<button type="button" class="rmx-btn rmx-btn-pri" id="rm-guardar"' + (_hayCambios(r) ? '' : ' disabled title="No hay cambios por guardar: ya puede correr la regla (paso 2)."') + '>'
-                + (_hayCambios(r) ? '1. Guardar cambios' : '1. Guardado <i class="bi bi-check-lg" aria-hidden="true"></i>') + '</button>' : '')
+            + (edit ? '<button type="button" class="rmx-btn rmx-btn-pri" id="rm-guardar"' + (porGuardar ? '' : ' disabled title="No hay cambios por guardar: ya puede correr la regla (paso 2)."') + '>'
+                + (porGuardar ? '1. Guardar cambios' : '1. Guardado <i class="bi bi-check-lg" aria-hidden="true"></i>') + '</button>' : '')
             + (puede && data.motor_conectado
                 ? (r.activa ? '<button type="button" class="rmx-btn rmx-btn-no" id="rm-correr" data-encender="0">Apagar esta regla</button>'
                             : '<button type="button" class="rmx-btn rmx-btn-ok" id="rm-correr" data-encender="1">' + (edit ? '2. ' : '') + 'Correr esta regla</button>')
@@ -876,6 +910,8 @@ const ReglasMarcasModule = (() => {
     }
 
     async function guardar(r) {
+        // «Confirmar» no se guarda en una regla que deja el día sin calcular (el servidor también lo rechaza)
+        if (r.accion === 'SOLO_REVISA' || r.lectura === 'NINGUNA') r.opciones_revision = (r.opciones_revision || []).filter(o => o !== 'CONFIRMAR');
         try {
             const res = await fetch(API + r.id + '/', {
                 method: 'PUT', headers: headers(),

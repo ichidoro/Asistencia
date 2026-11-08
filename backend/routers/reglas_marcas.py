@@ -96,6 +96,15 @@ async def evaluar_dia(
     return await repo.evaluar_dia(empleado_id, fecha)
 
 
+@router.get("/vigilante/", response_model=Dict[str, Any])
+async def vigilante(
+    repo: ReglasMarcasRepository = Depends(_repo),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
+):
+    """Solo lectura: días del tramo abierto en un estado sin salida y reglas que hoy no pasarían la validación."""
+    return await repo.vigilante()
+
+
 @router.post("/confirmar/", response_model=Dict[str, Any])
 async def confirmar_dia(
     payload: Dict[str, Any] = Body(...),

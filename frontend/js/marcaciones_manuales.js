@@ -773,8 +773,10 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     // Resetear estados
     inputEntrada.value = '';
     inputEntrada.disabled = false;
+    inputEntrada.dataset.teorico = '';
     inputSalida.value = '';
     inputSalida.disabled = false;
+    inputSalida.dataset.teorico = '';
     if (inputCond) inputCond.value = '';
     if (inputEsp) inputEsp.value = '';
     if (btnUnlock) btnUnlock.style.display = 'none';
@@ -822,8 +824,9 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         inputEntrada.disabled = true;
         hasLockedMarks = true;
     } else if (asist && isValidTime(asist.hora_entrada_teorica)) {
-        // Pre-fill theoretical time if real is missing
+        // Hora del horario como ayuda; se quita sola si el día trae marcas del reloj (ver _mmQuitarHorasDelHorario)
         inputEntrada.value = asist.hora_entrada_teorica;
+        inputEntrada.dataset.teorico = '1';
     }
 
     if (isValidTime(horaSalida)) {
@@ -831,8 +834,8 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         inputSalida.disabled = true;
         hasLockedMarks = true;
     } else if (asist && isValidTime(asist.hora_salida_teorica)) {
-        // Pre-fill theoretical time if real is missing
         inputSalida.value = asist.hora_salida_teorica;
+        inputSalida.dataset.teorico = '1';
     }
 
     // Segunda jornada sin SALIDA (volvió a marcar ENTRADA 4 h o más después de salir): la primera jornada está completa y lo
@@ -970,6 +973,7 @@ async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
         if (!r.ok) return;
         const data = await r.json();
         if (host.dataset.req !== reqId || !data.marcas || data.marcas.length === 0) return; // el modal ya cambió de día
+        _mmQuitarHorasDelHorario(data.marcas);
         renderPanelMarcasDia(host, empId, dateStr, data);
         cargarReglaDia(empId, dateStr, host, !!data.fecha_cerrada, reqId);
     } catch (e) {
@@ -994,16 +998,23 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         if (!cont) return;
         if (!ev.secuencia) { cont.innerHTML = ''; return; }
         const sec = ev.secuencia.split('').map(c => c === 'E' ? 'ENTRADA' : (c === 'S' ? 'SALIDA' : c)).join(' · ');
-        const opciones = (ev.regla && ev.regla.opciones_revision) || [];
+        const regla = ev.regla || {};
+        // Las salidas que se ofrecen salen de la regla guardada en la base. El servidor ya quitó «Confirmar» cuando el día
+        // quedó sin calcular (confirmarlo no le daría horas y seguiría bloqueando el cierre).
+        const opciones = regla.opciones_efectivas || regla.opciones_revision || [];
         const puedeEditar = typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.editar');
-        const puedeConfirmar = !cerrada && ev.en_revision && opciones.includes('CONFIRMAR') && puedeEditar;
+        const activo = !cerrada && ev.en_revision && puedeEditar;
+        const titulo = (regla.numero ? 'Regla ' + regla.numero + ' · ' : 'Regla de marcaciones · ') + sec;
+        const mx = host._mx;
+        if (mx) mx.enRevision = !!ev.en_revision;
+        const btnClasif = host.querySelector('#btn-marcas-guardar');
+        if (btnClasif) btnClasif.textContent = (activo && opciones.includes('RECLASIFICAR')) ? 'Guardar el cambio de tipo' : 'Guardar clasificación';
+        const lblClasif = btnClasif ? btnClasif.textContent : 'Guardar clasificación';
         // La marca que el sistema propone cambiar (la misma sugerencia de «Usar sugerencia») ya viene elegida y en rojo, solo si la
         // regla permite cambiar el tipo de una marca y la cantidad de marcas no deja dudas (orden del dueño, 06-11-2026). Nada se
-        // guarda hasta «Guardar clasificación» y el «Sí» de la pregunta.
-        const mx = host._mx;
+        // guarda hasta el botón de guardar y el «Sí» de la pregunta.
         let propuestas = [];
-        if (mx) mx.enRevision = !!ev.en_revision;
-        if (!cerrada && ev.en_revision && puedeEditar && opciones.includes('RECLASIFICAR') && mx && !mx.marcas.some(m => m.dudoso)) {
+        if (activo && opciones.includes('RECLASIFICAR') && mx && !mx.marcas.some(m => m.dudoso)) {
             propuestas = mx.marcas.map(m => (m.sugerido && m.sugerido !== m.tipo_actual) ? m.sugerido : null);
             if (propuestas.some(Boolean)) {
                 mx.propuestas = propuestas;
@@ -1018,25 +1029,45 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         if (nProp === 1) {
             const i = propuestas.findIndex(Boolean);
             txtRev = 'el sistema propone que la marca de las <strong>' + mx.marcas[i].hora + '</strong> sea <strong>'
-                + String(propuestas[i]).toUpperCase() + '</strong> (en rojo). Revísela y presione «Guardar clasificación».';
+                + String(propuestas[i]).toUpperCase() + '</strong> (en rojo). Revísela y presione «' + lblClasif + '».';
         } else if (nProp > 1) {
-            txtRev = 'el sistema propone cambiar ' + nProp + ' marcas (en rojo). Revíselas y presione «Guardar clasificación».';
+            txtRev = 'el sistema propone cambiar ' + nProp + ' marcas (en rojo). Revíselas y presione «' + lblClasif + '».';
         } else {
-            txtRev = 'este día está en <strong>«Días por revisar»</strong>. Corrija las marcas abajo' + (puedeConfirmar ? ', o confirme que está bien.' : '.');
+            txtRev = 'este día está en <strong>«Días por revisar»</strong>'
+                + (regla.sin_calcular ? ' y <strong>sin horas</strong> hasta corregir sus marcas.' : ' (ya tiene sus horas calculadas).');
         }
+        // «¿Qué pasó este día?»: un camino por cada opción de la regla; cada uno abre solo lo que hace falta
+        const CAMINOS = {
+            AGREGAR_SALIDA: ['bi-box-arrow-right', 'Se le olvidó marcar la SALIDA', 'Escriba solo la hora de SALIDA'],
+            AGREGAR_ENTRADA: ['bi-box-arrow-in-right', 'Se le olvidó marcar la ENTRADA', 'Escriba solo la hora de ENTRADA'],
+            RECLASIFICAR: ['bi-arrow-left-right', 'Marcó ENTRADA en vez de SALIDA (o al revés)', 'Cambie el tipo en la tabla de abajo'],
+            CONFIRMAR: ['bi-check2-circle', 'Las marcas están bien así', 'Queda confirmado con un motivo'],
+        };
+        const caminos = activo ? opciones.filter(o => CAMINOS[o]) : [];
+        const caminosHtml = caminos.length ? `
+                <div class="mt-2 fw-semibold">¿Qué pasó este día?</div>
+                <div class="d-flex flex-wrap gap-2 mt-1" role="group" aria-label="Qué pasó este día">
+                    ${caminos.map(o => `<button type="button" class="btn btn-sm btn-outline-primary text-start mm-camino" data-camino="${o}" aria-pressed="false" style="border:1px solid #93a4d8;">
+                        <i class="bi ${CAMINOS[o][0]} me-1" aria-hidden="true"></i><strong>${CAMINOS[o][1]}</strong><br><span class="small">${CAMINOS[o][2]}</span></button>`).join('')}
+                </div>` : '';
         cont.innerHTML = `
             <div class="border rounded p-2" style="background:${ev.en_revision ? '#fef2f2' : '#f0fdf4'};">
                 <i class="bi ${ev.en_revision ? 'bi-exclamation-triangle-fill text-danger' : 'bi-check-circle-fill text-success'}"></i>
-                <strong>Regla de marcaciones (${sec}):</strong>
+                <strong>${titulo}:</strong>
                 ${ev.en_revision ? txtRev
                  : ev.confirmado ? 'este día fue revisado y confirmado. Si cambian sus marcas, vuelve a revisión.'
                  : 'día en revisión ya resuelto.'}
-                ${puedeConfirmar ? `<button type="button" class="btn btn-sm btn-outline-success ms-2 py-0" onclick="confirmarDiaRevision(${empId}, '${dateStr}')">Confirmar que está bien</button>` : ''}
+                ${caminosHtml}
             </div>`;
-        // Si la regla solo permite cambiar el tipo de una marca (o confirmar), el día ya tiene todas sus marcas del reloj: la parte de
-        // abajo (escribir marcas a mano) queda vacía y bloqueada; «Habilitar edición» la abre si de verdad faltara una marca
-        if (!cerrada && ev.en_revision && opciones.length && opciones.every(o => o === 'RECLASIFICAR' || o === 'CONFIRMAR')) {
-            _mmAplicarBloqueoRevision();
+        cont.querySelectorAll('.mm-camino').forEach(b => b.addEventListener('click', () => _mmElegirCamino(b.dataset.camino, empId, dateStr, host)));
+        if (activo) {
+            // Mientras no se elija qué pasó, la parte de abajo (escribir marcas a mano) queda vacía y bloqueada: las horas del
+            // horario no son marcas y no deben guardarse por error
+            _mmAplicarBloqueoRevision(caminos.some(o => o.startsWith('AGREGAR_'))
+                ? 'Elija en <strong>«¿Qué pasó este día?»</strong>, más abajo: si falta una marca, se abre solo el campo de esa marca.'
+                : null);
+            if (nProp) _mmMarcarCamino(cont, 'RECLASIFICAR');
+            else if (caminos.length === 1 && caminos[0] !== 'CONFIRMAR') _mmElegirCamino(caminos[0], empId, dateStr, host);
         }
     } catch (e) {
         console.warn('No se pudo evaluar la regla del día', e);
@@ -1281,7 +1312,7 @@ async function _mmConfirmarClasificacion(cambios, dateStr) {
 
 /** Día por revisar con todas sus marcas del reloj (la regla solo permite cambiar el tipo de una marca o confirmar): la parte de
  *  abajo, que escribe marcas a mano, queda vacía y bloqueada (variante elegida por el dueño, 06-11-2026). */
-function _mmAplicarBloqueoRevision() {
+function _mmAplicarBloqueoRevision(texto) {
     const modal = marcacionesManualesState.manualModal;
     if (!modal || marcacionesManualesState.bloqueoRevision) return;
     marcacionesManualesState.bloqueoRevision = true;
@@ -1290,7 +1321,7 @@ function _mmAplicarBloqueoRevision() {
         avisoFalta.style.display = 'none';
         if (!document.getElementById('mm-alert-revision')) {
             avisoFalta.insertAdjacentHTML('beforebegin', '<div class="alert alert-info py-2 mb-3" id="mm-alert-revision">'
-                + '<i class="bi bi-info-circle-fill me-2" aria-hidden="true"></i>Este día tiene <strong>todas sus marcas del reloj</strong>: no hace falta agregar marcas.</div>');
+                + '<i class="bi bi-info-circle-fill me-2" aria-hidden="true"></i>' + (texto || 'Este día tiene <strong>todas sus marcas del reloj</strong>: no hace falta agregar marcas.') + '</div>');
         }
     }
     const huerfana = document.getElementById('manual-alert-huerfana');
@@ -1304,18 +1335,78 @@ function _mmAplicarBloqueoRevision() {
     const fila = ent ? ent.closest('.row') : null;
     if (fila && !document.getElementById('mm-bloqueo-nota')) {
         fila.insertAdjacentHTML('afterend', '<div class="mm-bloqueo-nota" id="mm-bloqueo-nota"><i class="bi bi-lock-fill me-1" aria-hidden="true"></i>'
-            + 'Bloqueado: este día no necesita marcas nuevas. Solo si de verdad falta una marca, presione <strong>Habilitar edición</strong>.</div>');
+            + (texto ? 'Bloqueado hasta elegir arriba qué pasó este día.'
+                     : 'Bloqueado: este día no necesita marcas nuevas. Solo si de verdad falta una marca, presione <strong>Habilitar edición</strong>.') + '</div>');
     }
 }
 
 function _mmQuitarBloqueoRevision() {
     marcacionesManualesState.bloqueoRevision = false;
+    _mmEtiquetaGuardar(null);
     ['mm-alert-revision', 'mm-bloqueo-nota'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
     const obs = document.getElementById('manual-observaciones');
     if (obs) obs.disabled = false;
     const modal = marcacionesManualesState.manualModal;
     const guardar = modal ? modal.querySelector('.modal-footer button[onclick="saveManualEntry()"]') : null;
     if (guardar) guardar.disabled = false;
+}
+
+/** Si el día trae marcas del reloj, los campos de abajo no llevan las horas del horario: esas horas no son marcas y,
+ *  si alguien presiona «Guardar», quedarían como marcas manuales que nadie hizo. */
+function _mmQuitarHorasDelHorario(marcas) {
+    if (!marcas || !marcas.length) return;
+    ['manual-hora-entrada', 'manual-hora-salida'].forEach(id => {
+        const i = document.getElementById(id);
+        if (i && i.dataset.teorico === '1') { i.value = ''; i.dataset.teorico = ''; }
+    });
+}
+
+/** Texto del botón «Guardar» del pie: dice qué se va a guardar. null lo devuelve a su texto original. */
+function _mmEtiquetaGuardar(texto) {
+    const modal = marcacionesManualesState.manualModal;
+    const b = modal ? modal.querySelector('.modal-footer button[onclick="saveManualEntry()"]') : null;
+    if (!b) return;
+    if (b.dataset.base === undefined) b.dataset.base = b.textContent;
+    b.textContent = texto || b.dataset.base;
+}
+
+function _mmMarcarCamino(cont, camino) {
+    if (!cont) return;
+    cont.querySelectorAll('.mm-camino').forEach(b => {
+        const sel = b.dataset.camino === camino;
+        b.classList.toggle('btn-primary', sel);
+        b.classList.toggle('btn-outline-primary', !sel);
+        b.setAttribute('aria-pressed', sel ? 'true' : 'false');
+    });
+}
+
+/** Un camino de «¿Qué pasó este día?». Cada uno abre solo lo que hace falta:
+ *  · falta la SALIDA (o la ENTRADA): solo ese campo, vacío, y el botón dice qué guarda; el otro campo queda cerrado,
+ *    así no se crea una marca manual que sobra;
+ *  · tipo equivocado: la tabla de marcas y su botón; la parte de abajo queda bloqueada;
+ *  · está bien así: confirmar con motivo (solo existe si el día ya tiene sus horas). */
+function _mmElegirCamino(camino, empId, dateStr, host) {
+    const cont = host ? host.querySelector('#marcas-regla-info') : null;
+    _mmMarcarCamino(cont, camino);
+    const ent = document.getElementById('manual-hora-entrada'), sal = document.getElementById('manual-hora-salida');
+    if (camino === 'AGREGAR_SALIDA' || camino === 'AGREGAR_ENTRADA') {
+        _mmQuitarBloqueoRevision();
+        const abre = camino === 'AGREGAR_SALIDA' ? sal : ent;
+        const cierra = camino === 'AGREGAR_SALIDA' ? ent : sal;
+        if (cierra) { cierra.value = ''; cierra.disabled = true; cierra.dataset.teorico = ''; }
+        if (abre) { abre.value = ''; abre.disabled = false; abre.dataset.teorico = ''; }
+        const huerfana = document.getElementById('manual-alert-huerfana');
+        if (huerfana) huerfana.style.display = 'none';
+        _mmEtiquetaGuardar(camino === 'AGREGAR_SALIDA' ? 'Guardar la SALIDA' : 'Guardar la ENTRADA');
+        if (abre) { abre.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => abre.focus(), 150); }
+    } else if (camino === 'RECLASIFICAR') {
+        _mmQuitarBloqueoRevision();
+        _mmAplicarBloqueoRevision();
+        const primero = host ? host.querySelector('.mm-seg-b:not([disabled])') : null;
+        if (primero) { primero.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => primero.focus(), 150); }
+    } else if (camino === 'CONFIRMAR') {
+        confirmarDiaRevision(empId, dateStr);
+    }
 }
 
 function closeManualEntryModal() {

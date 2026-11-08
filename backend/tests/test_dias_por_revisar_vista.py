@@ -96,7 +96,7 @@ def test_la_ventana_deja_elegida_la_propuesta_y_bloquea_la_parte_de_abajo():
     assert "mm-prop" in MODAL_JS and "mm-prop" in VENTANAS_CSS
     assert "Cambio propuesto" in MODAL_JS
     assert "_mmAplicarBloqueoRevision" in MODAL_JS and "_mmQuitarBloqueoRevision" in MODAL_JS
-    assert "o === 'RECLASIFICAR' || o === 'CONFIRMAR'" in MODAL_JS, "el bloqueo depende de las opciones de la regla"
+    assert "opciones.filter(o => CAMINOS[o])" in MODAL_JS, "los caminos salen de las opciones de la regla"
     assert "m.dudoso" in MODAL_JS, "con cantidad impar de marcas no se propone nada"
 
 
@@ -128,8 +128,10 @@ def test_los_textos_de_la_ventana_sobreviven_al_minificador():
         "No cambió el tipo de ninguna marca.", "¿Volver a calcular el día?",
         "Este día tiene <strong>todas sus marcas del reloj</strong>: no hace falta agregar marcas.",
         "Bloqueado: este día no necesita marcas nuevas. Solo si de verdad falta una marca, presione ",
-        "el sistema propone que la marca de las <strong>", "</strong> (en rojo). Revísela y presione «Guardar clasificación».",
-        "el sistema propone cambiar ", " marcas (en rojo). Revíselas y presione «Guardar clasificación».",
-        ". Corrija las marcas abajo", ", o confirme que está bien.",
+        "el sistema propone que la marca de las <strong>", "</strong> (en rojo). Revísela y presione «",
+        "el sistema propone cambiar ", " marcas (en rojo). Revíselas y presione «",
+        "Guardar el cambio de tipo", "Guardar la SALIDA", "Guardar la ENTRADA", "¿Qué pasó este día?",
+        "Se le olvidó marcar la SALIDA", "Marcó ENTRADA en vez de SALIDA (o al revés)", "Las marcas están bien así",
+        " y <strong>sin horas</strong> hasta corregir sus marcas.", "Bloqueado hasta elegir arriba qué pasó este día.",
     ):
         assert frase in m, f"el minificador rompe el texto: {frase!r}"

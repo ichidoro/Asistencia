@@ -149,7 +149,56 @@ def validar_regla(regla: dict) -> str:
         return "Si el día se calcula sin aviso, no corresponden opciones de revisión."
     if accion != 'CALCULA' and not opciones:
         return "Si el día va a revisión, elija al menos una opción para quien revisa."
+    if no_calcula(regla) and _RE_BIEN_MARCADA.fullmatch(sec):
+        return ("Una secuencia bien marcada (ENTRADA · SALIDA) es la salida de todas las revisiones: "
+                "siempre debe calcularse. Elija «Calcular» o «Avisar, pero calcular igual».")
+    if no_calcula(regla) and 'CONFIRMAR' in opciones:
+        return ("«Confirmar que está bien» no sirve si el día queda sin calcular: confirmarlo lo saca de la "
+                "lista, pero sigue sin horas y bloquea el cierre. Quítelo.")
+    if accion != 'CALCULA' and 'CONFIRMAR' not in opciones_efectivas(regla) and not tiene_salida(sec, opciones):
+        return ("Con estas opciones nadie podría dejar el día bien marcado (ENTRADA · SALIDA). "
+                "Agregue «Escribir la SALIDA que falta», «Escribir la ENTRADA que falta» o "
+                "«Cambiar si una marca es ENTRADA o SALIDA», según corresponda.")
     return ''
+
+
+def no_calcula(regla: dict) -> bool:
+    """True si la regla deja el día sin calcular (anomalía) hasta que una persona cambie las marcas."""
+    return regla.get('accion') == 'SOLO_REVISA' or regla.get('lectura') == 'NINGUNA'
+
+
+def opciones_efectivas(regla: dict, estado_dia: str = '') -> list:
+    """Las opciones que de verdad se ofrecen a quien revisa. «Confirmar» solo existe cuando el día
+    ya está calculado (regla «Avisar, pero calcular igual» y el día no quedó en anomalía): confirmar un
+    día sin horas lo sacaría de la lista sin resolverlo."""
+    ops = [o for o in (regla.get('opciones_revision') or []) if o in OPCIONES_REVISION]
+    if no_calcula(regla) or regla.get('accion') != 'CALCULA_Y_REVISA' or str(estado_dia or '').upper() == 'ANOMALIA':
+        ops = [o for o in ops if o != 'CONFIRMAR']
+    return ops
+
+
+_RE_BIEN_MARCADA = re.compile(r'^(ES)+$')
+
+
+def secuencias_alcanzables(secuencia: str, opciones) -> set:
+    """Secuencias a las que puede llegar quien revisa en una sola corrección, usando solo las opciones
+    permitidas: escribir una ENTRADA y/o una SALIDA a cualquier hora (en cualquier posición) y, si puede
+    cambiar el tipo, darle a cada marca el tipo que quiera."""
+    ops = set(opciones or [])
+    actuales = {str(secuencia or '')}
+    for op, letra in (('AGREGAR_ENTRADA', 'E'), ('AGREGAR_SALIDA', 'S')):
+        if op in ops:
+            actuales |= {s[:i] + letra + s[i:] for s in actuales for i in range(len(s) + 1)}
+    if 'RECLASIFICAR' in ops:
+        largos = {len(s) for s in actuales}
+        actuales |= {''.join('ES'[(m >> k) & 1] for k in range(n)) for n in largos for m in range(2 ** n)}
+    return actuales
+
+
+def tiene_salida(secuencia: str, opciones) -> bool:
+    """True si con las opciones permitidas el día puede quedar bien marcado (ENTRADA · SALIDA repetido),
+    que el motor siempre calcula por pares."""
+    return any(_RE_BIEN_MARCADA.fullmatch(s) for s in secuencias_alcanzables(secuencia, opciones))
 
 
 # Orden de los grupos en la pantalla. El número de cada regla («Regla N») sale de este orden
