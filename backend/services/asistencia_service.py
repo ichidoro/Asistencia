@@ -741,8 +741,11 @@ class AsistenciaService:
         feriados_preloaded: Optional[Dict] = None,
         collect_only: bool = False,
         ignore_closures: bool = False,
+        transformar_logs=None,
     ) -> Dict[str, Any]:
         """
+        transformar_logs: función que recibe las marcas leídas y devuelve las marcas a usar (simulación de una
+                          corrección en la ventana de revisión). Solo con collect_only=True.
         Parámetros extra para modo batch:
           feriados_preloaded: dict {fecha: descripcion} pre-cargado por el caller
                               para evitar N llamadas a get_feriados() (1 por empleado).
@@ -980,6 +983,12 @@ class AsistenciaService:
             (empleado_id, logs_ini, logs_fin)
         )
         all_logs = [dict(l) for l in all_logs]
+        # Simulación (ventana de revisión): las marcas como quedarían con una corrección propuesta, solo en memoria.
+        # Se usa siempre con collect_only=True: no se guarda nada.
+        if transformar_logs is not None:
+            if not collect_only:
+                raise ValueError("transformar_logs solo se usa para simular (collect_only=True)")
+            all_logs = sorted(transformar_logs(all_logs), key=lambda l: str(l.get('fecha_hora', '')))
 
         # Asistencia del día ANTES del inicio (para seed de consumo)
         ayer_ini = (start - timedelta(days=1)).strftime("%Y-%m-%d")

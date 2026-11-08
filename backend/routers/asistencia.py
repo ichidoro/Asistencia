@@ -16,7 +16,7 @@ from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
 from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine, libreta_es_inasistencia
 from backend.services import gps_nexacol
-from backend.services.reglas_marcas_def import TIPO_NO_SE_USA, propuesta_tres_marcas
+from backend.services.reglas_marcas_def import TIPO_NO_SE_USA, propuesta_tres_marcas, secuencia_en_revision
 from backend.services import libreta_orden
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
@@ -1819,6 +1819,108 @@ def marcas_doble_toque(rows: List[Dict[str, Any]], segundos: float) -> Dict[Any,
     return out
 
 
+async def _colacion_tipica(db, turno_id, hora_entrada) -> Optional[Dict[str, Any]]:
+    """A qué hora salen y vuelven de colación las personas de un horario (mismo horario y misma hora de entrada): la mediana
+    de la 2.ª y la 3.ª marca de los días ENTRADA · SALIDA · ENTRADA · SALIDA del reloj, sin marcas manuales, del tramo
+    abierto. Se calcula con las marcas reales cada vez (≈70 ms en el horario más grande); None si no hay ningún día así."""
+    import statistics
+    from backend.repositories.reglas_marcas import ReglasMarcasRepository
+    desde = await ReglasMarcasRepository(db).inicio_tramo_abierto()
+    filas = await db.fetch_all("""
+        WITH a AS (SELECT a.id AS aid, a.marcas_consumidas_ids AS ids FROM asistencias a
+                    WHERE a.turno_asignado_id = ? AND a.hora_entrada_teorica = ? AND a.fecha >= ?
+                      AND a.marcas_consumidas_ids ~ '^\\[ *[0-9]'),
+        x AS (SELECT a.aid, l.fecha_hora, COALESCE(l.manual, 0) AS man,
+                     CASE WHEN LOWER(COALESCE(o.tipo, l.tipo)) IN ('entrada','entry','e','in','1') THEN 'E' ELSE 'S' END AS t
+                FROM a CROSS JOIN LATERAL jsonb_array_elements_text(a.ids::jsonb) j(v)
+                JOIN logs_raw l ON l.id = j.v::bigint LEFT JOIN logs_tipo_override o ON o.log_id = l.id)
+        SELECT STRING_AGG(t, '' ORDER BY fecha_hora) AS pat, SUM(man) AS man,
+               STRING_AGG(SUBSTR(fecha_hora, 12, 5), ',' ORDER BY fecha_hora) AS horas
+          FROM x GROUP BY aid""", (turno_id, hora_entrada, desde))
+    sale, vuelve = [], []
+    for f in filas:
+        if f["pat"] != "ESES" or int(f["man"] or 0):
+            continue
+        h = str(f["horas"]).split(",")
+        sale.append(int(h[1][:2]) * 60 + int(h[1][3:5]))
+        vuelve.append(int(h[2][:2]) * 60 + int(h[2][3:5]))
+    if not sale:
+        return None
+    return {"sale": int(statistics.median(sale)), "vuelve": int(statistics.median(vuelve)), "dias": len(sale)}
+
+
+async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usadas, hd, horario, col_horario: int):
+    """Opciones para la ventana (ver propuesta_tres_marcas), con el tipo de cada marca por id, la marca nueva con su fecha y
+    lo que pagaría cada una: el día se calcula en memoria con esas marcas (collect_only, no se guarda nada)."""
+    from backend.repositories.reglas_marcas import ReglasMarcasRepository
+    db = service.repository.db
+    vc = await ReglasMarcasRepository(db).ventana_colacion()
+    tipica = await _colacion_tipica(db, hd.get("turno_asignado_id"), horario["entrada"]) if hd.get("turno_asignado_id") else None
+    fhs = [str(r["fecha_hora"])[:19] for r in usadas]
+    p = propuesta_tres_marcas(fhs, horario["entrada"], horario["salida"], int(vc.get("min", 20)), int(vc.get("max", 150)),
+                              col_horario, tipica)
+    if not p:
+        return None
+    marcas_dt = [datetime.strptime(x, "%Y-%m-%d %H:%M:%S") for x in fhs]
+    opciones = []
+    for op in p["opciones"]:
+        marca = None
+        if op["marca"]:
+            # La marca nueva va en su lugar: después de la marca que la antecede o antes de la que la sigue (turnos de noche)
+            hh, mm = map(int, op["marca"]["hora"].split(":"))
+            if op["clave"] == "FALTA_ENTRADA":
+                ref, antes = marcas_dt[0], True
+            elif op["clave"] == "FALTA_SALIDA":
+                ref, antes = marcas_dt[2], False
+            elif op["clave"] == "FALTA_VUELTA":
+                ref, antes = marcas_dt[1], False
+            else:
+                ref, antes = marcas_dt[1], True
+            dt = ref.replace(hour=hh, minute=mm, second=0)
+            if antes and dt > ref:
+                dt -= timedelta(days=1)
+            if not antes and dt < ref:
+                dt += timedelta(days=1)
+            marca = dict(op["marca"], fecha_hora=dt.strftime("%Y-%m-%d %H:%M:%S"), fecha=dt.strftime("%Y-%m-%d"))
+        opciones.append({"clave": op["clave"], "titulo": op["titulo"], "motivo": op["motivo"], "marca": marca,
+                         "tipos": {str(r["id"]): t for r, t in zip(usadas, op["tipos"])}})
+
+    async def paga(op):
+        tipos = op["tipos"]
+        base = dict(usadas[0])
+
+        def transformar(logs):
+            out = []
+            for l in logs:
+                t = tipos.get(str(l.get("id")))
+                if t == TIPO_NO_SE_USA:
+                    continue
+                out.append(dict(l, tipo=t) if t else l)
+            if op["marca"]:
+                out.append(dict(base, id=-1, fecha_hora=op["marca"]["fecha_hora"], tipo=op["marca"]["tipo"],
+                                tipo_original=op["marca"]["tipo"], manual=1, observaciones=op["motivo"]))
+            return out
+        r = await service.reprocesar_periodo_empleado(empleado_id, fecha, fecha, force=True, collect_only=True,
+                                                      transformar_logs=transformar)
+        fila = next((c for c in (r.get("_collect") or []) if str(c.get("fecha")) == fecha), None)
+        if not fila and r.get("sin_cambio"):
+            # Con esas marcas el día da lo mismo que ya está guardado: el cálculo no lo devuelve, se lee lo guardado
+            fila = await db.fetch_one("SELECT horas_trabajadas, estado, minutos_deuda FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+                                      (empleado_id, fecha))
+        if not fila:
+            return None
+        return {"horas": round(float(fila.get("horas_trabajadas") or 0), 2), "estado": fila.get("estado"),
+                "deuda_min": round(float(fila.get("minutos_deuda") or 0))}
+
+    for op in opciones:
+        try:
+            op["resultado"] = await paga(op)
+        except Exception as e:
+            logger.warning(f"Simulación de la opción {op['clave']} ({empleado_id} {fecha}): {e}")
+            op["resultado"] = None
+    return {"combinacion": p["combinacion"], "opciones": opciones, "colacion_tipica": tipica}
+
+
 def sugerir_clasificacion_marcas(horas: List[str]) -> List[Dict[str, Any]]:
     """
     Sugerencia de Entrada/Salida para las marcas de un día (ya ordenadas), y cuáles serían de colación.
@@ -1859,8 +1961,8 @@ async def marcaciones_del_dia(
     rows = await _marcas_del_dia(service.repository.db, empleado_id, fecha)
     # Horario asignado de ese día (lo guarda el cálculo en la asistencia): la ventana lo propone al escribir la marca que falta
     hd = await service.repository.db.fetch_one(
-        "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id FROM asistencias WHERE empleado_id = ? AND fecha = ?",
-        (empleado_id, fecha))
+        "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id, observaciones FROM asistencias "
+        "WHERE empleado_id = ? AND fecha = ?", (empleado_id, fecha))
     # Doble toque: las marcas que el cálculo deja fuera antes de aplicar la regla. La sugerencia y la colación se calculan
     # solo con las que se usan, igual que el cálculo.
     doble_toque: Dict[Any, Dict[str, Any]] = {}
@@ -1883,18 +1985,13 @@ async def marcaciones_del_dia(
     sug = [({"tipo": r["tipo"], "colacion": False, "dudoso": len(usadas) % 2 == 1 or len(usadas) < 2}
             if no_usada(r) else next(sug_usadas)) for r in rows]
     horario = {"entrada": (hd or {}).get("hora_entrada_teorica"), "salida": (hd or {}).get("hora_salida_teorica")}
-    # Tres marcas que se usan (falta una o sobra una): propuesta según el horario del día (reglas_marcas_def.propuesta_tres_marcas)
+    # Tres marcas que se usan (falta una o sobra una), en un día que una regla dejó en revisión: una o dos opciones completas
+    # según el horario del día y la colación de su mismo horario (reglas_marcas_def.propuesta_tres_marcas), cada una con lo
+    # que pagaría (simulación sin guardar nada).
     propuesta = None
-    if len(usadas) == 3:
+    if len(usadas) == 3 and hd and secuencia_en_revision(hd.get("observaciones")):
         try:
-            from backend.repositories.reglas_marcas import ReglasMarcasRepository
-            vc = await ReglasMarcasRepository(service.repository.db).ventana_colacion()
-            p = propuesta_tres_marcas([str(r["fecha_hora"]) for r in usadas], horario["entrada"], horario["salida"],
-                                      int(vc.get("min", 20)), int(vc.get("max", 150)), col_horario)
-            if p:
-                por_id = lambda tipos: {str(r["id"]): t for r, t in zip(usadas, tipos)}
-                propuesta = {"combinacion": p["combinacion"], "falta": p["falta"], "tipos": por_id(p["tipos"]),
-                             "caminos": {k: dict(v, tipos=por_id(v["tipos"])) for k, v in (p.get("caminos") or {}).items()}}
+            propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario)
         except Exception as e:
             logger.warning(f"Propuesta de tres marcas ({empleado_id} {fecha}): {e}")
     # Con UNA sola marca, el ciclo del día no es seguro (el cálculo lo elige por la marca más cercana, sin mirar su tipo).

@@ -474,39 +474,65 @@ def test_ventana_marca_el_doble_toque_igual_que_el_calculo():
 
 
 def test_propuesta_tres_marcas_con_el_horario():
-    """Regla 6 (E·E·E) y cualquier día de 3 marcas: falta una o sobra una; la propuesta sale de comparar con el horario."""
+    """Regla 6 (E·E·E) y cualquier día de 3 marcas: falta una o sobra una; una o dos opciones completas que salen de comparar
+    con el horario y, para la marca de colación, con la hora a la que sale y vuelve de colación su mismo horario."""
     from backend.services.reglas_marcas_def import propuesta_tres_marcas
-    p = lambda m, e, s: propuesta_tres_marcas(m, e, s, 20, 150)
-    # Falta la SALIDA final: entrada a la hora y una colación de 28 min al final → E·S·E y escribir la SALIDA del horario
+    p = lambda m, e, s, col=0, tip=None: propuesta_tres_marcas(m, e, s, 20, 150, col, tip)
+    resumen = lambda r: [(o['clave'], o['tipos'], o['marca']) for o in r['opciones']]
+    # Falta la SALIDA final: entrada a la hora y una colación de 28 min al final → una sola opción, completa
     r = p(['2026-05-18 06:58:56', '2026-05-18 13:31:31', '2026-05-18 13:59:23'], '07:00', '16:30')
-    assert (r['combinacion'], r['tipos'], r['falta']) == (1, ['Entrada', 'Salida', 'Entrada'], {'tipo': 'Salida', 'hora': '16:30'})
-    assert r['caminos']['AGREGAR_SALIDA']['tipos'] == ['Entrada', 'Salida', 'Entrada'] and r['caminos']['AGREGAR_SALIDA']['hora'] == '16:30'
+    assert r['combinacion'] == 1
+    assert resumen(r) == [('FALTA_SALIDA', ['Entrada', 'Salida', 'Entrada'], {'tipo': 'Salida', 'hora': '16:30'})]
+    assert '16:30' in r['opciones'][0]['motivo']
     r = p(['2026-08-11 07:54:39', '2026-08-11 15:19:20', '2026-08-11 15:41:55'], '08:00', '17:30')
-    assert r['combinacion'] == 1 and r['falta'] == {'tipo': 'Salida', 'hora': '17:30'}
-    # Sobra la del medio: entrada y salida a la hora y ninguna pausa es colación (154 min > 150) → la del medio no se usa
-    r = p(['2026-06-11 07:01:30', '2026-06-11 12:56:55', '2026-06-11 15:30:21'], '07:00', '15:30')
-    assert (r['combinacion'], r['tipos'], r['falta'], r['caminos']) == (6, ['Entrada', 'No se usa', 'Salida'], None, {})
-    # … o escribir la marca de colación que falta, con los minutos de colación del horario (30)
-    r = propuesta_tres_marcas(['2026-06-11 07:01:30', '2026-06-11 12:56:55', '2026-06-11 15:30:21'], '07:00', '15:30', 20, 150, 30)
-    assert r['caminos']['AGREGAR_ENTRADA']['tipos'] == ['Entrada', 'Salida', 'Salida'] and r['caminos']['AGREGAR_ENTRADA']['hora'] == '13:26'
-    assert r['caminos']['AGREGAR_SALIDA']['tipos'] == ['Entrada', 'Entrada', 'Salida'] and r['caminos']['AGREGAR_SALIDA']['hora'] == '12:26'
-    # Pausa de 148 min que termina a la hora de salida: la última ES la salida → la del medio no se usa (no falta nada)
-    r = p(['2026-04-27 07:01:00', '2026-04-27 14:03:00', '2026-04-27 16:31:00'], '07:00', '16:30')
-    assert r['combinacion'] == 6
+    assert resumen(r) == [('FALTA_SALIDA', ['Entrada', 'Salida', 'Entrada'], {'tipo': 'Salida', 'hora': '17:30'})]
+    # Están la entrada y la salida (ninguna pausa es colación: 154 min > 150): la del medio no se usa, siempre
+    galvez = ['2026-06-11 07:01:30', '2026-06-11 12:56:55', '2026-06-11 15:30:21']
+    assert resumen(p(galvez, '07:00', '15:30')) == [('SOBRA_MEDIO', ['Entrada', 'No se usa', 'Salida'], None)]
+    # … y, con la colación de su horario (30 min) y a qué hora sale (13:00) y vuelve (13:31) su horario, la marca de
+    # colación que calza: 12:56 está más cerca de la salida → faltó la vuelta, a las 13:26
+    tip = {'sale': 13 * 60, 'vuelve': 13 * 60 + 31}
+    r = p(galvez, '07:00', '15:30', 30, tip)
+    assert resumen(r) == [('SOBRA_MEDIO', ['Entrada', 'No se usa', 'Salida'], None),
+                          ('FALTA_VUELTA', ['Entrada', 'Salida', 'Salida'], {'tipo': 'Entrada', 'hora': '13:26'})]
+    assert 'salió a las 12:56' in r['opciones'][1]['motivo'] and '13:00' in r['opciones'][1]['motivo']
+    # Si la del medio queda más cerca de la hora en que vuelven, faltó la salida a colación (esa hora − 30)
+    r = p(['2026-06-11 07:01:30', '2026-06-11 13:35:00', '2026-06-11 15:30:21'], '07:00', '15:30', 30, tip)
+    assert resumen(r)[1] == ('FALTA_SALIDA_COLACION', ['Entrada', 'Entrada', 'Salida'], {'tipo': 'Salida', 'hora': '13:05'})
+    # Sin datos de su horario o sin minutos de colación: solo «no se usa»
+    assert len(p(galvez, '07:00', '15:30', 30, None)['opciones']) == 1
+    assert len(p(galvez, '07:00', '15:30', 0, tip)['opciones']) == 1
+    # Pausa de 148 min que termina a la hora de salida: la última ES la salida → sobra la del medio (no falta nada)
+    assert p(['2026-04-27 07:01:00', '2026-04-27 14:03:00', '2026-04-27 16:31:00'], '07:00', '16:30')['combinacion'] == 6
     # Pausa al comienzo y salida a la hora: falta la ENTRADA aunque la segunda pausa también mida como colación
-    r = p(['2026-05-14 12:58:00', '2026-05-14 13:32:00', '2026-05-14 15:33:00'], '07:00', '15:30')
-    assert r['combinacion'] == 2
-    # Falta la ENTRADA inicial: colación al comienzo y la última a la hora de salida
+    assert p(['2026-05-14 12:58:00', '2026-05-14 13:32:00', '2026-05-14 15:33:00'], '07:00', '15:30')['combinacion'] == 2
+    # Falta la ENTRADA inicial
     r = p(['2026-06-11 12:30:00', '2026-06-11 13:00:00', '2026-06-11 15:31:00'], '07:00', '15:30')
-    assert (r['combinacion'], r['tipos'], r['falta']) == (2, ['Salida', 'Entrada', 'Salida'], {'tipo': 'Entrada', 'hora': '07:00'})
+    assert resumen(r) == [('FALTA_ENTRADA', ['Salida', 'Entrada', 'Salida'], {'tipo': 'Entrada', 'hora': '07:00'})]
     # Turno de noche (cruza la medianoche): falta la SALIDA
     r = p(['2026-06-11 22:58:00', '2026-06-12 03:00:00', '2026-06-12 03:30:00'], '23:00', '07:00')
-    assert r['combinacion'] == 1 and r['falta']['hora'] == '07:00'
+    assert r['combinacion'] == 1 and r['opciones'][0]['marca']['hora'] == '07:00'
     # Dos pausas de colación seguidas: no se puede saber → sin propuesta
     assert p(['2026-06-11 13:00:00', '2026-06-11 13:30:00', '2026-06-11 14:00:00'], '07:00', '15:30') is None
     # Sin horario, o sin 3 marcas: sin propuesta
     assert p(['2026-06-11 07:00:00', '2026-06-11 12:00:00', '2026-06-11 15:30:00'], None, '15:30') is None
     assert p(['2026-06-11 07:00:00', '2026-06-11 15:30:00'], '07:00', '15:30') is None
+
+
+def test_ventana_de_tres_marcas_con_opciones_y_un_solo_guardar():
+    """La ventana muestra las opciones completas (la primera elegida), lo que paga cada una, «Otra cosa» y un solo Guardar;
+    la colación de su horario sale de las marcas reales (mediana), sin horas escritas en el código."""
+    base = os.path.join(os.path.dirname(__file__), "..")
+    router = open(os.path.join(base, "routers", "asistencia.py"), encoding="utf-8").read()
+    assert "async def _colacion_tipica(" in router and "statistics.median(sale)" in router
+    assert "transformar_logs=transformar" in router and "collect_only=True" in router
+    assert "secuencia_en_revision(hd.get(\"observaciones\"))" in router   # solo en días en revisión
+    servicio = open(os.path.join(base, "services", "asistencia_service.py"), encoding="utf-8").read()
+    assert "transformar_logs solo se usa para simular (collect_only=True)" in servicio
+    js = open(os.path.join(base, "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()
+    for texto in ("function _mmOpcionesTres(", "Otra cosa:", "id=\"mm-op-guardar\"", "Hora indicada por quien revisó",
+                  "_mmOpcionPermitida(op, mx, opciones)"):
+        assert texto in js, texto
 
 
 def test_no_se_usa_es_una_salida_de_la_revision():

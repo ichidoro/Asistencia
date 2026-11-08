@@ -300,21 +300,24 @@ def _dist_reloj(a: int, b: int) -> int:
     return min(d, 1440 - d)
 
 
-def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_max: int, colacion_horario: int = 0):
+def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_max: int, colacion_horario: int = 0,
+                          colacion_tipica=None):
     """Propuesta para un día con 3 marcas que se usan (falta una o sobra una), comparándolas con el horario del día.
     `marcas`: 'YYYY-MM-DD HH:MM:SS' en orden. `entrada`/`salida`: horas del horario. Una pausa «es colación» si dura
     entre `colacion_min` y `colacion_max` minutos (ajustes de la pestaña Reglas de marcaciones).
-      1 · falta la SALIDA final: la 1.ª calza con la entrada y la 2.ª y la 3.ª son una colación → ENTRADA·SALIDA·ENTRADA,
-          y luego se escribe la SALIDA del horario (el día queda como la regla 2).
-      2 · falta la ENTRADA inicial: la 3.ª calza con la salida y la 1.ª y la 2.ª son una colación → SALIDA·ENTRADA·SALIDA,
-          y luego se escribe la ENTRADA del horario (regla 2).
-      6 · sobra la del medio: la 1.ª calza con la entrada, la 3.ª con la salida y ninguna pausa es colación → la del medio
-          no se usa (regla 1, con la colación del horario).
-    Cada propuesta trae también `caminos`: para «Se le olvidó marcar la ENTRADA/SALIDA», qué tipo queda en cada marca y qué
-    hora se propone para la marca nueva, de modo que una sola corrección deje el día ENTRADA · SALIDA · ENTRADA · SALIDA.
-    En 6, además de «no se usa», se puede escribir la marca de colación que falta: si la del medio fue la salida a colación,
-    la ENTRADA de vuelta a esa hora + `colacion_horario` minutos (los de su horario); si fue la vuelta, la SALIDA a esa hora
-    − esos minutos. Sin minutos de colación en el horario no se proponen.
+    Devuelve {'combinacion', 'opciones'}: una o dos opciones completas, la primera es la propuesta. Cada opción trae el
+    tipo de cada marca (Entrada, Salida o «No se usa»), la marca que se escribe (tipo y hora) o None, y el motivo que
+    queda en esa marca.
+      1 · falta la SALIDA final: la 1.ª calza con la entrada y la 2.ª y la 3.ª son una colación → ENTRADA·SALIDA·ENTRADA
+          y la SALIDA del horario (queda como la regla 2).
+      2 · falta la ENTRADA inicial: la 3.ª calza con la salida y la 1.ª y la 2.ª son una colación → la ENTRADA del horario
+          y SALIDA·ENTRADA·SALIDA (regla 2).
+      6 · están la entrada y la salida: la 1.ª calza con la entrada, la 3.ª con la salida y ninguna pausa es colación →
+          (a) la del medio no se usa (regla 1, colación del horario), siempre; y (b) falta una marca de colación, si se
+          puede saber cuál: `colacion_tipica` = {'sale': min, 'vuelve': min}, las medianas de la salida y la vuelta de
+          colación de su mismo horario (marcas reales). Si la del medio queda más cerca de la hora en que salen, faltó la
+          vuelta (esa hora + `colacion_horario` minutos); si queda más cerca de la hora en que vuelven, faltó la salida
+          (esa hora − esos minutos). Sin esos datos o sin minutos de colación en el horario, solo (a).
     Si no calza con ninguna, devuelve None y decide la persona. «Calza con la entrada» = está más cerca de la entrada que
     de la salida del horario (y al revés). Una pausa del tamaño de una colación no cuenta como colación si la marca del
     extremo está más cerca de la hora del horario que de su vecina (es la entrada o la salida del día)."""
@@ -338,28 +341,33 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
     m1_es_entrada = _dist_reloj(m[0], he) < g12
     m3_es_salida = _dist_reloj(m[2], hs) < g23
     hora = lambda x: f'{(x % 1440) // 60:02d}:{x % 60:02d}'
-    hm = lambda x: hora(x)
+    opcion = lambda clave, titulo, tipos, marca, motivo: {'clave': clave, 'titulo': titulo, 'tipos': tipos,
+                                                          'marca': marca, 'motivo': motivo}
     if cerca_entrada(m[0]) and cerca_salida(m[2]) and (not es_col(g12) or m1_es_entrada) and (not es_col(g23) or m3_es_salida):
-        caminos = {}
+        opciones = [opcion('SOBRA_MEDIO', f'La de las {hora(m[1])} no se usa', ['Entrada', TIPO_NO_SE_USA, 'Salida'], None, None)]
         col = int(colacion_horario or 0)
-        if col > 0:
-            caminos['AGREGAR_ENTRADA'] = {
-                'tipos': ['Entrada', 'Salida', 'Salida'], 'hora': hora(m[1] + col),
-                'titulo': 'Se le olvidó marcar la vuelta de colación',
-                'texto': f'Salió a colación a las {hm(m[1])}: se propone la ENTRADA a las {hora(m[1] + col)} ({col} min de su horario)'}
-            caminos['AGREGAR_SALIDA'] = {
-                'tipos': ['Entrada', 'Entrada', 'Salida'], 'hora': hora(m[1] - col),
-                'titulo': 'Se le olvidó marcar la salida a colación',
-                'texto': f'Volvió de colación a las {hm(m[1])}: se propone la SALIDA a las {hora(m[1] - col)} ({col} min de su horario)'}
-        return {'combinacion': 6, 'tipos': ['Entrada', TIPO_NO_SE_USA, 'Salida'], 'falta': None, 'caminos': caminos}
+        tip = colacion_tipica or {}
+        if col > 0 and tip.get('sale') is not None and tip.get('vuelve') is not None:
+            sale, vuelve = int(tip['sale']), int(tip['vuelve'])
+            if _dist_reloj(m[1], sale) <= _dist_reloj(m[1], vuelve):
+                opciones.append(opcion(
+                    'FALTA_VUELTA', f'{hora(m[1])} fue la salida a colación: faltó la vuelta', ['Entrada', 'Salida', 'Salida'],
+                    {'tipo': 'Entrada', 'hora': hora(m[1] + col)},
+                    f'Regla de marcaciones: faltó la vuelta de colación (salió a las {hora(m[1])}; en su horario salen a '
+                    f'colación a las {hora(sale)}; {col} min de colación)'))
+            else:
+                opciones.append(opcion(
+                    'FALTA_SALIDA_COLACION', f'{hora(m[1])} fue la vuelta de colación: faltó la salida', ['Entrada', 'Entrada', 'Salida'],
+                    {'tipo': 'Salida', 'hora': hora(m[1] - col)},
+                    f'Regla de marcaciones: faltó la salida a colación (volvió a las {hora(m[1])}; en su horario vuelven de '
+                    f'colación a las {hora(vuelve)}; {col} min de colación)'))
+        return {'combinacion': 6, 'opciones': opciones}
     if es_col(g23) and not m3_es_salida and cerca_entrada(m[0]) and (not es_col(g12) or m1_es_entrada):
-        return {'combinacion': 1, 'tipos': ['Entrada', 'Salida', 'Entrada'], 'falta': {'tipo': 'Salida', 'hora': hora(hs)},
-                'caminos': {'AGREGAR_SALIDA': {'tipos': ['Entrada', 'Salida', 'Entrada'], 'hora': hora(hs),
-                                               'titulo': 'Se le olvidó marcar la SALIDA',
-                                               'texto': f'Se propone la SALIDA de su horario ({hora(hs)})'}}}
+        return {'combinacion': 1, 'opciones': [opcion(
+            'FALTA_SALIDA', 'Faltó la SALIDA', ['Entrada', 'Salida', 'Entrada'], {'tipo': 'Salida', 'hora': hora(hs)},
+            f'Regla de marcaciones: faltó la SALIDA (se usó la de su horario, {hora(hs)})')]}
     if es_col(g12) and not m1_es_entrada and cerca_salida(m[2]) and (not es_col(g23) or m3_es_salida):
-        return {'combinacion': 2, 'tipos': ['Salida', 'Entrada', 'Salida'], 'falta': {'tipo': 'Entrada', 'hora': hora(he)},
-                'caminos': {'AGREGAR_ENTRADA': {'tipos': ['Salida', 'Entrada', 'Salida'], 'hora': hora(he),
-                                                'titulo': 'Se le olvidó marcar la ENTRADA',
-                                                'texto': f'Se propone la ENTRADA de su horario ({hora(he)})'}}}
+        return {'combinacion': 2, 'opciones': [opcion(
+            'FALTA_ENTRADA', 'Faltó la ENTRADA', ['Salida', 'Entrada', 'Salida'], {'tipo': 'Entrada', 'hora': hora(he)},
+            f'Regla de marcaciones: faltó la ENTRADA (se usó la de su horario, {hora(he)})')]}
     return None

@@ -734,7 +734,6 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         console.error("Modal NO encontrado. Asegurate de incluir el HTML en index.html");
         return;
     }
-    marcacionesManualesState.caminoConTipos = false;   // ningún camino de la propuesta elegido todavía
 
     marcacionesManualesState.currentEmpId = empId;
     marcacionesManualesState.currentDate = dateStr;
@@ -1010,6 +1009,9 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         const titulo = (regla.numero ? 'Regla ' + regla.numero + ' · ' : 'Regla de marcaciones · ') + sec;
         const mx = host._mx;
         if (mx) mx.enRevision = !!ev.en_revision;
+        // Día de 3 marcas con propuesta del servidor: una o dos opciones con el día ya resuelto y un solo «Guardar»
+        if (activo && mx && mx.propuesta && mx.propuesta.opciones
+            && _mmOpcionesTres(cont, host, empId, dateStr, mx.propuesta, opciones, titulo)) return;
         const btnClasif = host.querySelector('#btn-marcas-guardar');
         const cambiaTipo = activo && (opciones.includes('RECLASIFICAR') || opciones.includes('NO_SE_USA'));
         if (btnClasif) btnClasif.textContent = cambiaTipo ? 'Guardar el cambio de tipo' : 'Guardar clasificación';
@@ -1020,20 +1022,7 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         // regla permite cambiar el tipo de una marca y la cantidad de marcas no deja dudas (orden del dueño, 06-11-2026). Nada se
         // guarda hasta el botón de guardar y el «Sí» de la pregunta.
         let propuestas = [];
-        const P = mx ? mx.propuesta : null;
-        if (cambiaTipo && P && P.tipos) {
-            // Tres marcas que se usan (falta una o sobra una): la propuesta compara las marcas con el horario del día
-            // (servidor: propuesta_tres_marcas). Solo se muestra si la regla tiene las opciones que pide.
-            propuestas = mx.marcas.map(m => { const t = P.tipos[String(m.id)]; return (t && t !== m.tipo_actual) ? t : null; });
-            const alcanza = propuestas.every(t => !t || (t === 'No se usa' ? opciones.includes('NO_SE_USA') : opciones.includes('RECLASIFICAR')));
-            if (alcanza && propuestas.some(Boolean)) {
-                mx.propuestas = propuestas;
-                mx.selects().forEach((sel, i) => { if (propuestas[i]) sel.value = propuestas[i]; });
-                mx.refrescar();
-            } else {
-                propuestas = [];
-            }
-        } else if (activo && opciones.includes('RECLASIFICAR') && mx && !mx.marcas.some(m => m.dudoso)) {
+        if (activo && opciones.includes('RECLASIFICAR') && mx && !mx.marcas.some(m => m.dudoso)) {
             propuestas = mx.marcas.map(m => (m.sugerido && m.sugerido !== m.tipo_actual) ? m.sugerido : null);
             if (propuestas.some(Boolean)) {
                 mx.propuestas = propuestas;
@@ -1045,14 +1034,7 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         }
         const nProp = propuestas.filter(Boolean).length;
         let txtRev;
-        if (nProp > 0 && mx && mx.propuestas === propuestas && P && P.tipos) {
-            const partes = propuestas.map((t, i) => !t ? null
-                : 'la marca de las <strong>' + mx.marcas[i].hora + '</strong> ' + (t === 'No se usa' ? '<strong>no se use</strong>' : 'sea <strong>' + String(t).toUpperCase() + '</strong>'))
-                .filter(Boolean);
-            txtRev = 'el sistema propone que ' + partes.join(' y ') + ' (en rojo). Revíselo y presione «' + lblClasif + '».'
-                + (P.falta ? ' Después falta escribir la <strong>' + String(P.falta.tipo).toUpperCase() + '</strong>: se propondrá la de su horario (<strong>' + P.falta.hora + '</strong>).'
-                           : ' El día queda ENTRADA · SALIDA y se descuenta la colación de su horario.');
-        } else if (nProp === 1) {
+        if (nProp === 1) {
             const i = propuestas.findIndex(Boolean);
             txtRev = 'el sistema propone que la marca de las <strong>' + mx.marcas[i].hora + '</strong> sea <strong>'
                 + String(propuestas[i]).toUpperCase() + '</strong> (en rojo). Revísela y presione «' + lblClasif + '».';
@@ -1074,14 +1056,8 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         const caminosHtml = caminos.length ? `
                 <div class="mt-2 fw-semibold">¿Qué pasó este día?</div>
                 <div class="d-flex flex-wrap gap-2 mt-1" role="group" aria-label="Qué pasó este día">
-                    ${caminos.map(o => {
-                        // Con la propuesta de 3 marcas, el camino dice qué marca se escribe y a qué hora (p. ej. la vuelta de colación)
-                        const pc = P && P.caminos ? P.caminos[o] : null;
-                        const titulo = pc ? pc.titulo : CAMINOS[o][1];
-                        const texto = pc ? pc.texto : (o === 'NO_SE_USA' && P && P.combinacion === 6 ? 'Propuesto: la marca del medio no se usa' : CAMINOS[o][2]);
-                        return `<button type="button" class="btn btn-sm btn-outline-primary text-start mm-camino" data-camino="${o}" aria-pressed="false" style="border:1px solid #93a4d8;">
-                        <i class="bi ${CAMINOS[o][0]} me-1" aria-hidden="true"></i><strong>${titulo}</strong><br><span class="small">${texto}</span></button>`;
-                    }).join('')}
+                    ${caminos.map(o => `<button type="button" class="btn btn-sm btn-outline-primary text-start mm-camino" data-camino="${o}" aria-pressed="false" style="border:1px solid #93a4d8;">
+                        <i class="bi ${CAMINOS[o][0]} me-1" aria-hidden="true"></i><strong>${CAMINOS[o][1]}</strong><br><span class="small">${CAMINOS[o][2]}</span></button>`).join('')}
                 </div>` : '';
         cont.innerHTML = `
             <div class="border rounded p-2" style="background:${ev.en_revision ? '#fef2f2' : '#f0fdf4'};">
@@ -1108,6 +1084,134 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
     } catch (e) {
         console.warn('No se pudo evaluar la regla del día', e);
     }
+}
+
+/** ¿La regla del día permite esta opción? Cambiar un tipo pide «Cambiar tipo», dejar una marca sin usar pide «Dejar sin
+ *  usar» y escribir una marca pide «Escribir la ENTRADA/SALIDA». */
+function _mmOpcionPermitida(op, mx, opciones) {
+    for (const m of mx.marcas) {
+        const t = op.tipos[String(m.id)];
+        if (!t || t === m.tipo_actual) continue;
+        if (t === 'No se usa' ? !opciones.includes('NO_SE_USA') : !opciones.includes('RECLASIFICAR')) return false;
+    }
+    if (op.marca && !opciones.includes(op.marca.tipo === 'Entrada' ? 'AGREGAR_ENTRADA' : 'AGREGAR_SALIDA')) return false;
+    return true;
+}
+
+/** El día como quedaría con la opción: las marcas que se usan con su tipo y la marca nueva con su hora editable. */
+function _mmLineaOpcion(op, mx, i) {
+    const items = mx.marcas.filter(m => op.tipos[String(m.id)] && op.tipos[String(m.id)] !== 'No se usa')
+        .map(m => ({ fh: (m.fecha || '') + ' ' + m.hora, html: m.hora.slice(0, 5) + ' ' + String(op.tipos[String(m.id)]).toUpperCase() }));
+    if (op.marca) items.push({
+        fh: op.marca.fecha_hora,
+        html: `<input type="time" class="form-control form-control-sm d-inline-block mm-op-hora" data-i="${i}" value="${op.marca.hora}" aria-label="Hora de la ${op.marca.tipo} que se escribe" style="width:7.5rem;"> <strong>${String(op.marca.tipo).toUpperCase()}</strong> <span class="small text-muted">(se escribe)</span>`,
+    });
+    items.sort((a, b) => (a.fh < b.fh ? -1 : a.fh > b.fh ? 1 : 0));
+    return items.map(x => x.html).join(' · ');
+}
+
+/** Día de 3 marcas en revisión: una o dos opciones completas (la primera elegida), «Otra cosa» para corregir en la tabla y
+ *  un solo «Guardar». Devuelve false si la regla no permite ninguna opción (la ventana sigue como antes). */
+function _mmOpcionesTres(cont, host, empId, dateStr, P, opciones, titulo) {
+    const mx = host._mx;
+    const ops = (P.opciones || []).filter(op => _mmOpcionPermitida(op, mx, opciones));
+    if (!ops.length) return false;
+    const fmtH = (h) => String(h).replace('.', ',');
+    const paga = (op) => op.resultado ? ` <span class="small text-muted">· paga ${fmtH(op.resultado.horas)} h${op.resultado.deuda_min ? ' · ' + op.resultado.deuda_min + ' min de deuda' : ''}</span>` : '';
+    const tabla = [host.querySelector('table'), host.querySelector('#marcas-dia-aviso'), host.querySelector('#btn-marcas-guardar'),
+                   host.querySelector('#btn-marcas-sugerir'), host.querySelector('.small.text-muted.mb-2')].filter(Boolean);
+    const mostrarTabla = (si) => tabla.forEach(el => { (el.closest('.text-end') || el).style.display = si ? '' : 'none'; });
+    cont.innerHTML = `
+        <div class="border rounded p-2" style="background:#fef2f2;">
+            <i class="bi bi-exclamation-triangle-fill text-danger"></i> <strong>${titulo}:</strong>
+            ${ops.length > 1 ? 'el sistema propone la primera; elija la que corresponda.' : 'el sistema propone esta corrección.'}
+            La hora que se escribe se puede cambiar.
+            <div class="mt-2" role="radiogroup" aria-label="Qué pasó este día">
+                ${ops.map((op, i) => `
+                <label class="d-flex gap-2 align-items-start border rounded p-2 mb-2 bg-white mm-op" style="cursor:pointer;">
+                    <input type="radio" class="form-check-input mt-1" name="mm-op" value="${i}"${i === 0 ? ' checked' : ''}>
+                    <span><strong>${op.titulo}</strong>${i === 0 ? ' <span class="badge bg-primary">propuesta</span>' : ''}${paga(op)}
+                    <span class="d-block mt-1">${_mmLineaOpcion(op, mx, i)}</span></span>
+                </label>`).join('')}
+                <label class="d-flex gap-2 align-items-start border rounded p-2 mb-2 bg-white mm-op" style="cursor:pointer;">
+                    <input type="radio" class="form-check-input mt-1" name="mm-op" value="otra">
+                    <span><strong>Otra cosa:</strong> lo corrijo yo en la tabla</span>
+                </label>
+            </div>
+            <div class="text-end"><button type="button" class="btn btn-sm btn-primary" id="mm-op-guardar">Guardar</button></div>
+        </div>`;
+    mostrarTabla(false);
+    _mmPermitirEscribirMarcas(false);
+    _mmAplicarBloqueoRevision('Elija arriba qué pasó este día y presione <strong>Guardar</strong>.');
+    const btn = cont.querySelector('#mm-op-guardar');
+    cont.querySelectorAll('input[name="mm-op"]').forEach(r => r.addEventListener('change', () => {
+        const otra = r.value === 'otra' && r.checked;
+        if (r.value === 'otra' && !r.checked) return;
+        mostrarTabla(otra);
+        btn.closest('.text-end').style.display = otra ? 'none' : '';
+        if (otra) {
+            if (opciones.includes('NO_SE_USA')) host.querySelectorAll('.mm-seg-nsu').forEach(b => b.classList.remove('d-none'));
+            const lbl = host.querySelector('#btn-marcas-guardar');
+            if (lbl) lbl.textContent = 'Guardar el cambio de tipo';
+            _mmPermitirEscribirMarcas(opciones.includes('AGREGAR_ENTRADA') || opciones.includes('AGREGAR_SALIDA'));
+        } else {
+            _mmPermitirEscribirMarcas(false);
+        }
+    }));
+    // Al tocar la hora, esa opción queda elegida
+    cont.querySelectorAll('.mm-op-hora').forEach(inp => inp.addEventListener('focus', () => {
+        const r = cont.querySelector(`input[name="mm-op"][value="${inp.dataset.i}"]`);
+        if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
+    }));
+    btn.addEventListener('click', async () => {
+        const elegido = cont.querySelector('input[name="mm-op"]:checked');
+        if (!elegido || elegido.value === 'otra') return;
+        const op = ops[parseInt(elegido.value, 10)];
+        let hora = null;
+        if (op.marca) {
+            const inp = cont.querySelector(`.mm-op-hora[data-i="${elegido.value}"]`);
+            hora = inp && inp.value ? inp.value.slice(0, 5) : '';
+            if (!/^\d{2}:\d{2}$/.test(hora)) { Avisos.falta('Falta la hora de la ' + op.marca.tipo.toUpperCase() + ' que se escribe.', { campos: inp ? [inp] : [] }); return; }
+        }
+        const cambios = mx.marcas.map(m => ({ m, nuevo: op.tipos[String(m.id)] })).filter(x => x.nuevo && x.nuevo !== x.m.tipo_actual);
+        const extra = op.marca ? 'Y se escribe la ' + String(op.marca.tipo).toUpperCase() + ' de las <b>' + hora + '</b>.' : '';
+        if (!(await _mmConfirmarClasificacion(cambios, dateStr, extra))) return;
+        btn.disabled = true;
+        try {
+            if (cambios.length) {
+                const r = await fetch('/api/asistencia/marcaciones/reclasificar/', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ empleado_id: parseInt(empId), fecha: dateStr,
+                                           marcas: mx.marcas.map(m => ({ id: m.id, tipo: op.tipos[String(m.id)] || m.tipo_actual })) })
+                });
+                const resp = await r.json().catch(() => ({}));
+                if (!r.ok) { Avisos.error(resp.detail || 'No se pudo guardar el tipo de las marcas. No se cambió nada.'); btn.disabled = false; return; }
+            }
+            if (op.marca) {
+                // El motivo queda en la marca (auditoría): el de la propuesta, o el mismo con la hora que indicó quien revisó
+                const motivo = hora === op.marca.hora ? op.motivo : op.motivo + ' Hora indicada por quien revisó: ' + hora + '.';
+                const url = `/api/asistencia/marcaciones/manual/?empleado_id=${empId}&fecha=${encodeURIComponent(dateStr)}&hora=${encodeURIComponent(hora)}&tipo=${encodeURIComponent(op.marca.tipo)}&observaciones=${encodeURIComponent(motivo)}`;
+                const r2 = await fetch(url, { method: 'POST' });
+                const resp2 = await r2.json().catch(() => ({}));
+                if (r2.status !== 200) {
+                    Avisos.error((cambios.length ? 'Se guardó el tipo de las marcas, pero no la ' + op.marca.tipo.toUpperCase() + ': ' : 'No se guardó la marca: ')
+                        + (resp2.detail || 'error') + '. Vuelva a abrir el día para completarlo.');
+                    btn.disabled = false;
+                    return;
+                }
+            }
+            if (typeof showToast === 'function') showToast('Listo. Se guardó la corrección y se volvió a calcular el día.', 'success');
+            window._rvUltimaCorreccion = { empId: parseInt(empId), fecha: dateStr };
+            closeManualEntryModal();
+            if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+            else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+            if (typeof window.actualizarPorRevisar === 'function') window.actualizarPorRevisar();
+        } catch (e) {
+            Avisos.sinConexion();
+            btn.disabled = false;
+        }
+    });
+    return true;
 }
 
 async function confirmarDiaRevision(empId, dateStr) {
@@ -1477,43 +1581,19 @@ function _mmMarcarCamino(cont, camino) {
  *    así no se crea una marca manual que sobra;
  *  · tipo equivocado: la tabla de marcas y su botón; la parte de abajo queda bloqueada;
  *  · está bien así: confirmar con motivo (solo existe si el día ya tiene sus horas). */
-/** Deja en la tabla los tipos que pide un camino de la propuesta de 3 marcas (en rojo los que cambian). */
-function _mmTiposEnTabla(host, tiposPorId) {
-    const mx = host ? host._mx : null;
-    if (!mx || !tiposPorId) return;
-    mx.propuestas = mx.marcas.map(m => { const t = tiposPorId[String(m.id)]; return (t && t !== m.tipo_actual) ? t : null; });
-    mx.selects().forEach((sel, i) => { const t = tiposPorId[String(mx.marcas[i].id)]; sel.value = t || mx.marcas[i].tipo_actual; });
-    mx.refrescar();
-}
-
 function _mmElegirCamino(camino, empId, dateStr, host) {
     const cont = host ? host.querySelector('#marcas-regla-info') : null;
     _mmMarcarCamino(cont, camino);
     const ent = document.getElementById('manual-hora-entrada'), sal = document.getElementById('manual-hora-salida');
-    const P = host && host._mx ? host._mx.propuesta : null;
-    const pc = P && P.caminos ? P.caminos[camino] : null;
-    marcacionesManualesState.caminoConTipos = false;
     if (camino === 'AGREGAR_SALIDA' || camino === 'AGREGAR_ENTRADA') {
         _mmQuitarBloqueoRevision();
         const abre = camino === 'AGREGAR_SALIDA' ? sal : ent;
         const cierra = camino === 'AGREGAR_SALIDA' ? ent : sal;
         if (cierra) { cierra.value = ''; cierra.disabled = true; cierra.dataset.teorico = ''; }
-        // Se propone la hora del horario asignado ese día (leída de la base); la persona la confirma o la cambia antes de guardar.
-        // Con la propuesta de 3 marcas, el camino trae también el tipo de cada marca y la hora (p. ej. la vuelta de colación):
-        // al guardar se corrigen los tipos y se escribe la marca en un solo paso.
-        const propuesta = pc ? pc.hora + ':00' : _mmHoraDelHorario(host, empId, dateStr, camino === 'AGREGAR_SALIDA' ? 'salida' : 'entrada');
-        if (pc) { _mmTiposEnTabla(host, pc.tipos); marcacionesManualesState.caminoConTipos = true; }
+        // Se propone la hora del horario asignado ese día (leída de la base); la persona la confirma o la cambia antes de guardar
+        const propuesta = _mmHoraDelHorario(host, empId, dateStr, camino === 'AGREGAR_SALIDA' ? 'salida' : 'entrada');
         if (abre) { abre.value = propuesta || ''; abre.disabled = false; abre.dataset.teorico = ''; }
-        if (pc) {
-            const palabra = camino === 'AGREGAR_SALIDA' ? 'SALIDA' : 'ENTRADA';
-            const vieja = document.getElementById('mm-propuesta-nota');
-            if (vieja) vieja.remove();
-            const fila = abre ? abre.closest('.row') : null;
-            if (fila) fila.insertAdjacentHTML('afterend', '<div class="mm-bloqueo-nota" id="mm-propuesta-nota"><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>'
-                + pc.texto + '. Los tipos en rojo de la tabla se guardan junto con la marca. Cambie la hora si la real fue otra y presione «Guardar la ' + palabra + '».</div>');
-        } else {
-            _mmNotaPropuesta(abre, propuesta, camino === 'AGREGAR_SALIDA' ? 'SALIDA' : 'ENTRADA');
-        }
+        _mmNotaPropuesta(abre, propuesta, camino === 'AGREGAR_SALIDA' ? 'SALIDA' : 'ENTRADA');
         const huerfana = document.getElementById('manual-alert-huerfana');
         if (huerfana) huerfana.style.display = 'none';
         _mmEtiquetaGuardar(camino === 'AGREGAR_SALIDA' ? 'Guardar la SALIDA' : 'Guardar la ENTRADA');
@@ -1521,7 +1601,6 @@ function _mmElegirCamino(camino, empId, dateStr, host) {
     } else if (camino === 'RECLASIFICAR' || camino === 'NO_SE_USA') {
         _mmQuitarBloqueoRevision();
         _mmAplicarBloqueoRevision();
-        if (P && P.tipos) _mmTiposEnTabla(host, P.tipos);
         const primero = host ? host.querySelector('.mm-seg-b:not([disabled])') : null;
         if (primero) { primero.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => primero.focus(), 150); }
     } else if (camino === 'CONFIRMAR') {
@@ -1607,31 +1686,6 @@ async function saveManualEntry() {
         if (window.Avisos) window.Avisos.falta(msg, { campos });
         else alert(msg);
         return;
-    }
-
-    // Día por revisar con la propuesta de 3 marcas: el camino elegido cambia también el tipo de las marcas del reloj.
-    // Primero se guardan esos tipos (con la misma pregunta de siempre) y después la marca nueva: una sola corrección.
-    const hostRev = document.getElementById('manual-panel-marcas');
-    const mxRev = hostRev ? hostRev._mx : null;
-    if (marcacionesManualesState.caminoConTipos && mxRev) {
-        const ts = mxRev.selects().map(sel => sel.value);
-        const cambios = mxRev.marcas.map((m, i) => ({ m, nuevo: ts[i] })).filter(x => x.nuevo !== x.m.tipo_actual);
-        if (cambios.length) {
-            const extra = 'Y se escribe la ' + (nuevaEntrada ? 'ENTRADA de las <b>' + nuevaEntrada.slice(0, 5) : 'SALIDA de las <b>' + String(nuevaSalida).slice(0, 5)) + '</b>.';
-            if (!(await _mmConfirmarClasificacion(cambios, dateStr, extra))) return;
-            try {
-                const r = await fetch('/api/asistencia/marcaciones/reclasificar/', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ empleado_id: parseInt(empId), fecha: dateStr, marcas: mxRev.marcas.map((m, i) => ({ id: m.id, tipo: ts[i] })) })
-                });
-                const resp = await r.json().catch(() => ({}));
-                if (!r.ok) { Avisos.error(resp.detail || 'No se pudo guardar el tipo de las marcas. No se escribió la marca nueva.'); return; }
-            } catch (e) {
-                Avisos.sinConexion();
-                return;
-            }
-            window._rvUltimaCorreccion = { empId: parseInt(empId), fecha: dateStr };
-        }
     }
 
     const promises = [];
