@@ -137,13 +137,14 @@ const ReglasMarcasModule = (() => {
     // ── Foto de lo guardado, para saber si hay cambios sin guardar ───────────
     function _fotoRegla(r) {
         return { lectura: r.lectura, colacion: r.colacion, accion: r.accion,
-                 opciones: (r.opciones_revision || []).slice().sort().join(','), eleccion: r.eleccion_colacion || 'PARECIDA' };
+                 opciones: (r.opciones_revision || []).slice().sort().join(','), eleccion: r.eleccion_colacion || 'PARECIDA',
+                 orden: r.lectura === 'ORDEN' ? (r.orden_marcas || '') : '' };
     }
     function _hayCambios(r) {
         if (!r || !r._guardada) return false;
         const a = r._guardada, b = _fotoRegla(r);
         return a.lectura !== b.lectura || a.colacion !== b.colacion || a.accion !== b.accion || a.opciones !== b.opciones
-            || a.eleccion !== b.eleccion;
+            || a.eleccion !== b.eleccion || a.orden !== b.orden;
     }
     function _revertir(r) {
         const g = r._guardada;
@@ -151,9 +152,14 @@ const ReglasMarcasModule = (() => {
         r.lectura = g.lectura; r.colacion = g.colacion; r.accion = g.accion;
         r.opciones_revision = g.opciones ? g.opciones.split(',') : [];
         r.eleccion_colacion = g.eleccion;
+        r.orden_marcas = g.orden || null;
     }
     // Pausas del día según cómo se leen las marcas (lo calcula el servidor por regla y lectura)
-    const pausasDe = (r) => Number(((r && r.pausas) || {})[r && r.lectura] || 0);
+    const usadasDe = (r) => String((r && r.orden_marcas) || '').replace(/-/g, '');
+    const ordenSirve = (r) => /^(ES)+$/.test(usadasDe(r)) && String(r.orden_marcas || '').length === String(r.secuencia || '').length;
+    const pausasDe = (r) => (r && r.lectura === 'ORDEN')
+        ? (ordenSirve(r) ? usadasDe(r).length / 2 - 1 : 0)
+        : Number(((r && r.pausas) || {})[r && r.lectura] || 0);
     const usaCorte = (r) => (r && r.eleccion_colacion) === 'CORTE_UMBRAL';
 
     // ── Lo que ve el sistema: se arma con la forma de la secuencia ───────────
@@ -180,10 +186,23 @@ const ReglasMarcasModule = (() => {
         return partes.join(' ');
     }
 
-    function papeles(sec, lectura) {
+    function papeles(sec, lectura, orden) {
         const s = String(sec || ''), n = s.length;
         if (lectura === 'NINGUNA') return 'No se leen: el día espera a que una persona lo complete.';
         const r = Array(n).fill('no se usa');
+        if (lectura === 'ORDEN') {
+            const o = String(orden || '');
+            if (o.length !== n) return 'Indique abajo cómo se lee cada marca.';
+            const usadas = [];
+            for (let i = 0; i < n; i++) if (o[i] !== '-') usadas.push(i);
+            usadas.forEach((i, k) => {
+                const t = o[i];
+                const papel = k === 0 ? 'ENTRADA del día' : (k === usadas.length - 1 ? 'SALIDA del día' : (t === 'S' ? 'SALIDA a pausa' : 'ENTRADA de regreso'));
+                r[i] = papel + (s[i] === t ? '' : ' (el reloj dijo ' + PALABRA[s[i]] + ')');
+            });
+            for (let i = 0; i < n; i++) if (o[i] === '-') r[i] = 'no se usa';
+            return r.map((x, i) => (i + 1) + 'ª ' + x).join(' · ');
+        }
         if (lectura === 'ALTERNADA') {
             if (n % 2 === 1) return 'Con un número impar de marcas el orden no es seguro: falta o sobra una marca.';
             for (let i = 0; i < n; i++) {
@@ -217,7 +236,9 @@ const ReglasMarcasModule = (() => {
             return 'Los días ' + sec + ' no se calculan solos: quedan «por revisar» y sin horas hasta que una persona pueda ' + (ops.join(' o ') || 'resolverlo') + '.';
         }
         const comoSeLeen = r.lectura === 'EXTREMOS' ? ' se leen con la primera marca como ENTRADA y la última como SALIDA'
-            : (r.lectura === 'ALTERNADA' ? ' se leen en el orden que propone el sistema (ENTRADA y SALIDA alternadas por hora)' : ' se leen como los marcó el reloj');
+            : (r.lectura === 'ALTERNADA' ? ' se leen en el orden que propone el sistema (ENTRADA y SALIDA alternadas por hora)'
+            : (r.lectura === 'ORDEN' ? ' se leen en el orden indicado: ' + String(r.orden_marcas || '').split('').map(c => c === '-' ? 'no se usa' : PALABRA[c]).join(' · ')
+            : ' se leen como los marcó el reloj'));
         let f = 'Los días ' + sec + comoSeLeen + ', contra el horario asignado de ese día';
         if (r.colacion === 'TURNO') f += '; se descuenta la colación del horario si la persona estuvo al menos el mínimo';
         else if (r.colacion === 'MEDIDA') f += '; se descuenta lo mayor entre la colación del horario y la pausa medida (bajo el mínimo, solo la pausa)';
@@ -406,7 +427,8 @@ const ReglasMarcasModule = (() => {
     // (el servidor lo rechaza); así el ensayo prueba exactamente lo que se guardaría.
     const opcionesAEnviar = (r) => (r.accion === 'SOLO_REVISA' || r.lectura === 'NINGUNA')
         ? (r.opciones_revision || []).filter(o => o !== 'CONFIRMAR') : (r.opciones_revision || []);
-    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, opcionesAEnviar(r).slice().sort().join('|'), r.eleccion_colacion || 'PARECIDA'].join('~');
+    const ordenAEnviar = (r) => r.lectura === 'ORDEN' ? (r.orden_marcas || '') : null;
+    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, opcionesAEnviar(r).slice().sort().join('|'), r.eleccion_colacion || 'PARECIDA', ordenAEnviar(r) || ''].join('~');
 
     async function cargarEjemplos(r) {
         if (ejemplos[r.id]) return;
@@ -431,7 +453,8 @@ const ReglasMarcasModule = (() => {
                 method: 'POST', headers: headers(),
                 body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion,
                                        opciones_revision: opcionesAEnviar(r),
-                                       eleccion_colacion: r.eleccion_colacion || 'PARECIDA' })
+                                       eleccion_colacion: r.eleccion_colacion || 'PARECIDA',
+                                       orden_marcas: ordenAEnviar(r) })
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(body.detail || ('HTTP ' + res.status));
@@ -625,6 +648,28 @@ const ReglasMarcasModule = (() => {
             }).join('') + '</tbody></table>';
     }
 
+    // Tabla del orden: una fila por marca, con lo que dijo el reloj y cómo se lee (ENTRADA / SALIDA / no se usa).
+    // Debajo, si el orden sirve para calcular (sin las que no se usan debe quedar ENTRADA · SALIDA repetido).
+    function tablaOrden(r, s, edit) {
+        const o = String(r.orden_marcas || r.orden_propuesto || '');
+        const filas = s.split('').map((c, i) => '<tr><td>' + (i + 1) + 'ª</td><td>' + chipsSecuencia(c) + '</td><td>'
+            + '<select class="form-select form-select-sm" data-rmx-orden="' + i + '" aria-label="Cómo se lee la marca ' + (i + 1) + '"' + (edit ? '' : ' disabled') + '>'
+            + [['E', 'ENTRADA'], ['S', 'SALIDA'], ['-', 'No se usa']].map(x => '<option value="' + x[0] + '"' + (o[i] === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('')
+            + '</select></td></tr>').join('');
+        const sirve = ordenSirve(Object.assign({}, r, { orden_marcas: o }));
+        const usadas = o.replace(/-/g, '');
+        const aviso = sirve
+            ? '<div class="rmx-ef" style="color:#166534;">El día se calcula como ' + usadas.split('').map(c => PALABRA[c]).join(' · ')
+              + (usadas.length >= 4 ? ': ' + (usadas.length / 2 - 1) + ' pausa' + (usadas.length > 4 ? 's' : '') + ' a mitad del día.' : '.') + '</div>'
+            : '<div class="rmx-ef" style="color:#b91c1c;">Con este orden el día no se puede calcular: sin las marcas que no se usan, tiene que quedar ENTRADA · SALIDA repetido, empezando por una ENTRADA y terminando en una SALIDA.</div>';
+        const esPropuesta = o === (r.orden_propuesto || '');
+        return '<div class="mt-2"><div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">'
+            + '<span class="text-muted" style="font-size:.78rem;">Cómo se lee cada marca' + (esPropuesta ? ' (propuesta del sistema)' : '') + '</span>'
+            + (edit && !esPropuesta ? '<button type="button" class="btn btn-sm btn-link p-0" id="rm-orden-propuesta">Volver a la propuesta del sistema</button>' : '')
+            + '</div><table class="rmx-tab" style="font-size:.84rem;"><thead><tr><th>Marca</th><th>El reloj dijo</th><th>Se lee como</th></tr></thead><tbody>'
+            + filas + '</tbody></table>' + aviso + '</div>';
+    }
+
     function renderEditor() {
         const el = $('rm-editor');
         const r = data.reglas.find(x => x.id === selId);
@@ -637,8 +682,10 @@ const ReglasMarcasModule = (() => {
         const calcula = r.lectura !== 'NINGUNA';
         const equivalente = alterna(s);
         // Con la lectura alternada, 4 marcas o más siempre dejan una pausa a mitad del día
-        const medible = r.lectura === 'ALTERNADA' ? (n >= 4 && n % 2 === 0) : hayPausaMedible(s);
+        const medible = r.lectura === 'ALTERNADA' ? (n >= 4 && n % 2 === 0)
+            : (r.lectura === 'ORDEN' ? (ordenSirve(r) && usadasDe(r).length >= 4) : hayPausaMedible(s));
         const dis = edit ? {} : { disabled: true };
+        if (r.lectura === 'ALTERNADA') { r.lectura = 'ORDEN'; r.orden_marcas = r.orden_propuesto || ''; if (r._guardada) r._guardada = _fotoRegla(r); }
 
         const cabecera = '<header class="rmx-card p-3 d-flex flex-column gap-3">'
             + '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2"><div class="d-flex flex-column gap-2">'
@@ -674,10 +721,10 @@ const ReglasMarcasModule = (() => {
                 equivalente && r.lectura !== 'RELOJ' ? '<span class="rmx-ef">En esta secuencia da lo mismo que la otra lectura.</span>' : '', dis)
             + opcion('rmx-p2', 'EXTREMOS', r.lectura === 'EXTREMOS', 'La primera es la ENTRADA y la última la SALIDA', esc(papeles(s, 'EXTREMOS')),
                 equivalente && r.lectura !== 'EXTREMOS' ? '<span class="rmx-ef">En esta secuencia da lo mismo que la otra lectura.</span>' : '', dis)
-            + opcion('rmx-p2', 'ALTERNADA', r.lectura === 'ALTERNADA', 'Como las ordena el sistema: ENTRADA y SALIDA alternadas por hora', esc(papeles(s, 'ALTERNADA')),
-                n % 2 === 0 ? '<span class="rmx-ef">Es el mismo orden que propone la ventana al revisar el día.</span>' : '',
-                Object.assign({}, dis, n % 2 === 1 ? { disabled: true, apagada: true } : {}))
+            + opcion('rmx-p2', 'ORDEN', r.lectura === 'ORDEN', 'En el orden que indico abajo',
+                'Usted decide para cada marca si es ENTRADA, SALIDA o si no se usa. Parte con la propuesta del sistema.', '', dis)
             + '</div>';
+        if (calcula && r.lectura === 'ORDEN') cuerpo2 += tablaOrden(r, s, edit);
         const p2 = paso(2, '¿Cómo se leen las marcas?',
             'Se comparan con el horario asignado de ese día y sus márgenes de ENTRADA y SALIDA. <span class="rmx-src">Configuración → Horarios</span>', cuerpo2);
 
@@ -784,7 +831,18 @@ const ReglasMarcasModule = (() => {
                 if (r.accion === 'SOLO_REVISA') { r.accion = 'CALCULA'; r.opciones_revision = []; }
             }
         })));
-        el.querySelectorAll('input[name="rmx-p2"]').forEach(i => i.addEventListener('change', cambiar(t => { r.lectura = t.value; })));
+        el.querySelectorAll('input[name="rmx-p2"]').forEach(i => i.addEventListener('change', cambiar(t => {
+            r.lectura = t.value;
+            if (r.lectura === 'ORDEN' && String(r.orden_marcas || '').length !== n) r.orden_marcas = r.orden_propuesto || '';
+        })));
+        el.querySelectorAll('select[data-rmx-orden]').forEach(sel => sel.addEventListener('change', cambiar(t => {
+            const i = parseInt(t.dataset.rmxOrden, 10);
+            const o = String(r.orden_marcas || r.orden_propuesto || '').split('');
+            o[i] = t.value;
+            r.orden_marcas = o.join('');
+        })));
+        const bProp = $('rm-orden-propuesta');
+        if (bProp) bProp.addEventListener('click', () => { if (!edit) return; r.orden_marcas = r.orden_propuesto || ''; renderEditor(); });
         el.querySelectorAll('input[name="rmx-p3"]').forEach(i => i.addEventListener('change', cambiar(t => { r.colacion = t.value; })));
         el.querySelectorAll('input[name="rmx-p35"]').forEach(i => i.addEventListener('change', cambiar(t => { r.eleccion_colacion = t.value; })));
         el.querySelectorAll('input[name="rmx-p4"]').forEach(i => i.addEventListener('change', cambiar(t => {
@@ -935,6 +993,7 @@ const ReglasMarcasModule = (() => {
                 method: 'PUT', headers: headers(),
                 body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion, opciones_revision: r.opciones_revision || [],
                                        eleccion_colacion: r.eleccion_colacion || 'PARECIDA',
+                                       orden_marcas: ordenAEnviar(r),
                                        nota: r.nota || '' })
             });
             const body = await res.json().catch(() => ({}));

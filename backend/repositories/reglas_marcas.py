@@ -86,6 +86,12 @@ class ReglasMarcasRepository:
                 await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN eleccion_colacion TEXT DEFAULT 'PARECIDA'")
         except Exception as e:
             logger.warning(f"Columna eleccion_colacion: {e}")
+        # Orden de las marcas indicado por la persona (lectura ORDEN): una letra por marca, E / S / - (no se usa).
+        try:
+            if 'orden_marcas' not in set(await self.db.get_column_names("reglas_marcas")):
+                await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN orden_marcas TEXT")
+        except Exception as e:
+            logger.warning(f"Columna orden_marcas: {e}")
         # Número de cada regla («Regla N»): se guarda una vez en el orden de la pantalla y no se mueve.
         try:
             if 'numero' not in set(await self.db.get_column_names("reglas_marcas")):
@@ -553,7 +559,7 @@ class ReglasMarcasRepository:
                                    'secuencia': sec, 'numero': (regla or {}).get('numero')})
         invalidas = []
         for r in await self.db.fetch_all(
-                "SELECT id, numero, secuencia, lectura, colacion, accion, opciones_revision, eleccion_colacion "
+                "SELECT id, numero, secuencia, lectura, colacion, accion, opciones_revision, eleccion_colacion, orden_marcas "
                 "FROM reglas_marcas WHERE tipo_horario = 'CICLO_INTELIGENTE' ORDER BY numero"):
             regla = dict(r)
             try:
@@ -630,7 +636,10 @@ class ReglasMarcasRepository:
             'accion': cambios.get('accion', actual['accion']),
             'opciones_revision': cambios.get('opciones_revision', actual['opciones_revision']),
             'eleccion_colacion': cambios.get('eleccion_colacion') or actual.get('eleccion_colacion') or 'PARECIDA',
+            'orden_marcas': cambios.get('orden_marcas', actual.get('orden_marcas')),
         }
+        if nueva['lectura'] != 'ORDEN':
+            nueva['orden_marcas'] = None
         motivo = validar_regla(nueva)
         if motivo:
             return {'error': motivo}
@@ -638,11 +647,11 @@ class ReglasMarcasRepository:
         await self.db.execute(
             """UPDATE reglas_marcas
                   SET lectura = ?, colacion = ?, accion = ?, opciones_revision = ?,
-                      eleccion_colacion = ?, nota = ?, updated_by = ?,
+                      eleccion_colacion = ?, orden_marcas = ?, nota = ?, updated_by = ?,
                       updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?""",
             (nueva['lectura'], nueva['colacion'], nueva['accion'],
-             json.dumps(nueva['opciones_revision']), nueva['eleccion_colacion'],
+             json.dumps(nueva['opciones_revision']), nueva['eleccion_colacion'], nueva['orden_marcas'],
              nota, username, regla_id)
         )
         despues = await self.obtener(regla_id)

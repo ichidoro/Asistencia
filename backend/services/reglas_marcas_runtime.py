@@ -20,7 +20,7 @@ async def cargar(db) -> int:
     try:
         rows = await db.fetch_all(
             "SELECT secuencia, lectura, colacion, accion, "
-            "COALESCE(eleccion_colacion, 'PARECIDA') AS eleccion_colacion "
+            "COALESCE(eleccion_colacion, 'PARECIDA') AS eleccion_colacion, orden_marcas "
             "FROM reglas_marcas WHERE tipo_horario = ? AND activa = 1",
             ('CICLO_INTELIGENTE',)
         )

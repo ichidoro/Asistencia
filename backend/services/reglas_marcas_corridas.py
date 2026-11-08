@@ -172,6 +172,7 @@ async def ensayar_regla(regla: Dict[str, Any], propuesta: Dict[str, Any],
             'colacion': propuesta['colacion'],
             'accion': propuesta['accion'],
             'eleccion_colacion': propuesta.get('eleccion_colacion') or 'PARECIDA',
+            'orden_marcas': propuesta.get('orden_marcas'),
         }
         despues: Dict[Tuple[int, str], Dict[str, Any]] = {}
         service = AsistenciaService(AsistenciaRepository(db))

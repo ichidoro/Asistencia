@@ -22,10 +22,14 @@ import re
 
 TIPOS_HORARIO_CON_REGLAS = ('CICLO_INTELIGENTE',)
 
-LECTURAS = ('RELOJ', 'EXTREMOS', 'ALTERNADA', 'NINGUNA')
+LECTURAS = ('RELOJ', 'EXTREMOS', 'ORDEN', 'ALTERNADA', 'NINGUNA')
 # RELOJ    = leer las marcas tal como las rotuló el reloj (con sus correcciones).
 # EXTREMOS = la primera marca es la ENTRADA del día y la última la SALIDA; las del
 #            medio solo valen como pausa si son una SALIDA seguida de una ENTRADA.
+# ORDEN    = en el orden que indica la persona en la pantalla: para cada marca de la secuencia, ENTRADA (E),
+#            SALIDA (S) o «no se usa» (-). Se guarda en `orden_marcas` (p. ej. «E--S»). La pantalla
+#            lo propone alternando y la persona lo cambia. Sin las que no se usan debe quedar ENTRADA · SALIDA
+#            repetido: así el motor puede calcular el día. No cambia las marcas: solo cómo se leen.
 # ALTERNADA = el orden que propone el sistema: por hora, la primera es ENTRADA, la siguiente SALIDA, y así
 #             alternando (ENTRADA · SALIDA · ENTRADA · SALIDA…). Una SALIDA seguida de una ENTRADA a mitad del
 #             día es una pausa. Solo para secuencias con número PAR de marcas: con un número impar el orden no es
@@ -97,7 +101,7 @@ def firma_marcas(marcas_consumidas_ids) -> str:
         return ''
 
 
-def pausas_de(secuencia, lectura) -> int:
+def pausas_de(secuencia, lectura, orden=None) -> int:
     """Cuántas pausas (una SALIDA seguida de una ENTRADA) tiene el día según cómo se leen sus marcas.
     RELOJ: se leen como las marcó el reloj. EXTREMOS: la primera es la ENTRADA y la última la SALIDA, y las del
     medio solo cuentan como pausa si son una SALIDA seguida de una ENTRADA. NINGUNA: no se calcula."""
@@ -106,6 +110,9 @@ def pausas_de(secuencia, lectura) -> int:
         return 0
     if lectura == 'ALTERNADA':
         return len(s) // 2 - 1 if len(s) % 2 == 0 else 0
+    if lectura == 'ORDEN':
+        usadas = str(orden or '').replace(MARCA_NO_SE_USA, '')
+        return len(usadas) // 2 - 1 if _RE_BIEN_MARCADA.fullmatch(usadas) else 0
     if lectura == 'RELOJ':
         pares, i = [], 0
         while i < len(s) - 1:
@@ -149,6 +156,10 @@ def validar_regla(regla: dict) -> str:
             return f"Opción de revisión desconocida: {op}."
     if len(sec) == 1 and lectura != 'NINGUNA':
         return "Con una sola marca no se puede calcular: la lectura debe ser «no leer»."
+    if lectura == 'ORDEN':
+        motivo = validar_orden(sec, regla.get('orden_marcas'))
+        if motivo:
+            return motivo
     if lectura == 'ALTERNADA' and len(sec) % 2 == 1:
         return ("«Como las ordena el sistema» solo vale con un número par de marcas: con un número impar "
                 "el orden no es seguro (falta o sobra una marca).")
@@ -169,6 +180,35 @@ def validar_regla(regla: dict) -> str:
                 "Agregue «Escribir la SALIDA que falta», «Escribir la ENTRADA que falta» o "
                 "«Cambiar si una marca es ENTRADA o SALIDA», según corresponda.")
     return ''
+
+
+MARCA_NO_SE_USA = '-'
+
+
+def validar_orden(secuencia: str, orden) -> str:
+    """'' si el orden indicado por la persona sirve para calcular, o el motivo en palabras simples.
+    Una letra por marca: E (ENTRADA), S (SALIDA) o - (no se usa). Sin las que no se usan debe quedar
+    ENTRADA · SALIDA repetido."""
+    orden = str(orden or '')
+    sec = str(secuencia or '')
+    if len(orden) != len(sec) or any(c not in ('E', 'S', MARCA_NO_SE_USA) for c in orden):
+        return "Indique para cada marca si se lee como ENTRADA, SALIDA o si no se usa."
+    if not _RE_BIEN_MARCADA.fullmatch(orden.replace(MARCA_NO_SE_USA, '')):
+        return ("Con ese orden el día no se puede calcular: sin las marcas que no se usan, tiene que quedar "
+                "ENTRADA · SALIDA (o ENTRADA · SALIDA · ENTRADA · SALIDA…), empezando por una ENTRADA y "
+                "terminando en una SALIDA.")
+    return ''
+
+
+def orden_propuesto(secuencia: str) -> str:
+    """La propuesta del sistema para el orden: la primera ENTRADA, la última SALIDA y las del medio alternando
+    (la misma que muestra la ventana «Corregir marcas»). Con un número impar no es segura: la persona decide cuál
+    no se usa."""
+    n = len(str(secuencia or ''))
+    o = ['E' if i % 2 == 0 else 'S' for i in range(n)]
+    if n >= 2:
+        o[-1] = 'S'
+    return ''.join(o)
 
 
 def no_calcula(regla: dict) -> bool:

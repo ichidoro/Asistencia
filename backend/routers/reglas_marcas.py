@@ -16,7 +16,7 @@ from backend.core.database import Database, get_db
 from backend.core.security import RequirePermission, SecurityContext
 from backend.repositories.reglas_marcas import AJUSTES_EDITABLES, ReglasMarcasRepository
 from backend.repositories.seguridad import SeguridadRepository
-from backend.services.reglas_marcas_def import pausas_de, grupo_de_secuencia, validar_regla
+from backend.services.reglas_marcas_def import grupo_de_secuencia, orden_propuesto, pausas_de, validar_regla
 from backend.services.reglas_marcas_corridas import (
     JOBS, _hay_corrida_en_curso, ensayar_regla, iniciar_corrida, job_publico,
 )
@@ -48,7 +48,9 @@ async def listar_reglas(
         r["dias_abiertos"] = c["dias_abiertos"]
         r["grupo"] = grupo_de_secuencia(r["secuencia"])
         r["eleccion_colacion"] = r.get("eleccion_colacion") or "PARECIDA"
-        r["pausas"] = {lect: pausas_de(r["secuencia"], lect) for lect in ("RELOJ", "EXTREMOS", "ALTERNADA")}
+        r["pausas"] = {lect: pausas_de(r["secuencia"], lect, r.get("orden_marcas"))
+                       for lect in ("RELOJ", "EXTREMOS", "ORDEN", "ALTERNADA")}
+        r["orden_propuesto"] = orden_propuesto(r["secuencia"])
     sin_regla = [
         {"secuencia": sec, "dias": c["dias"], "dias_abiertos": c["dias_abiertos"],
          "grupo": grupo_de_secuencia(sec)}
@@ -248,6 +250,8 @@ async def ensayar_la_regla(
         "accion": str(payload.get("accion") or ""),
         "opciones_revision": payload.get("opciones_revision") or [],
         "eleccion_colacion": str(payload.get("eleccion_colacion") or "PARECIDA"),
+        "orden_marcas": (str(payload.get("orden_marcas") or "") or None)
+                        if str(payload.get("lectura") or "") == "ORDEN" else None,
     }
     motivo = validar_regla(propuesta)
     if motivo:
@@ -297,13 +301,13 @@ async def actualizar_regla(
 ):
     cambios = {k: payload.get(k) for k in
                ("lectura", "colacion", "accion", "opciones_revision", "eleccion_colacion",
-                "nota", "activa")
+                "orden_marcas", "nota", "activa")
                if k in payload}
     resultado = await repo.actualizar(regla_id, cambios, current_user.username)
     if resultado.get("error"):
         raise HTTPException(status_code=400, detail=resultado["error"])
     antes, despues = resultado["antes"], resultado["despues"]
-    campos = ("lectura", "colacion", "accion", "opciones_revision", "eleccion_colacion")
+    campos = ("lectura", "colacion", "accion", "opciones_revision", "eleccion_colacion", "orden_marcas")
     detalle = {
         "regla_id": regla_id,
         "secuencia": antes["secuencia"],

@@ -75,6 +75,8 @@ def _coherente_sin_salida(r):
         return False
     if lec == 'ALTERNADA' and len(sec) % 2 == 1:
         return False
+    if lec == 'ORDEN':               # sin orden indicado no se puede guardar (se prueba aparte, con todos los órdenes)
+        return False
     if lec == 'NINGUNA' and acc != 'SOLO_REVISA':
         return False
     if (acc == 'CALCULA') != (not ops):
@@ -307,6 +309,8 @@ def test_la_pantalla_de_reglas_apaga_confirmar_sin_calculo():
     js = _js('reglas_marcas_ui.js')
     assert "o[0] === 'CONFIRMAR' && sinCalcular" in js
     assert "API + 'vigilante/'" in js
+    # el orden lo indica la persona: tabla por marca y el orden viaja al ensayo y al guardar
+    assert "data-rmx-orden" in js and "orden_marcas: ordenAEnviar(r)" in js and js.count("orden_marcas: ordenAEnviar(r)") == 2
     # el ensayo envía lo mismo que se guardaría (sin «Confirmar» en una regla que no calcula)
     assert js.count('opcionesAEnviar(r)') >= 3 and 'opciones_revision: opcionesAEnviar(r)' in js
 
@@ -350,3 +354,70 @@ def test_alternada_mide_la_colacion_cuando_la_vuelta_se_marco_como_salida(monkey
     assert auto["horas_trabajadas"] == a_mano["horas_trabajadas"]
     assert auto["minutos_colacion"] == a_mano["minutos_colacion"] == 35
     assert [m["tipo"] for m in marcas] == [E, S, S, S]        # las marcas no se tocan
+
+
+# ── Lectura «en el orden que indico» (ORDEN): el orden lo define la persona en la pantalla ──────────────
+
+def _todos_los_ordenes(n):
+    return [''.join(p) for p in product('ES-', repeat=n)]
+
+
+def test_el_orden_se_acepta_solo_si_deja_el_dia_calculable():
+    """Todas las secuencias de hasta 5 marcas × todos los órdenes posibles: se acepta si y solo si, sin las marcas que
+    no se usan, queda ENTRADA · SALIDA repetido (lo que el motor sabe calcular)."""
+    from backend.services.reglas_marcas_def import validar_orden
+    probados = 0
+    for sec in (s for s in SECUENCIAS if len(s) <= 5):
+        for orden in _todos_los_ordenes(len(sec)):
+            r = {'secuencia': sec, 'lectura': 'ORDEN', 'orden_marcas': orden, 'colacion': 'MEDIDA',
+                 'accion': 'CALCULA', 'opciones_revision': []}
+            assert (validar_regla(r) == '') == _bien_marcada(orden.replace('-', '')), (sec, orden)
+            assert (validar_orden(sec, orden) == '') == _bien_marcada(orden.replace('-', ''))
+            probados += 1
+        assert validar_regla({'secuencia': sec, 'lectura': 'ORDEN', 'orden_marcas': None, 'colacion': 'MEDIDA',
+                              'accion': 'CALCULA', 'opciones_revision': []}) != ''
+    assert probados > 300
+
+
+def test_la_propuesta_del_orden_es_la_de_la_ventana():
+    from backend.routers.asistencia import sugerir_clasificacion_marcas
+    from backend.services.reglas_marcas_def import orden_propuesto
+    for sec in SECUENCIAS:
+        marcas = _marcas(sec)
+        propuesta = ''.join(x['tipo'][0] for x in sugerir_clasificacion_marcas([m['fecha_hora'] for m in marcas]))
+        assert orden_propuesto(sec) == propuesta.upper(), sec
+
+
+def test_el_motor_lee_el_orden_guardado_y_descarta_las_que_no_se_usan(monkeypatch):
+    """ENTRADA 08:00 · ENTRADA 08:12 (doble toque) · SALIDA 14:23 (doble) · SALIDA 16:30 con el orden E--S:
+    se calcula de 08:00 a 16:30, igual que si el día tuviera solo esas dos marcas. Las marcas no se tocan."""
+    monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 10, 19, 12, 0))
+    marcas = [{"id": i + 1, "fecha_hora": f"{FECHA} {h}:00", "tipo": t, "manual": 0, "observaciones": None}
+              for i, (h, t) in enumerate((("08:00", E), ("08:12", E), ("14:23", S), ("16:30", S)))]
+    solo_dos = [marcas[0], marcas[3]]
+
+    def calcular(logs):
+        return Q.solve_attendance_day(fecha=FECHA, empleado_id=1, logs=[dict(l) for l in logs], turno_config=TURNO,
+                                      dia_config=DIA, global_ajustes={"reglas_marcas_repetidas_minutos": "20"},
+                                      todos_ciclos_dia=[DIA], consumidas_previas=set())
+    qme.REGLAS_MARCAS_ACTIVAS = {"EESS": {"secuencia": "EESS", "lectura": "ORDEN", "orden_marcas": "E--S",
+                                          "colacion": "TURNO", "accion": "CALCULA"}}
+    por_orden = calcular(marcas)
+    qme.REGLAS_MARCAS_ACTIVAS = {}
+    a_mano = calcular(solo_dos)
+    assert por_orden["horas_trabajadas"] == a_mano["horas_trabajadas"] > 0
+    assert por_orden["hora_entrada_real"] == "08:00:00" and por_orden["hora_salida_real"] == "16:30:00"
+    assert "orden indicado" in (por_orden["observaciones"] or "")
+    assert [m["tipo"] for m in marcas] == [E, E, S, S]
+
+
+def test_el_orden_propuesto_da_lo_mismo_que_la_lectura_alternada(monkeypatch):
+    from backend.services.reglas_marcas_def import orden_propuesto
+    monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 10, 19, 12, 0))
+    for sec in (s for s in SECUENCIAS if len(s) % 2 == 0 and len(s) <= 6):
+        qme.REGLAS_MARCAS_ACTIVAS = {sec: {"secuencia": sec, "lectura": "ALTERNADA", "colacion": "MEDIDA", "accion": "CALCULA"}}
+        a = _motor(monkeypatch, sec)
+        qme.REGLAS_MARCAS_ACTIVAS = {sec: {"secuencia": sec, "lectura": "ORDEN", "orden_marcas": orden_propuesto(sec),
+                                           "colacion": "MEDIDA", "accion": "CALCULA"}}
+        b = _motor(monkeypatch, sec)
+        assert (a["estado"], a["horas_trabajadas"], a["minutos_colacion"]) == (b["estado"], b["horas_trabajadas"], b["minutos_colacion"]), sec
