@@ -1818,9 +1818,14 @@ async def marcaciones_del_dia(
     # Las marcas de la jornada, no solo las del día del calendario: un turno que cruza la medianoche cierra con una marca de mañana
     rows = await _marcas_del_dia(service.repository.db, empleado_id, fecha)
     sug = sugerir_clasificacion_marcas([str(r["fecha_hora"]) for r in rows])
+    # Horario asignado de ese día (lo guarda el cálculo en la asistencia): la ventana lo propone al escribir la marca que falta
+    hd = await service.repository.db.fetch_one(
+        "SELECT hora_entrada_teorica, hora_salida_teorica FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+        (empleado_id, fecha))
     return {
         "success": True,
         "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),
+        "horario": {"entrada": (hd or {}).get("hora_entrada_teorica"), "salida": (hd or {}).get("hora_salida_teorica")},
         "marcas": [{
             "id": r["id"], "hora": str(r["fecha_hora"])[11:19], "fecha": str(r["fecha_hora"])[:10],
             "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],

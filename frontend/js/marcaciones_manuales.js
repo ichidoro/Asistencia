@@ -974,6 +974,7 @@ async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
         const data = await r.json();
         if (host.dataset.req !== reqId || !data.marcas || data.marcas.length === 0) return; // el modal ya cambió de día
         _mmQuitarHorasDelHorario(data.marcas);
+        host._horario = data.horario || null;
         renderPanelMarcasDia(host, empId, dateStr, data);
         cargarReglaDia(empId, dateStr, host, !!data.fecha_cerrada, reqId);
     } catch (e) {
@@ -1038,8 +1039,8 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         }
         // «¿Qué pasó este día?»: un camino por cada opción de la regla; cada uno abre solo lo que hace falta
         const CAMINOS = {
-            AGREGAR_SALIDA: ['bi-box-arrow-right', 'Se le olvidó marcar la SALIDA', 'Escriba solo la hora de SALIDA'],
-            AGREGAR_ENTRADA: ['bi-box-arrow-in-right', 'Se le olvidó marcar la ENTRADA', 'Escriba solo la hora de ENTRADA'],
+            AGREGAR_SALIDA: ['bi-box-arrow-right', 'Se le olvidó marcar la SALIDA', 'Se propone la SALIDA de su horario'],
+            AGREGAR_ENTRADA: ['bi-box-arrow-in-right', 'Se le olvidó marcar la ENTRADA', 'Se propone la ENTRADA de su horario'],
             RECLASIFICAR: ['bi-arrow-left-right', 'Marcó ENTRADA en vez de SALIDA (o al revés)', 'Cambie el tipo en la tabla de abajo'],
             CONFIRMAR: ['bi-check2-circle', 'Las marcas están bien así', 'Queda confirmado con un motivo'],
         };
@@ -1343,7 +1344,7 @@ function _mmAplicarBloqueoRevision(texto) {
 function _mmQuitarBloqueoRevision() {
     marcacionesManualesState.bloqueoRevision = false;
     _mmEtiquetaGuardar(null);
-    ['mm-alert-revision', 'mm-bloqueo-nota'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+    ['mm-alert-revision', 'mm-bloqueo-nota', 'mm-propuesta-nota'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
     const obs = document.getElementById('manual-observaciones');
     if (obs) obs.disabled = false;
     const modal = marcacionesManualesState.manualModal;
@@ -1370,6 +1371,29 @@ function _mmEtiquetaGuardar(texto) {
     b.textContent = texto || b.dataset.base;
 }
 
+/** Hora de ENTRADA o SALIDA del horario asignado ese día: primero la que entrega el servidor con las marcas del día,
+ *  si no, la de la grilla cargada. HH:MM:SS para el campo de hora. */
+function _mmHoraDelHorario(host, empId, dateStr, cual) {
+    let h = host && host._horario ? host._horario[cual] : null;
+    if (!h) {
+        const m = (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.data && stateMarcacionesApp.data.matrix) ? stateMarcacionesApp.data.matrix[empId] : null;
+        const a = m ? m[dateStr] : null;
+        h = a ? a['hora_' + cual + '_teorica'] : null;
+    }
+    const t = String(h || '').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    return t ? t[1].padStart(2, '0') + ':' + t[2] + ':' + (t[3] || '00') : '';
+}
+
+function _mmNotaPropuesta(input, hora, palabra) {
+    const vieja = document.getElementById('mm-propuesta-nota');
+    if (vieja) vieja.remove();
+    const fila = input ? input.closest('.row') : null;
+    if (!fila) return;
+    fila.insertAdjacentHTML('afterend', '<div class="mm-bloqueo-nota" id="mm-propuesta-nota"><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>'
+        + (hora ? 'Se propone la ' + palabra + ' de su horario asignado (<strong>' + hora.slice(0, 5) + '</strong>). Cámbiela si la hora real fue otra y presione «Guardar la ' + palabra + '».'
+                : 'Su horario no tiene hora de ' + palabra + ' para este día: escriba la hora real.') + '</div>');
+}
+
 function _mmMarcarCamino(cont, camino) {
     if (!cont) return;
     cont.querySelectorAll('.mm-camino').forEach(b => {
@@ -1394,7 +1418,10 @@ function _mmElegirCamino(camino, empId, dateStr, host) {
         const abre = camino === 'AGREGAR_SALIDA' ? sal : ent;
         const cierra = camino === 'AGREGAR_SALIDA' ? ent : sal;
         if (cierra) { cierra.value = ''; cierra.disabled = true; cierra.dataset.teorico = ''; }
-        if (abre) { abre.value = ''; abre.disabled = false; abre.dataset.teorico = ''; }
+        // Se propone la hora del horario asignado ese día (leída de la base); la persona la confirma o la cambia antes de guardar
+        const propuesta = _mmHoraDelHorario(host, empId, dateStr, camino === 'AGREGAR_SALIDA' ? 'salida' : 'entrada');
+        if (abre) { abre.value = propuesta || ''; abre.disabled = false; abre.dataset.teorico = ''; }
+        _mmNotaPropuesta(abre, propuesta, camino === 'AGREGAR_SALIDA' ? 'SALIDA' : 'ENTRADA');
         const huerfana = document.getElementById('manual-alert-huerfana');
         if (huerfana) huerfana.style.display = 'none';
         _mmEtiquetaGuardar(camino === 'AGREGAR_SALIDA' ? 'Guardar la SALIDA' : 'Guardar la ENTRADA');

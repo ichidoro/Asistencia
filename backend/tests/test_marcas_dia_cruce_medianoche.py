@@ -31,6 +31,10 @@ class FakeDB:
     def __init__(self, marcas, usadas):
         self.marcas, self.usadas, self.overrides, self.ejecutadas = marcas, usadas, {}, []
 
+    async def fetch_one(self, sql, params=()):
+        # El horario asignado del día (para proponer la hora de la marca que falta): estas pruebas no lo usan
+        return None
+
     async def fetch_all(self, sql, params=()):
         q = " ".join(sql.split())
         if "FROM asistencias" in q:

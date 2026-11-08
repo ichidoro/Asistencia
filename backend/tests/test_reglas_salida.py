@@ -290,6 +290,12 @@ def test_la_ventana_usa_las_opciones_de_la_regla_y_no_guarda_horas_del_horario()
     assert "regla.numero" in js                          # muestra «Regla N»
     assert '_mmQuitarHorasDelHorario(data.marcas)' in js # con marcas del reloj, sin horas del horario
     assert "'Guardar la SALIDA'" in js and "'Guardar la ENTRADA'" in js
+    # al elegir «Se le olvidó marcar…» se propone la hora del horario asignado de ese día, leída de la base
+    assert "_mmHoraDelHorario(host, empId, dateStr" in js and "host._horario = data.horario" in js
+    raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    with open(os.path.join(raiz, 'backend', 'routers', 'asistencia.py'), encoding='utf-8') as f:
+        router = f.read()
+    assert '"horario": {"entrada": (hd or {}).get("hora_entrada_teorica")' in router
 
 
 def test_la_pantalla_de_reglas_apaga_confirmar_sin_calculo():
