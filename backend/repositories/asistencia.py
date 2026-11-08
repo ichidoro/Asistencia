@@ -12,11 +12,15 @@ from backend.core.database import Database
 
 # Marcas del reloj con el tipo (Entrada/Salida) ya corregido por una persona, si lo hubo (tabla logs_tipo_override). Se usa como
 # `FROM {LOGS_CON_TIPO_CORREGIDO}`: el alias se llama logs_raw, así los WHERE existentes siguen igual. `tipo_original` = lo que dijo el reloj.
-LOGS_CON_TIPO_CORREGIDO = (
-    "(SELECT l.id, l.empleado_id, l.rut, l.fecha_hora, COALESCE(o.tipo, l.tipo) AS tipo, l.equipo, l.hash_original, l.created_at, "
+_LOGS_COLUMNAS = (
+    "l.id, l.empleado_id, l.rut, l.fecha_hora, COALESCE(o.tipo, l.tipo) AS tipo, l.equipo, l.hash_original, l.created_at, "
     "l.manual, l.observaciones, l.usuario_id, l.tipo AS tipo_original "
-    "FROM logs_raw l LEFT JOIN logs_tipo_override o ON o.log_id = l.id) AS logs_raw"
+    "FROM logs_raw l LEFT JOIN logs_tipo_override o ON o.log_id = l.id"
 )
+# Una marca que una persona dejó como «No se usa» (opción de revisión NO_SE_USA) no entra al cálculo: queda guardada y
+# se ve en la ventana (LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO), pero el motor no la lee.
+LOGS_CON_TIPO_CORREGIDO = "(SELECT " + _LOGS_COLUMNAS + " WHERE COALESCE(o.tipo, '') <> 'No se usa') AS logs_raw"
+LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO = "(SELECT " + _LOGS_COLUMNAS + ") AS logs_raw"
 
 class AsistenciaRepository:
     def __init__(self, db: Database):

@@ -16,6 +16,7 @@ from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
 from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine, libreta_es_inasistencia
 from backend.services import gps_nexacol
+from backend.services.reglas_marcas_def import TIPO_NO_SE_USA, propuesta_tres_marcas
 from backend.services import libreta_orden
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
@@ -1783,12 +1784,13 @@ def marcas_que_pertenecen_al_dia(fecha: str, marcas: List[Dict[str, Any]], ids_d
 
 
 async def _marcas_del_dia(db, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
-    """Marcas (con el tipo ya corregido por una persona, si lo hubo) que pertenecen a la jornada de `fecha`."""
-    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO
+    """Marcas (con el tipo ya corregido por una persona, si lo hubo) que pertenecen a la jornada de `fecha`. Incluye las que
+    una persona dejó como «No se usa» (tipo 'No se usa'): el cálculo no las lee, pero la ventana las muestra para poder deshacerlo."""
+    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO
     f = datetime.strptime(fecha, "%Y-%m-%d")
     ayer, manana = (f - timedelta(days=1)).strftime("%Y-%m-%d"), (f + timedelta(days=1)).strftime("%Y-%m-%d")
     rows = await db.fetch_all(
-        f"SELECT id, fecha_hora, tipo, tipo_original, manual, equipo FROM {LOGS_CON_TIPO_CORREGIDO} "
+        f"SELECT id, fecha_hora, tipo, tipo_original, manual, equipo FROM {LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO} "
         "WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ? ORDER BY fecha_hora ASC",
         (empleado_id, f"{ayer} 00:00:00", f"{manana} 23:59:59"))
     asist = await db.fetch_all(
@@ -1862,23 +1864,42 @@ async def marcaciones_del_dia(
     # Doble toque: las marcas que el cálculo deja fuera antes de aplicar la regla. La sugerencia y la colación se calculan
     # solo con las que se usan, igual que el cálculo.
     doble_toque: Dict[Any, Dict[str, Any]] = {}
+    col_horario = 0
     try:
         from backend.services.quantum_matrix_engine import _rebote_defecto
         tp = None
         if hd and hd.get("turno_asignado_id"):
-            t = await service.repository.db.fetch_one("SELECT tipo_programacion FROM turnos WHERE id = ?", (hd["turno_asignado_id"],))
+            t = await service.repository.db.fetch_one("SELECT tipo_programacion, minutos_colacion_auto FROM turnos WHERE id = ?",
+                                                      (hd["turno_asignado_id"],))
             tp = (t or {}).get("tipo_programacion")
-        doble_toque = marcas_doble_toque(rows, _rebote_defecto(tp or ""))
+            col_horario = int(float((t or {}).get("minutos_colacion_auto") or 0))
+        # Las que una persona dejó como «No se usa» tampoco las lee el cálculo
+        doble_toque = marcas_doble_toque([r for r in rows if r["tipo"] != TIPO_NO_SE_USA], _rebote_defecto(tp or ""))
     except Exception as e:
         logger.warning(f"Doble toque en la ventana ({empleado_id} {fecha}): {e}")
-    usadas = [r for r in rows if r["id"] not in doble_toque]
+    no_usada = lambda r: r["id"] in doble_toque or r["tipo"] == TIPO_NO_SE_USA
+    usadas = [r for r in rows if not no_usada(r)]
     sug_usadas = iter(sugerir_clasificacion_marcas([str(r["fecha_hora"]) for r in usadas]))
     sug = [({"tipo": r["tipo"], "colacion": False, "dudoso": len(usadas) % 2 == 1 or len(usadas) < 2}
-            if r["id"] in doble_toque else next(sug_usadas)) for r in rows]
+            if no_usada(r) else next(sug_usadas)) for r in rows]
     horario = {"entrada": (hd or {}).get("hora_entrada_teorica"), "salida": (hd or {}).get("hora_salida_teorica")}
+    # Tres marcas que se usan (falta una o sobra una): propuesta según el horario del día (reglas_marcas_def.propuesta_tres_marcas)
+    propuesta = None
+    if len(usadas) == 3:
+        try:
+            from backend.repositories.reglas_marcas import ReglasMarcasRepository
+            vc = await ReglasMarcasRepository(service.repository.db).ventana_colacion()
+            p = propuesta_tres_marcas([str(r["fecha_hora"]) for r in usadas], horario["entrada"], horario["salida"],
+                                      int(vc.get("min", 20)), int(vc.get("max", 150)), col_horario)
+            if p:
+                por_id = lambda tipos: {str(r["id"]): t for r, t in zip(usadas, tipos)}
+                propuesta = {"combinacion": p["combinacion"], "falta": p["falta"], "tipos": por_id(p["tipos"]),
+                             "caminos": {k: dict(v, tipos=por_id(v["tipos"])) for k, v in (p.get("caminos") or {}).items()}}
+        except Exception as e:
+            logger.warning(f"Propuesta de tres marcas ({empleado_id} {fecha}): {e}")
     # Con UNA sola marca, el ciclo del día no es seguro (el cálculo lo elige por la marca más cercana, sin mirar su tipo).
     # La propuesta usa el ciclo del horario asignado que calza con esa marca según lo que falte.
-    if len(rows) == 1 and hd and hd.get("turno_asignado_id"):
+    if len(usadas) == 1 and hd and hd.get("turno_asignado_id"):
         try:
             dia_semana = datetime.strptime(fecha, "%Y-%m-%d").weekday()
             ciclos = await service.repository.db.fetch_all(
@@ -1886,7 +1907,7 @@ async def marcaciones_del_dia(
                 "AND COALESCE(es_libre, 0) = 0 AND hora_entrada IS NOT NULL AND hora_salida IS NOT NULL",
                 (hd["turno_asignado_id"], dia_semana))
             ciclos = [dict(c) for c in ciclos]
-            hora_sola = str(rows[0]["fecha_hora"])[11:16]
+            hora_sola = str(usadas[0]["fecha_hora"])[11:16]
             # Si falta la ENTRADA, la marca que hay es la SALIDA: ciclo cuya salida calza. Si falta la SALIDA, la marca
             # que hay es la ENTRADA: ciclo cuya entrada calza. Así sirve aunque el reloj la haya rotulado al revés.
             como_salida = ciclo_para_marca_sola(ciclos, hora_sola, "Salida")
@@ -1899,12 +1920,13 @@ async def marcaciones_del_dia(
         "success": True,
         "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),
         "horario": horario,
+        "propuesta": propuesta,
         "marcas": [{
             "id": r["id"], "hora": str(r["fecha_hora"])[11:19], "fecha": str(r["fecha_hora"])[:10],
             "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],
             "corregida": (r["tipo"] != r["tipo_original"]), "manual": bool(r["manual"]), "equipo": r.get("equipo"),
             "sugerido": s["tipo"], "colacion": s["colacion"], "colacion_min": s.get("colacion_min"), "dudoso": s["dudoso"],
-            "doble_toque": doble_toque.get(r["id"]),
+            "doble_toque": doble_toque.get(r["id"]), "no_se_usa": r["tipo"] == TIPO_NO_SE_USA,
         } for r, s in zip(rows, sug)],
     }
 
@@ -1938,18 +1960,29 @@ async def reclasificar_marcaciones(
     nuevos = {}
     for m in req.marcas:
         t = (m.tipo or "").strip().capitalize()
-        if t not in ("Entrada", "Salida"):
-            raise HTTPException(status_code=400, detail=f"Tipo inválido para la marca {m.id}: debe ser Entrada o Salida.")
+        if t not in ("Entrada", "Salida", TIPO_NO_SE_USA):
+            raise HTTPException(status_code=400, detail=f"Tipo inválido para la marca {m.id}: debe ser Entrada, Salida o No se usa.")
         nuevos[m.id] = t
     db = service.repository.db
     ids = list(nuevos.keys())
     ph = ",".join("?" * len(ids))
     # Solo marcas de ESTE empleado y de ESTA jornada (no se puede tocar una marca ajena por el id)
-    permitidas = {m["id"] for m in await _marcas_del_dia(db, req.empleado_id, req.fecha)}
+    del_dia = {m["id"]: m for m in await _marcas_del_dia(db, req.empleado_id, req.fecha)}
+    permitidas = set(del_dia)
     orig = await db.fetch_all(f"SELECT id, tipo FROM logs_raw WHERE id IN ({ph}) AND empleado_id = ?", tuple(ids) + (req.empleado_id,))
     orig = {r["id"]: r["tipo"] for r in orig}
     if len(orig) != len(ids) or not set(ids) <= permitidas:
         raise HTTPException(status_code=400, detail="Alguna marca no corresponde a este empleado y día.")
+    # «No se usa»: solo marcas del reloj (una manual se quita) y solo si la regla del día ofrece esa opción. Deshacerlo
+    # (volver a ENTRADA o SALIDA) siempre se puede.
+    nuevas_sin_uso = [i for i, t in nuevos.items() if t == TIPO_NO_SE_USA and del_dia[i]["tipo"] != TIPO_NO_SE_USA]
+    if nuevas_sin_uso:
+        if any(del_dia[i]["manual"] for i in nuevas_sin_uso):
+            raise HTTPException(status_code=400, detail="Una marca manual no se marca como «No se usa»: quítela con «Quitar».")
+        from backend.repositories.reglas_marcas import ReglasMarcasRepository
+        ev = await ReglasMarcasRepository(db).evaluar_dia(req.empleado_id, req.fecha)
+        if not (ev.get("en_revision") and "NO_SE_USA" in ((ev.get("regla") or {}).get("opciones_efectivas") or [])):
+            raise HTTPException(status_code=400, detail="La regla de este día no permite dejar una marca sin usar.")
     for log_id, t in nuevos.items():
         await db.execute("DELETE FROM logs_tipo_override WHERE log_id = ?", (log_id,))
         if str(orig[log_id] or "").strip().lower() != t.lower():

@@ -54,7 +54,10 @@ ACCIONES = ('CALCULA', 'CALCULA_Y_REVISA', 'SOLO_REVISA')
 # CALCULA_Y_REVISA = calcula igual y el día queda en «Días por revisar» (triángulo).
 # SOLO_REVISA      = no calcula (anomalía) hasta que una persona lo resuelva.
 
-OPCIONES_REVISION = ('AGREGAR_ENTRADA', 'AGREGAR_SALIDA', 'RECLASIFICAR', 'CONFIRMAR')
+OPCIONES_REVISION = ('AGREGAR_ENTRADA', 'AGREGAR_SALIDA', 'RECLASIFICAR', 'NO_SE_USA', 'CONFIRMAR')
+# NO_SE_USA = quien revisa indica que una marca del reloj no se usa ese día (sobra). La marca no se borra: queda
+#             guardada como «No se usa» en logs_tipo_override y el cálculo la deja fuera; se puede deshacer.
+TIPO_NO_SE_USA = 'No se usa'
 
 # Cómo se llama cada marca hacia la persona: siempre la palabra completa.
 PALABRA_MARCA = {'E': 'ENTRADA', 'S': 'SALIDA'}
@@ -177,8 +180,8 @@ def validar_regla(regla: dict) -> str:
                 "lista, pero sigue sin horas y bloquea el cierre. Quítelo.")
     if accion != 'CALCULA' and 'CONFIRMAR' not in opciones_efectivas(regla) and not tiene_salida(sec, opciones):
         return ("Con estas opciones nadie podría dejar el día bien marcado (ENTRADA · SALIDA). "
-                "Agregue «Escribir la SALIDA que falta», «Escribir la ENTRADA que falta» o "
-                "«Cambiar si una marca es ENTRADA o SALIDA», según corresponda.")
+                "Agregue «Escribir la SALIDA que falta», «Escribir la ENTRADA que falta», "
+                "«Cambiar si una marca es ENTRADA o SALIDA» o «Una marca no se usa», según corresponda.")
     return ''
 
 
@@ -238,6 +241,15 @@ def secuencias_alcanzables(secuencia: str, opciones) -> set:
     for op, letra in (('AGREGAR_ENTRADA', 'E'), ('AGREGAR_SALIDA', 'S')):
         if op in ops:
             actuales |= {s[:i] + letra + s[i:] for s in actuales for i in range(len(s) + 1)}
+    if 'NO_SE_USA' in ops:
+        # Una o más marcas pueden quedar sin usar (sin bajar de una marca)
+        nuevas = set(actuales)
+        while True:
+            mas = {s[:i] + s[i + 1:] for s in nuevas for i in range(len(s)) if len(s) > 1} - nuevas
+            if not mas:
+                break
+            nuevas |= mas
+        actuales = nuevas
     if 'RECLASIFICAR' in ops:
         largos = {len(s) for s in actuales}
         actuales |= {''.join('ES'[(m >> k) & 1] for k in range(n)) for n in largos for m in range(2 ** n)}
@@ -272,3 +284,82 @@ def grupo_de_secuencia(sec: str) -> str:
     if any(sec[i] == sec[i + 1] for i in range(len(sec) - 1)):
         return 'Se repite un tipo'
     return 'Falta una marca'
+
+
+def _min_reloj(hora) -> int:
+    """'HH:MM[:SS]' (o 'YYYY-MM-DD HH:MM:SS') → minutos del día."""
+    h = str(hora or '')
+    h = h[11:16] if len(h) >= 16 and h[4] == '-' else h[:5]
+    hh, mm = h.split(':')
+    return int(hh) * 60 + int(mm)
+
+
+def _dist_reloj(a: int, b: int) -> int:
+    """Distancia en el reloj de 24 horas (sirve para horarios que cruzan la medianoche)."""
+    d = abs(a - b) % 1440
+    return min(d, 1440 - d)
+
+
+def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_max: int, colacion_horario: int = 0):
+    """Propuesta para un día con 3 marcas que se usan (falta una o sobra una), comparándolas con el horario del día.
+    `marcas`: 'YYYY-MM-DD HH:MM:SS' en orden. `entrada`/`salida`: horas del horario. Una pausa «es colación» si dura
+    entre `colacion_min` y `colacion_max` minutos (ajustes de la pestaña Reglas de marcaciones).
+      1 · falta la SALIDA final: la 1.ª calza con la entrada y la 2.ª y la 3.ª son una colación → ENTRADA·SALIDA·ENTRADA,
+          y luego se escribe la SALIDA del horario (el día queda como la regla 2).
+      2 · falta la ENTRADA inicial: la 3.ª calza con la salida y la 1.ª y la 2.ª son una colación → SALIDA·ENTRADA·SALIDA,
+          y luego se escribe la ENTRADA del horario (regla 2).
+      6 · sobra la del medio: la 1.ª calza con la entrada, la 3.ª con la salida y ninguna pausa es colación → la del medio
+          no se usa (regla 1, con la colación del horario).
+    Cada propuesta trae también `caminos`: para «Se le olvidó marcar la ENTRADA/SALIDA», qué tipo queda en cada marca y qué
+    hora se propone para la marca nueva, de modo que una sola corrección deje el día ENTRADA · SALIDA · ENTRADA · SALIDA.
+    En 6, además de «no se usa», se puede escribir la marca de colación que falta: si la del medio fue la salida a colación,
+    la ENTRADA de vuelta a esa hora + `colacion_horario` minutos (los de su horario); si fue la vuelta, la SALIDA a esa hora
+    − esos minutos. Sin minutos de colación en el horario no se proponen.
+    Si no calza con ninguna, devuelve None y decide la persona. «Calza con la entrada» = está más cerca de la entrada que
+    de la salida del horario (y al revés). Una pausa del tamaño de una colación no cuenta como colación si la marca del
+    extremo está más cerca de la hora del horario que de su vecina (es la entrada o la salida del día)."""
+    if len(marcas or []) != 3 or not entrada or not salida:
+        return None
+    from datetime import datetime as _dt
+    try:
+        t = [_dt.strptime(str(m)[:19], '%Y-%m-%d %H:%M:%S') for m in marcas]
+        he, hs = _min_reloj(entrada), _min_reloj(salida)
+    except (ValueError, IndexError):
+        return None
+    m = [x.hour * 60 + x.minute for x in t]
+    g12 = (t[1] - t[0]).total_seconds() / 60.0
+    g23 = (t[2] - t[1]).total_seconds() / 60.0
+    es_col = lambda g: colacion_min <= g <= colacion_max
+    cerca_entrada = lambda x: _dist_reloj(x, he) < _dist_reloj(x, hs)
+    cerca_salida = lambda x: _dist_reloj(x, hs) < _dist_reloj(x, he)
+    # La 1.ª ES la entrada si queda más cerca de la entrada del horario que de la marca siguiente; la 3.ª ES la salida si
+    # queda más cerca de la salida del horario que de la marca anterior (así una pausa larga que termina justo a la hora de
+    # salida no se confunde con una colación).
+    m1_es_entrada = _dist_reloj(m[0], he) < g12
+    m3_es_salida = _dist_reloj(m[2], hs) < g23
+    hora = lambda x: f'{(x % 1440) // 60:02d}:{x % 60:02d}'
+    hm = lambda x: hora(x)
+    if cerca_entrada(m[0]) and cerca_salida(m[2]) and (not es_col(g12) or m1_es_entrada) and (not es_col(g23) or m3_es_salida):
+        caminos = {}
+        col = int(colacion_horario or 0)
+        if col > 0:
+            caminos['AGREGAR_ENTRADA'] = {
+                'tipos': ['Entrada', 'Salida', 'Salida'], 'hora': hora(m[1] + col),
+                'titulo': 'Se le olvidó marcar la vuelta de colación',
+                'texto': f'Salió a colación a las {hm(m[1])}: se propone la ENTRADA a las {hora(m[1] + col)} ({col} min de su horario)'}
+            caminos['AGREGAR_SALIDA'] = {
+                'tipos': ['Entrada', 'Entrada', 'Salida'], 'hora': hora(m[1] - col),
+                'titulo': 'Se le olvidó marcar la salida a colación',
+                'texto': f'Volvió de colación a las {hm(m[1])}: se propone la SALIDA a las {hora(m[1] - col)} ({col} min de su horario)'}
+        return {'combinacion': 6, 'tipos': ['Entrada', TIPO_NO_SE_USA, 'Salida'], 'falta': None, 'caminos': caminos}
+    if es_col(g23) and not m3_es_salida and cerca_entrada(m[0]) and (not es_col(g12) or m1_es_entrada):
+        return {'combinacion': 1, 'tipos': ['Entrada', 'Salida', 'Entrada'], 'falta': {'tipo': 'Salida', 'hora': hora(hs)},
+                'caminos': {'AGREGAR_SALIDA': {'tipos': ['Entrada', 'Salida', 'Entrada'], 'hora': hora(hs),
+                                               'titulo': 'Se le olvidó marcar la SALIDA',
+                                               'texto': f'Se propone la SALIDA de su horario ({hora(hs)})'}}}
+    if es_col(g12) and not m1_es_entrada and cerca_salida(m[2]) and (not es_col(g23) or m3_es_salida):
+        return {'combinacion': 2, 'tipos': ['Salida', 'Entrada', 'Salida'], 'falta': {'tipo': 'Entrada', 'hora': hora(he)},
+                'caminos': {'AGREGAR_ENTRADA': {'tipos': ['Salida', 'Entrada', 'Salida'], 'hora': hora(he),
+                                                'titulo': 'Se le olvidó marcar la ENTRADA',
+                                                'texto': f'Se propone la ENTRADA de su horario ({hora(he)})'}}}
+    return None

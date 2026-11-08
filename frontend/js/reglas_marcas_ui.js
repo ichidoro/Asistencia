@@ -17,6 +17,7 @@ const ReglasMarcasModule = (() => {
         ['AGREGAR_SALIDA', 'Escribir la SALIDA que falta'],
         ['AGREGAR_ENTRADA', 'Escribir la ENTRADA que falta'],
         ['RECLASIFICAR', 'Cambiar si una marca es ENTRADA o SALIDA'],
+        ['NO_SE_USA', 'Dejar sin usar una marca que sobra'],
         ['CONFIRMAR', 'Confirmar que está bien'],
     ];
     window.REGLAS_OPCIONES_REVISION = OPCIONES;   // la tarjeta del día muestra las mismas salidas de un día por revisar

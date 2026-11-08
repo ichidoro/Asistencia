@@ -734,6 +734,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         console.error("Modal NO encontrado. Asegurate de incluir el HTML en index.html");
         return;
     }
+    marcacionesManualesState.caminoConTipos = false;   // ningún camino de la propuesta elegido todavía
 
     marcacionesManualesState.currentEmpId = empId;
     marcacionesManualesState.currentDate = dateStr;
@@ -1010,13 +1011,29 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         const mx = host._mx;
         if (mx) mx.enRevision = !!ev.en_revision;
         const btnClasif = host.querySelector('#btn-marcas-guardar');
-        if (btnClasif) btnClasif.textContent = (activo && opciones.includes('RECLASIFICAR')) ? 'Guardar el cambio de tipo' : 'Guardar clasificación';
+        const cambiaTipo = activo && (opciones.includes('RECLASIFICAR') || opciones.includes('NO_SE_USA'));
+        if (btnClasif) btnClasif.textContent = cambiaTipo ? 'Guardar el cambio de tipo' : 'Guardar clasificación';
+        // «No se usa» aparece en cada marca del reloj solo si la regla del día lo permite
+        if (activo && opciones.includes('NO_SE_USA')) host.querySelectorAll('.mm-seg-nsu').forEach(b => b.classList.remove('d-none'));
         const lblClasif = btnClasif ? btnClasif.textContent : 'Guardar clasificación';
         // La marca que el sistema propone cambiar (la misma sugerencia de «Usar sugerencia») ya viene elegida y en rojo, solo si la
         // regla permite cambiar el tipo de una marca y la cantidad de marcas no deja dudas (orden del dueño, 06-11-2026). Nada se
         // guarda hasta el botón de guardar y el «Sí» de la pregunta.
         let propuestas = [];
-        if (activo && opciones.includes('RECLASIFICAR') && mx && !mx.marcas.some(m => m.dudoso)) {
+        const P = mx ? mx.propuesta : null;
+        if (cambiaTipo && P && P.tipos) {
+            // Tres marcas que se usan (falta una o sobra una): la propuesta compara las marcas con el horario del día
+            // (servidor: propuesta_tres_marcas). Solo se muestra si la regla tiene las opciones que pide.
+            propuestas = mx.marcas.map(m => { const t = P.tipos[String(m.id)]; return (t && t !== m.tipo_actual) ? t : null; });
+            const alcanza = propuestas.every(t => !t || (t === 'No se usa' ? opciones.includes('NO_SE_USA') : opciones.includes('RECLASIFICAR')));
+            if (alcanza && propuestas.some(Boolean)) {
+                mx.propuestas = propuestas;
+                mx.selects().forEach((sel, i) => { if (propuestas[i]) sel.value = propuestas[i]; });
+                mx.refrescar();
+            } else {
+                propuestas = [];
+            }
+        } else if (activo && opciones.includes('RECLASIFICAR') && mx && !mx.marcas.some(m => m.dudoso)) {
             propuestas = mx.marcas.map(m => (m.sugerido && m.sugerido !== m.tipo_actual) ? m.sugerido : null);
             if (propuestas.some(Boolean)) {
                 mx.propuestas = propuestas;
@@ -1028,7 +1045,14 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         }
         const nProp = propuestas.filter(Boolean).length;
         let txtRev;
-        if (nProp === 1) {
+        if (nProp > 0 && mx && mx.propuestas === propuestas && P && P.tipos) {
+            const partes = propuestas.map((t, i) => !t ? null
+                : 'la marca de las <strong>' + mx.marcas[i].hora + '</strong> ' + (t === 'No se usa' ? '<strong>no se use</strong>' : 'sea <strong>' + String(t).toUpperCase() + '</strong>'))
+                .filter(Boolean);
+            txtRev = 'el sistema propone que ' + partes.join(' y ') + ' (en rojo). Revíselo y presione «' + lblClasif + '».'
+                + (P.falta ? ' Después falta escribir la <strong>' + String(P.falta.tipo).toUpperCase() + '</strong>: se propondrá la de su horario (<strong>' + P.falta.hora + '</strong>).'
+                           : ' El día queda ENTRADA · SALIDA y se descuenta la colación de su horario.');
+        } else if (nProp === 1) {
             const i = propuestas.findIndex(Boolean);
             txtRev = 'el sistema propone que la marca de las <strong>' + mx.marcas[i].hora + '</strong> sea <strong>'
                 + String(propuestas[i]).toUpperCase() + '</strong> (en rojo). Revísela y presione «' + lblClasif + '».';
@@ -1043,14 +1067,21 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
             AGREGAR_SALIDA: ['bi-box-arrow-right', 'Se le olvidó marcar la SALIDA', 'Se propone la SALIDA de su horario'],
             AGREGAR_ENTRADA: ['bi-box-arrow-in-right', 'Se le olvidó marcar la ENTRADA', 'Se propone la ENTRADA de su horario'],
             RECLASIFICAR: ['bi-arrow-left-right', 'Marcó ENTRADA en vez de SALIDA (o al revés)', 'Cambie el tipo en la tabla de abajo'],
+            NO_SE_USA: ['bi-slash-circle', 'Sobra una marca', 'Márquela como «No se usa» en la tabla de abajo'],
             CONFIRMAR: ['bi-check2-circle', 'Las marcas están bien así', 'Queda confirmado con un motivo'],
         };
         const caminos = activo ? opciones.filter(o => CAMINOS[o]) : [];
         const caminosHtml = caminos.length ? `
                 <div class="mt-2 fw-semibold">¿Qué pasó este día?</div>
                 <div class="d-flex flex-wrap gap-2 mt-1" role="group" aria-label="Qué pasó este día">
-                    ${caminos.map(o => `<button type="button" class="btn btn-sm btn-outline-primary text-start mm-camino" data-camino="${o}" aria-pressed="false" style="border:1px solid #93a4d8;">
-                        <i class="bi ${CAMINOS[o][0]} me-1" aria-hidden="true"></i><strong>${CAMINOS[o][1]}</strong><br><span class="small">${CAMINOS[o][2]}</span></button>`).join('')}
+                    ${caminos.map(o => {
+                        // Con la propuesta de 3 marcas, el camino dice qué marca se escribe y a qué hora (p. ej. la vuelta de colación)
+                        const pc = P && P.caminos ? P.caminos[o] : null;
+                        const titulo = pc ? pc.titulo : CAMINOS[o][1];
+                        const texto = pc ? pc.texto : (o === 'NO_SE_USA' && P && P.combinacion === 6 ? 'Propuesto: la marca del medio no se usa' : CAMINOS[o][2]);
+                        return `<button type="button" class="btn btn-sm btn-outline-primary text-start mm-camino" data-camino="${o}" aria-pressed="false" style="border:1px solid #93a4d8;">
+                        <i class="bi ${CAMINOS[o][0]} me-1" aria-hidden="true"></i><strong>${titulo}</strong><br><span class="small">${texto}</span></button>`;
+                    }).join('')}
                 </div>` : '';
         cont.innerHTML = `
             <div class="border rounded p-2" style="background:${ev.en_revision ? '#fef2f2' : '#f0fdf4'};">
@@ -1119,11 +1150,12 @@ async function confirmarDiaRevision(empId, dateStr) {
 function renderPanelMarcasDia(host, empId, dateStr, data) {
     const marcas = data.marcas;
     const cerrada = !!data.fecha_cerrada;
-    const dudoso = marcas.some(m => m.dudoso);
-    // Doble toque: el cálculo deja fuera esa marca antes de aplicar la regla. Se muestra en gris y no cuenta para la colación
-    // ni para los avisos, así la ventana ve las mismas marcas que la regla.
-    const usada = marcas.map(m => !m.doble_toque);
-    const nUsadas = usada.filter(Boolean).length;
+    // Doble toque: el cálculo deja fuera esa marca antes de aplicar la regla. «No se usa»: una persona indicó que esa marca del
+    // reloj sobra (opción de revisión de la regla). Las dos se ven en gris y no cuentan para la colación ni para los avisos,
+    // así la ventana ve las mismas marcas que la regla.
+    const dobleT = marcas.map(m => !!m.doble_toque);
+    const nUsadas = marcas.filter(m => !m.doble_toque && !m.no_se_usa).length;
+    const NSU = 'No se usa';
     const txtDobleToque = (dt) => {
         const s = Number(dt.segundos) || 0;
         const sep = s >= 60 ? Math.floor(s / 60) + ' min' + (s % 60 ? ' ' + (s % 60) + ' s' : '') : s + ' s';
@@ -1158,15 +1190,17 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         return `<div class="small text-muted fw-normal">${d}-${mo} · ${m.fecha > dateStr ? 'día siguiente' : 'día anterior'}</div>`;
     };
     body.innerHTML = marcas.map((m, i) => `
-        <tr data-i="${i}"${usada[i] ? '' : ' class="text-muted" style="opacity:.6;"'}>
+        <tr data-i="${i}"${dobleT[i] ? ' class="text-muted"' : ''}>
             <td class="fw-semibold">${m.hora}${etiquetaOtroDia(m)}<div class="mm-prop-txt">Cambio propuesto</div></td>
             <td>${m.tipo_reloj ? String(m.tipo_reloj).toUpperCase() : '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
             <td><div class="mm-seg" role="radiogroup" aria-label="Tipo de la marca de las ${m.hora}">
-                <button type="button" class="mm-seg-b" role="radio" data-v="Entrada"${cerrada || !usada[i] ? ' disabled' : ''}>ENTRADA</button>
-                <button type="button" class="mm-seg-b" role="radio" data-v="Salida"${cerrada || !usada[i] ? ' disabled' : ''}>SALIDA</button>
-            </div><select class="form-select form-select-sm marca-tipo visually-hidden" tabindex="-1" aria-hidden="true"${cerrada || !usada[i] ? ' disabled' : ''}>
+                <button type="button" class="mm-seg-b" role="radio" data-v="Entrada"${cerrada || dobleT[i] ? ' disabled' : ''}>ENTRADA</button>
+                <button type="button" class="mm-seg-b" role="radio" data-v="Salida"${cerrada || dobleT[i] ? ' disabled' : ''}>SALIDA</button>
+                ${!m.manual && !dobleT[i] ? `<button type="button" class="mm-seg-b mm-seg-nsu${m.no_se_usa ? '' : ' d-none'}" role="radio" data-v="${NSU}"${cerrada ? ' disabled' : ''}>NO SE USA</button>` : ''}
+            </div><select class="form-select form-select-sm marca-tipo visually-hidden" tabindex="-1" aria-hidden="true"${cerrada || dobleT[i] ? ' disabled' : ''}>
                 <option value="Entrada"${m.tipo_actual === 'Entrada' ? ' selected' : ''}>Entrada</option>
                 <option value="Salida"${m.tipo_actual === 'Salida' ? ' selected' : ''}>Salida</option>
+                ${!m.manual ? `<option value="${NSU}"${m.tipo_actual === NSU ? ' selected' : ''}>${NSU}</option>` : ''}
             </select></td>
             <td class="marca-etiqueta"></td>
             ${puedeQuitar ? `<td class="text-end">${m.manual ? `<button type="button" class="btn btn-sm btn-outline-danger btn-quitar-marca" title="Quitar esta marcación manual"${cerrada ? ' disabled' : ''}><i class="bi bi-trash"></i> Quitar</button>` : ''}</td>` : ''}
@@ -1179,16 +1213,19 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     const tipos = () => selects().map(sel => sel.value);
     const refrescar = () => {
         const tsTodas = tipos();
-        // Colación y avisos solo con las marcas que usa el cálculo (sin el doble toque)
-        const idx = marcas.map((m, i) => i).filter(i => usada[i]);
+        // Colación y avisos solo con las marcas que usa el cálculo (sin el doble toque ni las que «No se usa»)
+        const usada = (i) => !dobleT[i] && tsTodas[i] !== NSU;
+        const idx = marcas.map((m, i) => i).filter(usada);
         const ts = idx.map(i => tsTodas[i]);
         const colU = _marcasColacion(idx.map(i => marcas[i]), ts);
         const col = {};
         Object.keys(colU).forEach(k => { col[idx[k]] = colU[k]; });
         body.querySelectorAll('tr').forEach((tr, i) => {
-            tr.querySelector('.marca-etiqueta').innerHTML = !usada[i]
+            tr.style.opacity = usada(i) ? '' : '.6';
+            tr.querySelector('.marca-etiqueta').innerHTML = dobleT[i]
                 ? `<span class="small">${txtDobleToque(marcas[i].doble_toque)}</span>`
-                : (col[i] !== undefined ? `<span class="vn-pill">Colación · ${col[i]} min</span>` : '');
+                : (tsTodas[i] === NSU ? '<span class="small">No se usa · el cálculo no la lee (queda guardada)</span>'
+                : (col[i] !== undefined ? `<span class="vn-pill">Colación · ${col[i]} min</span>` : ''));
             tr.querySelectorAll('.mm-seg-b').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === tsTodas[i] ? 'true' : 'false'));
             // El cambio que propone el sistema se ve en rojo mientras siga elegido (y sea distinto de lo que rige hoy)
             const prop = host._mx && host._mx.propuestas ? host._mx.propuestas[i] : null;
@@ -1198,12 +1235,12 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         if (ts[0] === 'Salida') avisos.push('La primera marca del día está como SALIDA.');
         if (ts.length > 1 && ts[ts.length - 1] === 'Entrada') avisos.push('La última marca del día está como ENTRADA.');
         for (let i = 1; i < ts.length; i++) if (ts[i] === ts[i - 1]) { avisos.push('Hay dos marcas seguidas del mismo tipo: revise que alternen ENTRADA y SALIDA.'); break; }
-        if (dudoso) avisos.push('La cantidad de marcas es impar o hay una sola: confirme cuál falta.');
+        if (ts.length % 2 === 1 || ts.length < 2) avisos.push('La cantidad de marcas que se usan es impar o hay una sola: falta una o sobra una.');
         host.querySelector('#marcas-dia-aviso').innerHTML = avisos.length
             ? `<span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> ${avisos.join(' ')}</span>` : '';
     };
     // La regla del día (cargarReglaDia) usa esto para dejar elegida la marca que el sistema propone cambiar
-    host._mx = { marcas, selects, refrescar, propuestas: [], enRevision: false };
+    host._mx = { marcas, selects, refrescar, propuestas: [], enRevision: false, propuesta: data.propuesta || null };
     selects().forEach(sel => sel.addEventListener('change', refrescar));
     body.addEventListener('click', (e) => {
         const b = e.target.closest('.mm-seg-b');
@@ -1303,13 +1340,15 @@ async function quitarMarcaManual(empId, marca) {
 }
 
 /** Pregunta antes de guardar la clasificación: dice qué marca cambia y de qué a qué. Devuelve true solo con el «Sí». */
-async function _mmConfirmarClasificacion(cambios, dateStr) {
+async function _mmConfirmarClasificacion(cambios, dateStr, extra) {
     const T = (t) => String(t || '').toUpperCase();
     const cuando = (m) => m.hora + (m.fecha && m.fecha !== dateStr ? ' del ' + m.fecha.substring(8, 10) + '-' + m.fecha.substring(5, 7) : '');
     const hay = cambios.length > 0;
-    const lineas = cambios.map(x => 'La marca de las <b>' + cuando(x.m) + '</b> pasa de <b>' + T(x.m.tipo_actual) + '</b> a <b>' + T(x.nuevo) + '</b>.');
+    const lineas = cambios.map(x => x.nuevo === 'No se usa'
+        ? 'La marca de las <b>' + cuando(x.m) + '</b> <b>no se usa</b>: queda guardada, pero el cálculo no la lee.'
+        : 'La marca de las <b>' + cuando(x.m) + '</b> pasa de <b>' + T(x.m.tipo_actual) + '</b> a <b>' + T(x.nuevo) + '</b>.');
     const si = hay ? 'Sí, corregir' : 'Sí, recalcular';
-    const html = (hay ? lineas.join('<br>') : 'No cambió el tipo de ninguna marca.')
+    const html = (hay ? lineas.join('<br>') : 'No cambió el tipo de ninguna marca.') + (extra ? '<br>' + extra : '')
         + '<br>Al presionar «' + si + '» se guarda y el día se vuelve a calcular.'
         + '<br><span style="color:#64748b;font-size:.9em">Con «No» no se guarda nada.</span>';
     if (typeof Swal === 'undefined') {
@@ -1438,26 +1477,51 @@ function _mmMarcarCamino(cont, camino) {
  *    así no se crea una marca manual que sobra;
  *  · tipo equivocado: la tabla de marcas y su botón; la parte de abajo queda bloqueada;
  *  · está bien así: confirmar con motivo (solo existe si el día ya tiene sus horas). */
+/** Deja en la tabla los tipos que pide un camino de la propuesta de 3 marcas (en rojo los que cambian). */
+function _mmTiposEnTabla(host, tiposPorId) {
+    const mx = host ? host._mx : null;
+    if (!mx || !tiposPorId) return;
+    mx.propuestas = mx.marcas.map(m => { const t = tiposPorId[String(m.id)]; return (t && t !== m.tipo_actual) ? t : null; });
+    mx.selects().forEach((sel, i) => { const t = tiposPorId[String(mx.marcas[i].id)]; sel.value = t || mx.marcas[i].tipo_actual; });
+    mx.refrescar();
+}
+
 function _mmElegirCamino(camino, empId, dateStr, host) {
     const cont = host ? host.querySelector('#marcas-regla-info') : null;
     _mmMarcarCamino(cont, camino);
     const ent = document.getElementById('manual-hora-entrada'), sal = document.getElementById('manual-hora-salida');
+    const P = host && host._mx ? host._mx.propuesta : null;
+    const pc = P && P.caminos ? P.caminos[camino] : null;
+    marcacionesManualesState.caminoConTipos = false;
     if (camino === 'AGREGAR_SALIDA' || camino === 'AGREGAR_ENTRADA') {
         _mmQuitarBloqueoRevision();
         const abre = camino === 'AGREGAR_SALIDA' ? sal : ent;
         const cierra = camino === 'AGREGAR_SALIDA' ? ent : sal;
         if (cierra) { cierra.value = ''; cierra.disabled = true; cierra.dataset.teorico = ''; }
-        // Se propone la hora del horario asignado ese día (leída de la base); la persona la confirma o la cambia antes de guardar
-        const propuesta = _mmHoraDelHorario(host, empId, dateStr, camino === 'AGREGAR_SALIDA' ? 'salida' : 'entrada');
+        // Se propone la hora del horario asignado ese día (leída de la base); la persona la confirma o la cambia antes de guardar.
+        // Con la propuesta de 3 marcas, el camino trae también el tipo de cada marca y la hora (p. ej. la vuelta de colación):
+        // al guardar se corrigen los tipos y se escribe la marca en un solo paso.
+        const propuesta = pc ? pc.hora + ':00' : _mmHoraDelHorario(host, empId, dateStr, camino === 'AGREGAR_SALIDA' ? 'salida' : 'entrada');
+        if (pc) { _mmTiposEnTabla(host, pc.tipos); marcacionesManualesState.caminoConTipos = true; }
         if (abre) { abre.value = propuesta || ''; abre.disabled = false; abre.dataset.teorico = ''; }
-        _mmNotaPropuesta(abre, propuesta, camino === 'AGREGAR_SALIDA' ? 'SALIDA' : 'ENTRADA');
+        if (pc) {
+            const palabra = camino === 'AGREGAR_SALIDA' ? 'SALIDA' : 'ENTRADA';
+            const vieja = document.getElementById('mm-propuesta-nota');
+            if (vieja) vieja.remove();
+            const fila = abre ? abre.closest('.row') : null;
+            if (fila) fila.insertAdjacentHTML('afterend', '<div class="mm-bloqueo-nota" id="mm-propuesta-nota"><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>'
+                + pc.texto + '. Los tipos en rojo de la tabla se guardan junto con la marca. Cambie la hora si la real fue otra y presione «Guardar la ' + palabra + '».</div>');
+        } else {
+            _mmNotaPropuesta(abre, propuesta, camino === 'AGREGAR_SALIDA' ? 'SALIDA' : 'ENTRADA');
+        }
         const huerfana = document.getElementById('manual-alert-huerfana');
         if (huerfana) huerfana.style.display = 'none';
         _mmEtiquetaGuardar(camino === 'AGREGAR_SALIDA' ? 'Guardar la SALIDA' : 'Guardar la ENTRADA');
         if (abre) { abre.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => abre.focus(), 150); }
-    } else if (camino === 'RECLASIFICAR') {
+    } else if (camino === 'RECLASIFICAR' || camino === 'NO_SE_USA') {
         _mmQuitarBloqueoRevision();
         _mmAplicarBloqueoRevision();
+        if (P && P.tipos) _mmTiposEnTabla(host, P.tipos);
         const primero = host ? host.querySelector('.mm-seg-b:not([disabled])') : null;
         if (primero) { primero.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => primero.focus(), 150); }
     } else if (camino === 'CONFIRMAR') {
@@ -1543,6 +1607,31 @@ async function saveManualEntry() {
         if (window.Avisos) window.Avisos.falta(msg, { campos });
         else alert(msg);
         return;
+    }
+
+    // Día por revisar con la propuesta de 3 marcas: el camino elegido cambia también el tipo de las marcas del reloj.
+    // Primero se guardan esos tipos (con la misma pregunta de siempre) y después la marca nueva: una sola corrección.
+    const hostRev = document.getElementById('manual-panel-marcas');
+    const mxRev = hostRev ? hostRev._mx : null;
+    if (marcacionesManualesState.caminoConTipos && mxRev) {
+        const ts = mxRev.selects().map(sel => sel.value);
+        const cambios = mxRev.marcas.map((m, i) => ({ m, nuevo: ts[i] })).filter(x => x.nuevo !== x.m.tipo_actual);
+        if (cambios.length) {
+            const extra = 'Y se escribe la ' + (nuevaEntrada ? 'ENTRADA de las <b>' + nuevaEntrada.slice(0, 5) : 'SALIDA de las <b>' + String(nuevaSalida).slice(0, 5)) + '</b>.';
+            if (!(await _mmConfirmarClasificacion(cambios, dateStr, extra))) return;
+            try {
+                const r = await fetch('/api/asistencia/marcaciones/reclasificar/', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ empleado_id: parseInt(empId), fecha: dateStr, marcas: mxRev.marcas.map((m, i) => ({ id: m.id, tipo: ts[i] })) })
+                });
+                const resp = await r.json().catch(() => ({}));
+                if (!r.ok) { Avisos.error(resp.detail || 'No se pudo guardar el tipo de las marcas. No se escribió la marca nueva.'); return; }
+            } catch (e) {
+                Avisos.sinConexion();
+                return;
+            }
+            window._rvUltimaCorreccion = { empId: parseInt(empId), fecha: dateStr };
+        }
     }
 
     const promises = [];

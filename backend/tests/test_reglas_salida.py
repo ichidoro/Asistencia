@@ -56,6 +56,9 @@ def _camino_propio(sec, opciones):
         if 'RECLASIFICAR' in ops:
             for i in range(len(s)):
                 sig.append((s[:i] + ('S' if s[i] == 'E' else 'E') + s[i + 1:], puede_e, puede_s))
+        if 'NO_SE_USA' in ops and len(s) > 1:      # una marca que sobra queda sin usar
+            for i in range(len(s)):
+                sig.append((s[:i] + s[i + 1:], puede_e, puede_s))
         for x in sig:
             if x not in vistos:
                 vistos.add(x)
@@ -468,3 +471,65 @@ def test_ventana_marca_el_doble_toque_igual_que_el_calculo():
     assert '"doble_toque": doble_toque.get(r["id"])' in router
     js = open(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()
     assert "No se usa · doble toque" in js and "se usan " in js
+
+
+def test_propuesta_tres_marcas_con_el_horario():
+    """Regla 6 (E·E·E) y cualquier día de 3 marcas: falta una o sobra una; la propuesta sale de comparar con el horario."""
+    from backend.services.reglas_marcas_def import propuesta_tres_marcas
+    p = lambda m, e, s: propuesta_tres_marcas(m, e, s, 20, 150)
+    # Falta la SALIDA final: entrada a la hora y una colación de 28 min al final → E·S·E y escribir la SALIDA del horario
+    r = p(['2026-05-18 06:58:56', '2026-05-18 13:31:31', '2026-05-18 13:59:23'], '07:00', '16:30')
+    assert (r['combinacion'], r['tipos'], r['falta']) == (1, ['Entrada', 'Salida', 'Entrada'], {'tipo': 'Salida', 'hora': '16:30'})
+    assert r['caminos']['AGREGAR_SALIDA']['tipos'] == ['Entrada', 'Salida', 'Entrada'] and r['caminos']['AGREGAR_SALIDA']['hora'] == '16:30'
+    r = p(['2026-08-11 07:54:39', '2026-08-11 15:19:20', '2026-08-11 15:41:55'], '08:00', '17:30')
+    assert r['combinacion'] == 1 and r['falta'] == {'tipo': 'Salida', 'hora': '17:30'}
+    # Sobra la del medio: entrada y salida a la hora y ninguna pausa es colación (154 min > 150) → la del medio no se usa
+    r = p(['2026-06-11 07:01:30', '2026-06-11 12:56:55', '2026-06-11 15:30:21'], '07:00', '15:30')
+    assert (r['combinacion'], r['tipos'], r['falta'], r['caminos']) == (6, ['Entrada', 'No se usa', 'Salida'], None, {})
+    # … o escribir la marca de colación que falta, con los minutos de colación del horario (30)
+    r = propuesta_tres_marcas(['2026-06-11 07:01:30', '2026-06-11 12:56:55', '2026-06-11 15:30:21'], '07:00', '15:30', 20, 150, 30)
+    assert r['caminos']['AGREGAR_ENTRADA']['tipos'] == ['Entrada', 'Salida', 'Salida'] and r['caminos']['AGREGAR_ENTRADA']['hora'] == '13:26'
+    assert r['caminos']['AGREGAR_SALIDA']['tipos'] == ['Entrada', 'Entrada', 'Salida'] and r['caminos']['AGREGAR_SALIDA']['hora'] == '12:26'
+    # Pausa de 148 min que termina a la hora de salida: la última ES la salida → la del medio no se usa (no falta nada)
+    r = p(['2026-04-27 07:01:00', '2026-04-27 14:03:00', '2026-04-27 16:31:00'], '07:00', '16:30')
+    assert r['combinacion'] == 6
+    # Pausa al comienzo y salida a la hora: falta la ENTRADA aunque la segunda pausa también mida como colación
+    r = p(['2026-05-14 12:58:00', '2026-05-14 13:32:00', '2026-05-14 15:33:00'], '07:00', '15:30')
+    assert r['combinacion'] == 2
+    # Falta la ENTRADA inicial: colación al comienzo y la última a la hora de salida
+    r = p(['2026-06-11 12:30:00', '2026-06-11 13:00:00', '2026-06-11 15:31:00'], '07:00', '15:30')
+    assert (r['combinacion'], r['tipos'], r['falta']) == (2, ['Salida', 'Entrada', 'Salida'], {'tipo': 'Entrada', 'hora': '07:00'})
+    # Turno de noche (cruza la medianoche): falta la SALIDA
+    r = p(['2026-06-11 22:58:00', '2026-06-12 03:00:00', '2026-06-12 03:30:00'], '23:00', '07:00')
+    assert r['combinacion'] == 1 and r['falta']['hora'] == '07:00'
+    # Dos pausas de colación seguidas: no se puede saber → sin propuesta
+    assert p(['2026-06-11 13:00:00', '2026-06-11 13:30:00', '2026-06-11 14:00:00'], '07:00', '15:30') is None
+    # Sin horario, o sin 3 marcas: sin propuesta
+    assert p(['2026-06-11 07:00:00', '2026-06-11 12:00:00', '2026-06-11 15:30:00'], None, '15:30') is None
+    assert p(['2026-06-11 07:00:00', '2026-06-11 15:30:00'], '07:00', '15:30') is None
+
+
+def test_no_se_usa_es_una_salida_de_la_revision():
+    """«Dejar sin usar una marca que sobra» (NO_SE_USA) lleva E·E·E a la regla 1 y la validación lo cuenta como salida."""
+    from backend.services.reglas_marcas_def import OPCIONES_REVISION, secuencias_alcanzables, tiene_salida, validar_regla
+    assert 'NO_SE_USA' in OPCIONES_REVISION
+    assert not tiene_salida('EEE', ['NO_SE_USA'])            # sin cambiar tipos, E·E sigue sin SALIDA
+    assert tiene_salida('EEE', ['NO_SE_USA', 'RECLASIFICAR'])
+    assert 'ES' in secuencias_alcanzables('EEE', ['NO_SE_USA', 'RECLASIFICAR'])
+    assert 'ES' in secuencias_alcanzables('ESE', ['NO_SE_USA'])  # sobra la última ENTRADA
+    regla = {'secuencia': 'EEE', 'lectura': 'NINGUNA', 'colacion': 'TURNO', 'accion': 'SOLO_REVISA',
+             'opciones_revision': ['RECLASIFICAR', 'NO_SE_USA', 'AGREGAR_SALIDA', 'AGREGAR_ENTRADA']}
+    assert validar_regla(regla) == ''
+
+
+def test_el_calculo_no_lee_las_marcas_que_no_se_usan():
+    """La marca «No se usa» queda guardada y se ve en la ventana, pero el motor no la lee."""
+    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO, LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO
+    assert "<> 'No se usa'" in LOGS_CON_TIPO_CORREGIDO
+    assert "No se usa" not in LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO
+    router = open(os.path.join(os.path.dirname(__file__), "..", "routers", "asistencia.py"), encoding="utf-8").read()
+    assert "FROM {LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO}" in router          # la ventana las muestra
+    assert "La regla de este día no permite dejar una marca sin usar." in router
+    assert "Una marca manual no se marca como «No se usa»" in router
+    js = open(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()
+    assert "mm-seg-nsu" in js and "opciones.includes('NO_SE_USA')" in js
