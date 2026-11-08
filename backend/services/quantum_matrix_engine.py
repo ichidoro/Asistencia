@@ -195,6 +195,17 @@ def _aplicar_extremos(consumidos: List[Dict[str, Any]], colacion: str) -> List[D
     return nuevo
 
 
+def _aplicar_alternada(consumidos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Lectura «alternada» de una regla de marcaciones: el orden que propone el sistema. Por hora, la primera
+    marca es la Entrada, la siguiente la Salida, y así alternando; una Salida seguida de una Entrada a mitad del
+    día queda como pausa. Solo con un número par de marcas (la validación de la regla lo exige): con un número
+    impar devuelve las marcas tal cual. Devuelve copias: no toca las originales."""
+    orden = sorted(consumidos, key=lambda l: str(l.get('fecha_hora', '')))
+    if len(orden) < 2 or len(orden) % 2 == 1:
+        return [dict(l) for l in orden]
+    return [dict(l, tipo=('Entrada' if i % 2 == 0 else 'Salida')) for i, l in enumerate(orden)]
+
+
 class QuantumPhaseTopology:
     """Manejo de tiempo modular y distancias geodésicas en el círculo unitario S^1 (24 horas = 1440 minutos)."""
     
@@ -2193,8 +2204,10 @@ class QuantumMatrixEngine:
                     pide_solo_revision = (regla_dia.get('lectura') == 'NINGUNA'
                                           or regla_dia.get('accion') == 'SOLO_REVISA')
                     if not pide_solo_revision:
-                        if regla_dia.get('lectura') == 'EXTREMOS':
-                            nuevo_bloque = _aplicar_extremos(consumidos_dia, str(regla_dia.get('colacion') or ''))
+                        if regla_dia.get('lectura') in ('EXTREMOS', 'ALTERNADA'):
+                            alternada = regla_dia.get('lectura') == 'ALTERNADA'
+                            nuevo_bloque = (_aplicar_alternada(consumidos_dia) if alternada
+                                            else _aplicar_extremos(consumidos_dia, str(regla_dia.get('colacion') or '')))
                             def _letras(ls):
                                 return [(l.get('id'), 'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E else 'S')
                                         for l in ls]
@@ -2202,7 +2215,9 @@ class QuantumMatrixEngine:
                             # no hay nada que cambiar ni que anotar: sigue el camino de siempre.
                             if _letras(nuevo_bloque) != _letras(consumidos_dia):
                                 bloque_p = nuevo_bloque
-                                obs_regla += (f"Regla de marcaciones ({sec_fmt}): se leyó con la primera marca "
+                                obs_regla += (f"Regla de marcaciones ({sec_fmt}): se leyó alternando ENTRADA y "
+                                              f"SALIDA por hora, como propone el sistema. " if alternada else
+                                              f"Regla de marcaciones ({sec_fmt}): se leyó con la primera marca "
                                               f"como ENTRADA y la última como SALIDA. ")
                         if regla_dia.get('colacion') == 'NINGUNA':
                             descuento_col_auto = False

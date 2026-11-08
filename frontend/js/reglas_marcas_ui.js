@@ -184,6 +184,15 @@ const ReglasMarcasModule = (() => {
         const s = String(sec || ''), n = s.length;
         if (lectura === 'NINGUNA') return 'No se leen: el día espera a que una persona lo complete.';
         const r = Array(n).fill('no se usa');
+        if (lectura === 'ALTERNADA') {
+            if (n % 2 === 1) return 'Con un número impar de marcas el orden no es seguro: falta o sobra una marca.';
+            for (let i = 0; i < n; i++) {
+                const t = i % 2 === 0 ? 'E' : 'S';
+                const papel = i === 0 ? 'ENTRADA del día' : (i === n - 1 ? 'SALIDA del día' : (t === 'S' ? 'SALIDA a pausa' : 'ENTRADA de regreso'));
+                r[i] = papel + (s[i] === t ? '' : ' (el reloj dijo ' + PALABRA[s[i]] + ')');
+            }
+            return r.map((x, i) => (i + 1) + 'ª ' + x).join(' · ');
+        }
         if (lectura === 'RELOJ') {
             const pares = [];
             for (let i = 0; i < n;) { if (s[i] === 'E' && s[i + 1] === 'S') { pares.push([i, i + 1]); i += 2; } else i++; }
@@ -207,7 +216,9 @@ const ReglasMarcasModule = (() => {
             const ops = (r.opciones_revision || []).map(o => (OPCIONES.find(x => x[0] === o) || [o, o])[1].toLowerCase());
             return 'Los días ' + sec + ' no se calculan solos: quedan «por revisar» y sin horas hasta que una persona pueda ' + (ops.join(' o ') || 'resolverlo') + '.';
         }
-        let f = 'Los días ' + sec + (r.lectura === 'EXTREMOS' ? ' se leen con la primera marca como ENTRADA y la última como SALIDA' : ' se leen como los marcó el reloj') + ', contra el horario asignado de ese día';
+        const comoSeLeen = r.lectura === 'EXTREMOS' ? ' se leen con la primera marca como ENTRADA y la última como SALIDA'
+            : (r.lectura === 'ALTERNADA' ? ' se leen en el orden que propone el sistema (ENTRADA y SALIDA alternadas por hora)' : ' se leen como los marcó el reloj');
+        let f = 'Los días ' + sec + comoSeLeen + ', contra el horario asignado de ese día';
         if (r.colacion === 'TURNO') f += '; se descuenta la colación del horario si la persona estuvo al menos el mínimo';
         else if (r.colacion === 'MEDIDA') f += '; se descuenta lo mayor entre la colación del horario y la pausa medida (bajo el mínimo, solo la pausa)';
         else f += '; no se descuenta colación';
@@ -625,7 +636,8 @@ const ReglasMarcasModule = (() => {
         const s = String(r.secuencia), n = s.length;
         const calcula = r.lectura !== 'NINGUNA';
         const equivalente = alterna(s);
-        const medible = hayPausaMedible(s);
+        // Con la lectura alternada, 4 marcas o más siempre dejan una pausa a mitad del día
+        const medible = r.lectura === 'ALTERNADA' ? (n >= 4 && n % 2 === 0) : hayPausaMedible(s);
         const dis = edit ? {} : { disabled: true };
 
         const cabecera = '<header class="rmx-card p-3 d-flex flex-column gap-3">'
@@ -657,11 +669,14 @@ const ReglasMarcasModule = (() => {
         // Paso 2: lectura
         let cuerpo2;
         if (!calcula) cuerpo2 = '<div class="rmx-na">No aplica: el día no se calcula hasta que una persona lo complete.</div>';
-        else cuerpo2 = '<div class="rmx-ops rmx-c2">'
+        else cuerpo2 = '<div class="rmx-ops rmx-c3">'
             + opcion('rmx-p2', 'RELOJ', r.lectura === 'RELOJ', 'Como las marcó el reloj', esc(papeles(s, 'RELOJ')),
                 equivalente && r.lectura !== 'RELOJ' ? '<span class="rmx-ef">En esta secuencia da lo mismo que la otra lectura.</span>' : '', dis)
             + opcion('rmx-p2', 'EXTREMOS', r.lectura === 'EXTREMOS', 'La primera es la ENTRADA y la última la SALIDA', esc(papeles(s, 'EXTREMOS')),
                 equivalente && r.lectura !== 'EXTREMOS' ? '<span class="rmx-ef">En esta secuencia da lo mismo que la otra lectura.</span>' : '', dis)
+            + opcion('rmx-p2', 'ALTERNADA', r.lectura === 'ALTERNADA', 'Como las ordena el sistema: ENTRADA y SALIDA alternadas por hora', esc(papeles(s, 'ALTERNADA')),
+                n % 2 === 0 ? '<span class="rmx-ef">Es el mismo orden que propone la ventana al revisar el día.</span>' : '',
+                Object.assign({}, dis, n % 2 === 1 ? { disabled: true, apagada: true } : {}))
             + '</div>';
         const p2 = paso(2, '¿Cómo se leen las marcas?',
             'Se comparan con el horario asignado de ese día y sus márgenes de ENTRADA y SALIDA. <span class="rmx-src">Configuración → Horarios</span>', cuerpo2);

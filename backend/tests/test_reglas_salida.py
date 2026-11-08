@@ -73,6 +73,8 @@ def _coherente_sin_salida(r):
     sec, lec, acc, ops = r['secuencia'], r['lectura'], r['accion'], r['opciones_revision']
     if len(sec) == 1 and lec != 'NINGUNA':
         return False
+    if lec == 'ALTERNADA' and len(sec) % 2 == 1:
+        return False
     if lec == 'NINGUNA' and acc != 'SOLO_REVISA':
         return False
     if (acc == 'CALCULA') != (not ops):
@@ -292,6 +294,9 @@ def test_la_ventana_usa_las_opciones_de_la_regla_y_no_guarda_horas_del_horario()
     assert "'Guardar la SALIDA'" in js and "'Guardar la ENTRADA'" in js
     # al elegir «Se le olvidó marcar…» se propone la hora del horario asignado de ese día, leída de la base
     assert "_mmHoraDelHorario(host, empId, dateStr" in js and "host._horario = data.horario" in js
+    # si la regla no permite escribir marcas, no se ofrece «Habilitar edición» (con d-none: d-flex le gana a display:none)
+    assert "_mmPermitirEscribirMarcas(caminos.some(o => o.startsWith('AGREGAR_')))" in js
+    assert "b.classList.toggle('d-none', !permitir)" in js
     raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     with open(os.path.join(raiz, 'backend', 'routers', 'asistencia.py'), encoding='utf-8') as f:
         router = f.read()
@@ -304,3 +309,44 @@ def test_la_pantalla_de_reglas_apaga_confirmar_sin_calculo():
     assert "API + 'vigilante/'" in js
     # el ensayo envía lo mismo que se guardaría (sin «Confirmar» en una regla que no calcula)
     assert js.count('opcionesAEnviar(r)') >= 3 and 'opciones_revision: opcionesAEnviar(r)' in js
+
+
+# ── Lectura «como las ordena el sistema» (ALTERNADA) ─────────────────────────
+
+def test_la_lectura_alternada_solo_vale_con_marcas_pares():
+    for sec in SECUENCIAS:
+        r = {'secuencia': sec, 'lectura': 'ALTERNADA', 'colacion': 'MEDIDA', 'accion': 'CALCULA', 'opciones_revision': []}
+        assert (validar_regla(r) == '') == (len(sec) % 2 == 0), sec
+
+
+def test_la_lectura_alternada_es_la_misma_propuesta_de_la_ventana():
+    """Para cada secuencia par, el motor lee las marcas en el mismo orden que propone sugerir_clasificacion_marcas."""
+    from backend.routers.asistencia import sugerir_clasificacion_marcas
+    from backend.services.quantum_matrix_engine import _aplicar_alternada
+    for sec in (s for s in SECUENCIAS if len(s) % 2 == 0):
+        marcas = _marcas(sec)
+        propuesta = [x['tipo'] for x in sugerir_clasificacion_marcas([m['fecha_hora'] for m in marcas])]
+        assert [m['tipo'] for m in _aplicar_alternada(marcas)] == propuesta, sec
+
+
+def test_alternada_mide_la_colacion_cuando_la_vuelta_se_marco_como_salida(monkeypatch):
+    """ENTRADA 06:57 · SALIDA 12:54 · SALIDA 13:29 · SALIDA 16:30 (la vuelta de colación quedó como SALIDA).
+    Con la lectura alternada se mide la pausa de 35 min, igual que si una persona cambiara la 3.ª a ENTRADA."""
+    monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 10, 19, 12, 0))
+    marcas = [{"id": i + 1, "fecha_hora": f"{FECHA} {h}:00", "tipo": t, "manual": 0, "observaciones": None}
+              for i, (h, t) in enumerate((("06:57", E), ("12:54", S), ("13:29", S), ("16:30", S)))]
+    corregidas = [dict(m, tipo=(E if m["id"] == 3 else m["tipo"])) for m in marcas]
+
+    def calcular(logs):
+        return Q.solve_attendance_day(fecha=FECHA, empleado_id=1, logs=[dict(l) for l in logs], turno_config=TURNO,
+                                      dia_config=DIA, global_ajustes={"reglas_marcas_repetidas_minutos": "20"},
+                                      todos_ciclos_dia=[DIA], consumidas_previas=set())
+    qme.REGLAS_MARCAS_ACTIVAS = {"ESSS": {"secuencia": "ESSS", "lectura": "ALTERNADA", "colacion": "MEDIDA",
+                                          "accion": "CALCULA"}}
+    auto = calcular(marcas)
+    qme.REGLAS_MARCAS_ACTIVAS = {}
+    a_mano = calcular(corregidas)
+    assert auto["estado"] != "ANOMALIA" and MARCA_REVISION_REGLA not in (auto["observaciones"] or "")
+    assert auto["horas_trabajadas"] == a_mano["horas_trabajadas"]
+    assert auto["minutos_colacion"] == a_mano["minutos_colacion"] == 35
+    assert [m["tipo"] for m in marcas] == [E, S, S, S]        # las marcas no se tocan

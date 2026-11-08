@@ -738,6 +738,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     marcacionesManualesState.currentEmpId = empId;
     marcacionesManualesState.currentDate = dateStr;
     _mmQuitarBloqueoRevision();   // lo que dejó un día por revisar abierto antes
+    _mmPermitirEscribirMarcas(true);
 
     // Set Title
     const titleEl = marcacionesManualesState.manualModal.querySelector('.modal-title');
@@ -1061,6 +1062,9 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
                 ${caminosHtml}
             </div>`;
         cont.querySelectorAll('.mm-camino').forEach(b => b.addEventListener('click', () => _mmElegirCamino(b.dataset.camino, empId, dateStr, host)));
+        // Si la regla del día no permite escribir marcas (solo cambiar el tipo o confirmar), la ventana no ofrece
+        // «Habilitar edición»: la corrección es solo de tipo (orden del dueño, 07-11-2026)
+        if (activo) _mmPermitirEscribirMarcas(caminos.some(o => o.startsWith('AGREGAR_')));
         if (activo) {
             // Mientras no se elija qué pasó, la parte de abajo (escribir marcas a mano) queda vacía y bloqueada: las horas del
             // horario no son marcas y no deben guardarse por error
@@ -1337,7 +1341,9 @@ function _mmAplicarBloqueoRevision(texto) {
     if (fila && !document.getElementById('mm-bloqueo-nota')) {
         fila.insertAdjacentHTML('afterend', '<div class="mm-bloqueo-nota" id="mm-bloqueo-nota"><i class="bi bi-lock-fill me-1" aria-hidden="true"></i>'
             + (texto ? 'Bloqueado hasta elegir arriba qué pasó este día.'
-                     : 'Bloqueado: este día no necesita marcas nuevas. Solo si de verdad falta una marca, presione <strong>Habilitar edición</strong>.') + '</div>');
+                     : (marcacionesManualesState.sinEscribirMarcas
+                        ? 'Bloqueado: este día se corrige solo cambiando el tipo de sus marcas, en la tabla de arriba.'
+                        : 'Bloqueado: este día no necesita marcas nuevas. Solo si de verdad falta una marca, presione <strong>Habilitar edición</strong>.')) + '</div>');
     }
 }
 
@@ -1354,6 +1360,14 @@ function _mmQuitarBloqueoRevision() {
 
 /** Si el día trae marcas del reloj, los campos de abajo no llevan las horas del horario: esas horas no son marcas y,
  *  si alguien presiona «Guardar», quedarían como marcas manuales que nadie hizo. */
+/** Muestra u oculta «Habilitar edición». Se usa la clase d-none de Bootstrap: el botón trae d-flex (con !important),
+ *  que le gana a un display:none puesto a mano. */
+function _mmPermitirEscribirMarcas(permitir) {
+    marcacionesManualesState.sinEscribirMarcas = !permitir;
+    const b = document.getElementById('btn-unlock-manual');
+    if (b) b.classList.toggle('d-none', !permitir);
+}
+
 function _mmQuitarHorasDelHorario(marcas) {
     if (!marcas || !marcas.length) return;
     ['manual-hora-entrada', 'manual-hora-salida'].forEach(id => {

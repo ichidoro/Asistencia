@@ -22,10 +22,14 @@ import re
 
 TIPOS_HORARIO_CON_REGLAS = ('CICLO_INTELIGENTE',)
 
-LECTURAS = ('RELOJ', 'EXTREMOS', 'NINGUNA')
+LECTURAS = ('RELOJ', 'EXTREMOS', 'ALTERNADA', 'NINGUNA')
 # RELOJ    = leer las marcas tal como las rotuló el reloj (con sus correcciones).
 # EXTREMOS = la primera marca es la ENTRADA del día y la última la SALIDA; las del
 #            medio solo valen como pausa si son una SALIDA seguida de una ENTRADA.
+# ALTERNADA = el orden que propone el sistema: por hora, la primera es ENTRADA, la siguiente SALIDA, y así
+#             alternando (ENTRADA · SALIDA · ENTRADA · SALIDA…). Una SALIDA seguida de una ENTRADA a mitad del
+#             día es una pausa. Solo para secuencias con número PAR de marcas: con un número impar el orden no es
+#             seguro (falta o sobra una marca). No cambia las marcas: solo cómo se leen.
 # NINGUNA  = no leer: el día queda en anomalía hasta que una persona lo resuelva.
 
 COLACIONES = ('TURNO', 'MEDIDA', 'NINGUNA')
@@ -100,6 +104,8 @@ def pausas_de(secuencia, lectura) -> int:
     s = str(secuencia or '')
     if lectura == 'NINGUNA' or len(s) < 4:
         return 0
+    if lectura == 'ALTERNADA':
+        return len(s) // 2 - 1 if len(s) % 2 == 0 else 0
     if lectura == 'RELOJ':
         pares, i = [], 0
         while i < len(s) - 1:
@@ -143,6 +149,9 @@ def validar_regla(regla: dict) -> str:
             return f"Opción de revisión desconocida: {op}."
     if len(sec) == 1 and lectura != 'NINGUNA':
         return "Con una sola marca no se puede calcular: la lectura debe ser «no leer»."
+    if lectura == 'ALTERNADA' and len(sec) % 2 == 1:
+        return ("«Como las ordena el sistema» solo vale con un número par de marcas: con un número impar "
+                "el orden no es seguro (falta o sobra una marca).")
     if lectura == 'NINGUNA' and accion != 'SOLO_REVISA':
         return "Si las marcas no se leen, el día solo puede quedar en revisión."
     if accion == 'CALCULA' and opciones:

@@ -112,7 +112,7 @@ def test_la_regla_creada_desde_la_bandeja_nace_valida():
 
 
 def test_catalogos_sin_sorpresas():
-    assert LECTURAS == ('RELOJ', 'EXTREMOS', 'NINGUNA')
+    assert LECTURAS == ('RELOJ', 'EXTREMOS', 'ALTERNADA', 'NINGUNA')
     assert COLACIONES == ('TURNO', 'MEDIDA', 'NINGUNA')
     assert ACCIONES == ('CALCULA', 'CALCULA_Y_REVISA', 'SOLO_REVISA')
     assert set(OPCIONES_REVISION) == {'AGREGAR_ENTRADA', 'AGREGAR_SALIDA', 'RECLASIFICAR', 'CONFIRMAR'}

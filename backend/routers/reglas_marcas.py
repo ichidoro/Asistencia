@@ -48,7 +48,7 @@ async def listar_reglas(
         r["dias_abiertos"] = c["dias_abiertos"]
         r["grupo"] = grupo_de_secuencia(r["secuencia"])
         r["eleccion_colacion"] = r.get("eleccion_colacion") or "PARECIDA"
-        r["pausas"] = {lect: pausas_de(r["secuencia"], lect) for lect in ("RELOJ", "EXTREMOS")}
+        r["pausas"] = {lect: pausas_de(r["secuencia"], lect) for lect in ("RELOJ", "EXTREMOS", "ALTERNADA")}
     sin_regla = [
         {"secuencia": sec, "dias": c["dias"], "dias_abiertos": c["dias_abiertos"],
          "grupo": grupo_de_secuencia(sec)}
