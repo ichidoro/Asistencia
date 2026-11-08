@@ -638,3 +638,16 @@ def test_jornada_abierta_se_mide_con_la_salida_de_la_madrugada_siguiente():
                    m(3, "2026-06-23 15:05:00", "Salida")]) == 3
     # Un día que cierra con su SALIDA el mismo día sigue como siempre
     assert elegir([m(1, "2026-06-22 14:58:00", "Entrada"), m(2, "2026-06-22 23:03:00", "Salida")]) == 3
+
+
+def test_una_salida_inicial_sola_no_abre_un_mas_dos():
+    """Una SALIDA que es la primera marca del día (sin ENTRADA antes) no cerró ninguna jornada: el hueco desde ella no abre
+    una jornada adicional (+2). Un hueco desde una SALIDA que sí cerró una jornada lo sigue abriendo."""
+    from backend.services.quantum_matrix_engine import MultiBlockTensorSolver as M
+    m = lambda i, h, t: {"id": i, "fecha_hora": f"2026-08-10 {h}", "tipo": t}
+    r = M.segment_blocks([m(1, "07:10:13", "Salida"), m(2, "12:57:46", "Entrada"), m(3, "13:30:06", "Entrada"),
+                          m(4, "16:30:58", "Salida")], gap_emergencia_horas=4.0)
+    assert not r["bloques_extras"] and [l["id"] for l in r["bloque_principal"]] == [1, 2, 3, 4]
+    r = M.segment_blocks([m(1, "06:00:00", "Entrada"), m(2, "10:00:00", "Salida"), m(3, "15:00:00", "Entrada"),
+                          m(4, "19:00:00", "Salida")], gap_emergencia_horas=4.0)
+    assert len(r["bloques_extras"]) == 1

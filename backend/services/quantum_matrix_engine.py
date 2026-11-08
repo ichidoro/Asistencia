@@ -716,8 +716,11 @@ class MultiBlockTensorSolver:
                 is_prev_s = prev_tipo in ('salida', 'exit', 's', 'out', '2')
                 is_curr_e = curr_tipo in ('entrada', 'entry', 'e', 'in', '1')
 
-                # Si veníamos de Salida y ahora hay Entrada con brecha >= gap configurado
-                if is_prev_s and is_curr_e and gap_hours >= gap_emergencia_horas:
+                # Si veníamos de Salida y ahora hay Entrada con brecha >= gap configurado. Una SALIDA que es la primera marca del
+                # día (sin una ENTRADA antes) no cerró ninguna jornada: el hueco desde ella no abre una jornada adicional (+2)
+                # (decisión del dueño, 08-11-2026: una primera marca rotulada SALIDA partía el día en un +2 que no existía).
+                primera_es_salida_sola = idx - 1 == 0
+                if is_prev_s and is_curr_e and gap_hours >= gap_emergencia_horas and not primera_es_salida_sola:
                     bloques.append(bloque_actual)
                     bloque_actual = [item]
                     continue
