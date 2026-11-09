@@ -4734,7 +4734,7 @@ async function openCierrePeriodoModal() {
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-2" disabled><i class="bi bi-clock-fill text-warning me-2"></i> 2. En curso</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-3" disabled><i class="bi bi-calendar-plus text-primary me-2"></i> 3. Horas extra</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-4" disabled><i class="bi bi-person-dash text-info me-2"></i> 4. Inasistencias</button>
-                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-5" disabled><i class="bi bi-file-earmark-pdf text-success me-2"></i> 5. Reporte final</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-5" disabled><i class="bi bi-file-earmark-pdf text-success me-2"></i> 5. Resumen antes de sellar</button>
                                 </div>
                                 <div class="card border-0 bg-white shadow-sm p-3 mb-3">
                                     <h6 class="fw-bold mb-2 small" style="color: #475569"><i class="bi bi-calendar-check text-primary me-1"></i> Período a cerrar</h6>
@@ -5403,114 +5403,17 @@ function renderWizardStep(step) {
             btnNext.disabled = false;
             btnNext.onclick = () => renderWizardStep(5);
         }
-    } else if (step === 5) { // Reporte Final
-        const heTotal = ev.resumen.he_total_haberes_horas !== undefined ? ev.resumen.he_total_haberes_horas : (ev.resumen.he_aprobadas_horas || 0);
-        const heFijos = ev.resumen.he_aprobadas_fijos_horas !== undefined ? ev.resumen.he_aprobadas_fijos_horas : heTotal;
-        const heCount = ev.resumen.he_aprobadas_fijos_count !== undefined ? ev.resumen.he_aprobadas_fijos_count : (ev.resumen.he_aprobadas_count || 0);
-        const heBolsa = ev.resumen.he_exceso_bolsa_horas || 0;
-
-        const dTotal = ev.resumen.deuda_total_debitos_horas !== undefined ? ev.resumen.deuda_total_debitos_horas : (ev.resumen.deuda_neta_horas || 0);
-        const dFijos = ev.resumen.deuda_fijos_horas !== undefined ? ev.resumen.deuda_fijos_horas : dTotal;
-        const dBolsa = ev.resumen.deficit_bolsa_horas || 0;
-
-        const balNeto = ev.resumen.balance_operativo_horas !== undefined ? ev.resumen.balance_operativo_horas : (heTotal - dTotal);
-
-        // Avance de la Bolsa: mientras el tramo no termine, lo que falta para la
-        // meta NO es deuda y se muestra como avance (texto con comillas y
-        // concatenación por el minificador del servidor).
-        const bolsaPers = ev.resumen.bolsa_personas || 0;
-        let bolsaAvanceHtml = '';
-        if (bolsaPers > 0 && ev.resumen.bolsa_definitiva === false) {
-            const bm = ev.resumen.bolsa_meta_total_horas || 0;
-            const ba = ev.resumen.bolsa_acumulado_horas || 0;
-            const br = ev.resumen.bolsa_dias_restantes || 0;
-            const pctB = bm > 0 ? Math.min(100, Math.round(ba / bm * 100)) : 0;
-            bolsaAvanceHtml = '<div class="card border-0 shadow-sm mb-3" style="background:#faf5ff;">' +
-                '<div class="card-body py-3">' +
-                '<h6 class="text-uppercase small fw-bold mb-1" style="color:#6d28d9;font-size:0.72rem;">Bolsa Flexible — avance del tramo (' + bolsaPers + ' choferes)</h6>' +
-                '<div class="d-flex justify-content-between small" style="color:#4c1d95;"><span>Acumulado del grupo</span><b>' + ba + ' de ' + bm + ' hrs de meta' + (br > 0 ? ' · faltan ' + br + ' días del tramo' : '') + '</b></div>' +
-                '<div style="height:6px;background:#ede9fe;border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:' + pctB + '%;background:#7c3aed"></div></div>' +
-                '<div class="small text-muted mt-2" style="font-size:0.72rem;">La meta es mensual: lo que falta aún no es deuda. El déficit o exceso definitivo por persona se calcula al sellar, cuando el tramo haya terminado (con la meta ajustada de quien entró o salió a mitad de tramo).</div>' +
-                '</div></div>';
-        }
-
+    } else if (step === 5) { // Resumen antes de sellar (propuesta A, dueño 09-11-2026)
+        // El balance de horas de cada tipo de horario parte de las horas totales y termina en lo que se carga; las
+        // cifras son las mismas del informe PDF (GET /api/cierre/resumen).
         content.innerHTML = `
-            <h4 class="fw-bold mb-4"><i class="bi bi-file-text"></i> Previsualización de Cierre</h4>
-            <div class="row mb-3 g-3">
-                <div class="col-4">
-                    <div class="card border-0 bg-primary-subtle border-primary-subtle shadow-sm h-100">
-                        <div class="card-body py-3">
-                            <h6 class="text-primary text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Haberes HE (+50%)</h6>
-                            <h3 class="text-primary-emphasis fw-bold mb-0">${heTotal} <span class="fs-6 text-muted">hrs</span></h3>
-                            <small class="text-muted d-block mt-1">Fijos: ${heFijos} hrs (${heCount} reg.)</small>
-                            ${heBolsa > 0 ? `<small class="text-primary fw-bold d-block">Bolsa Choferes: +${heBolsa} hrs</small>` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <div class="card border-0 bg-danger-subtle border-danger-subtle shadow-sm h-100">
-                        <div class="card-body py-3">
-                            <h6 class="text-danger text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Débitos Tiempo (100%)</h6>
-                            <h3 class="text-danger fw-bold mb-0">${dTotal} <span class="fs-6 text-muted">hrs</span></h3>
-                            <small class="text-muted d-block mt-1">Fijos: ${dFijos} hrs</small>
-                            ${dBolsa > 0 ? `<small class="text-danger fw-bold d-block">Déficit Choferes: -${dBolsa} hrs</small>` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <div class="card border-0 ${balNeto >= 0 ? 'bg-success-subtle border-success-subtle' : 'bg-warning-subtle border-warning-subtle'} shadow-sm h-100">
-                        <div class="card-body py-3">
-                            <h6 class="text-uppercase small fw-bold mb-1 ${balNeto >= 0 ? 'text-success' : 'text-warning-emphasis'}" style="font-size: 0.72rem;">Balance Operativo</h6>
-                            <h3 class="fw-bold mb-0 ${balNeto >= 0 ? 'text-success' : 'text-danger'}">${balNeto > 0 ? '+' : ''}${balNeto} <span class="fs-6 text-muted">hrs</span></h3>
-                            <small class="text-muted d-block mt-1">Saldo Neto Conciliado</small>
-                            <small class="text-muted d-block">Compensaciones descontadas: ${ev.resumen.compensaciones_horas || 0} hrs</small>
-                            <small class="text-muted d-block">Colaboradores: ${ev.resumen.total_empleados || 0}</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-file-text"></i> Lo que se va a cargar en remuneraciones</h4>
+            <p class="cz-r-sub">Una columna por tipo de horario: la cuenta parte de las horas totales y termina en lo que se descuenta y lo que se paga.</p>
+            <div id="cz-resumen" class="cz-r-cols"><div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Calculando el resumen del área…</div></div>
 
-            ${bolsaAvanceHtml}
-
-            <!-- Desglose de Deuda Neta -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-light border-0 py-2">
-                    <h6 class="text-dark fw-bold mb-0 small"><i class="bi bi-pie-chart-fill me-1 text-danger"></i> Detalle de Débitos por Tiempo No Trabajado del Área</h6>
-                </div>
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush small">
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
-                            <span><i class="bi bi-clock-history me-2 text-warning"></i> Deuda por Atrasos Netos</span>
-                            <span class="fw-bold text-dark">${ev.resumen.deuda_atrasos_horas || 0} hrs</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
-                            <span><i class="bi bi-egg-fried me-2 text-info"></i> Deuda por Exceso de Colación</span>
-                            <span class="fw-bold text-dark">${ev.resumen.deuda_colacion_horas || 0} hrs</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
-                            <span><i class="bi bi-box-arrow-right me-2 text-secondary"></i> Deuda por Salidas Adelantadas</span>
-                            <span class="fw-bold text-dark">${ev.resumen.deuda_salidas_horas || 0} hrs</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
-                            <span><i class="bi bi-calendar-x me-2 text-danger"></i> Deuda por Permisos Personales</span>
-                            <span class="fw-bold text-dark">${ev.resumen.deuda_permisos_horas || 0} hrs</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
-                            <span><i class="bi bi-question-circle me-2 text-muted"></i> Otros (jornadas incompletas sin categoría)</span>
-                            <span class="fw-bold text-dark">${ev.resumen.deuda_otros_horas || 0} hrs</span>
-                        </li>
-                        ${dBolsa > 0 ? `
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 text-danger">
-                            <span><i class="bi bi-truck me-2 text-danger"></i> Déficit Bolsa Flexible Choferes</span>
-                            <span class="fw-bold text-danger">${dBolsa} hrs</span>
-                        </li>` : ''}
-                    </ul>
-                </div>
-            </div>
-            
             <div class="d-flex gap-2 my-3">
                 <button class="btn btn-outline-success fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.cierreWizardDownloadExcel()">
-                    <i class="bi bi-file-earmark-excel-fill me-2"></i> Descargar Excel de Previsualización
+                    <i class="bi bi-file-earmark-excel-fill me-2"></i> Descargar Excel (detalle día a día)
                 </button>
                 <button class="btn btn-outline-primary fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.descargarInformeCierre(window.cierreWizardState.fIni, window.cierreWizardState.fFin, window.cierreWizardState.area, this)" title="El informe para Recursos Humanos, aún sin cerrar: un PDF por tipo de horario">
                     <i class="bi bi-file-earmark-pdf-fill me-2"></i> Descargar preinforme (PDF)
@@ -5518,9 +5421,10 @@ function renderWizardStep(step) {
             </div>
 
             <div class="alert alert-warning mt-3 border-warning">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Atención:</strong> Esta acción sellará el periodo. Los empleados en el biométrico NO podrán alterar la asistencia de estas fechas retrospectivamente.
+                <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Al sellar</strong> el período queda cerrado para el área y el informe en PDF se envía a Recursos Humanos. Las marcas de estas fechas ya no se podrán cambiar.
             </div>
         `;
+        window.cargarResumenCierre(window.cierreWizardState);
         btnNext.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
         btnNext.className = 'btn btn-warning fw-bold px-4';
         btnNext.disabled = false;
@@ -5701,7 +5605,7 @@ async function confirmarCierreRRHH() {
             const e = window.escHtml || (x => String(x == null ? '' : x));
             const per = (s.periodos || []).find(p => p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin);
             const queMes = per && per.mes_cierre ? per.mes_cierre : 'Tramo ' + window.formatFechaDDMMYYYY(s.fIni) + ' al ' + window.formatFechaDDMMYYYY(s.fFin);
-            const pasos = ['Anomalías', 'En curso', 'Horas extra', 'Inasistencias', 'Reporte final'];
+            const pasos = ['Anomalías', 'En curso', 'Horas extra', 'Inasistencias', 'Resumen antes de sellar'];
             Swal.fire({
                 title: 'Período cerrado',
                 html: '<div class="cz-sello"><div class="cz-pasos" role="list" aria-label="Pasos del cierre">'
@@ -5745,6 +5649,40 @@ window.descargarPreinformeGrilla = function (btn) {
     return window.descargarInformeCierre(st.fechaInicioRRHH, st.fechaFinRRHH, area, btn);
 };
 
+// ── RESUMEN ANTES DE SELLAR (paso 5 del cierre) ─────────────────────────────
+// Propuesta A elegida por el dueño (09-11-2026): una columna por tipo de horario con el balance de horas (las horas
+// totales son el punto de partida), lo que se carga con su porcentaje, de dónde sale y las jornadas.
+window.cargarResumenCierre = async function (st) {
+    const caja = document.getElementById('cz-resumen');
+    if (!caja || !st) return;
+    const e = window.escHtml || (x => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+    try {
+        const resp = await fetch('/api/cierre/resumen?fecha_inicio=' + st.fIni + '&fecha_fin=' + st.fFin + '&area=' + encodeURIComponent(st.area), {
+            headers: { 'Authorization': 'Bearer ' + AuthService.getToken() }
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.detail || 'No se pudo preparar el resumen del cierre.');
+        const tipos = d.tipos || [];
+        if (!tipos.length) {
+            caja.innerHTML = '<p class="text-muted py-3">El área no tiene personas en este tramo.</p>';
+            return;
+        }
+        const filas = (rows) => rows.map(r => '<li class="' + e(r.c || '') + '"><span>' + e(r.t) + '</span><i class="cz-r-pc">' + e(r.q || '') + '</i><b>' + e(r.v) + '</b></li>').join('');
+        caja.innerHTML = tipos.map(t => {
+            const cargar = (t.cargar || []).map(c => '<div class="cz-r-g ' + e(c.c) + '"><span>' + e(c.t) + '</span><b>' + e(c.v) + '</b><small>' + e(c.n) + (c.q ? ' · ' + e(c.q) : '') + '</small></div>').join('');
+            const dd = (t.de_donde || []).map(g => '<div><p>' + e(g.t) + '</p>' + g.filas.map(r => '<span class="cz-r-ln">' + e(r.t) + '<i class="cz-r-pc">' + e(r.q || '') + '</i><b>' + e(r.v) + '</b></span>').join('') + '</div>').join('');
+            return '<section class="cz-r-col"><header><h5>' + e(t.titulo) + '</h5><span>' + t.personas + ' personas</span></header>'
+                + '<h6>Balance de horas</h6><ul class="cz-r-bal">' + filas(t.balance || []) + '</ul>'
+                + '<h6>Lo que se carga</h6><div class="cz-r-gg">' + cargar + '</div>'
+                + (dd ? '<div class="cz-r-dd">' + dd + '</div>' : '')
+                + '<h6>Jornadas</h6><ul class="cz-r-bal cz-r-jor">' + filas(t.jornadas || []) + '</ul></section>';
+        }).join('');
+    } catch (err) {
+        console.error(err);
+        caja.innerHTML = '<div class="alert alert-danger">' + e(err.message || 'No se pudo preparar el resumen del cierre.') + '</div>';
+    }
+};
+
 // ── INFORME DE CIERRE (PDF) ──────────────────────────────────────────────────
 // El informe para RR.HH. (el mismo del correo de cierre), un PDF por tipo de horario del área. Con el área sin cerrar
 // es el preinforme. Se descarga desde Tramos de cierre, al sellar y en la previsualización del cierre (09-11-2026).
@@ -5765,24 +5703,23 @@ window.descargarInformeCierre = async function (fIni, fFin, area, btn) {
             showToast('El área no tiene personas en ese tramo: no hay informe que descargar.', 'warning');
             return;
         }
+        // Cada PDF lo entrega el servidor como archivo adjunto (igual que el Excel), en un marco oculto: así el
+        // navegador lo descarga directo, sin armar archivos en memoria (algunos navegadores los bloquean sin avisar).
+        const token = AuthService.getToken();
         archivos.forEach(function (a, i) {
-            const bin = atob(a.content_b64);
-            const bytes = new Uint8Array(bin.length);
-            for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
-            const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
             setTimeout(function () {
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = a.filename;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
-            }, i * 500);
+                const fr = document.createElement('iframe');
+                fr.style.display = 'none';
+                fr.title = 'Descarga ' + a.filename;
+                fr.src = '/api/cierre/informe-pdf/archivo?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area)
+                    + '&tipo=' + encodeURIComponent(a.tipo) + (token ? '&token=' + encodeURIComponent(token) : '');
+                document.body.appendChild(fr);
+                setTimeout(function () { fr.remove(); }, 120000);
+            }, i * 1500);
         });
         const que = d.preinforme ? 'Preinforme' : 'Informe';
-        showToast(que + ' de cierre de ' + area + ': ' + archivos.length + (archivos.length === 1 ? ' PDF' : ' PDF, uno por tipo de horario')
-            + ' (' + archivos.map(function (a) { return a.titulo; }).join(' y ') + ').', 'success');
+        showToast(que + ' de cierre de ' + area + ': se descarga' + (archivos.length === 1 ? ' 1 PDF' : 'n ' + archivos.length + ' PDF, uno por tipo de horario')
+            + ' (' + archivos.map(function (a) { return a.titulo; }).join(' y ') + '). Revise sus descargas en unos segundos.', 'success');
     } catch (e) {
         console.error(e);
         showToast(e.message || 'No se pudo generar el informe de cierre.', 'error');

@@ -38,21 +38,18 @@ def test_el_resumen_y_la_pantalla_llevan_el_avance():
     assert "bolsa_meta_total_horas" in s and "bolsa_acumulado_horas" in s
     assert "acum_bolsa < meta_min and bolsa_definitiva" in s, \
         "el déficit de bolsa volvió a contarse con el tramo corriendo"
+    # Desde el 09-11-2026 (decisión del dueño) el paso 5 del cierre es el «Resumen antes de sellar» (propuesta A):
+    # lo dibuja cargarResumenCierre con /api/cierre/resumen, las mismas cifras del informe PDF.
     js = (RAIZ / "frontend/js/marcaciones_ui.js").read_text(encoding="utf-8")
-    assert "bolsaAvanceHtml" in js and "bolsa_definitiva" in js
-    assert "avance del tramo (" in js
+    assert "window.cargarResumenCierre(window.cierreWizardState)" in js and "/api/cierre/resumen?" in js
+    srv = (RAIZ / "backend/services/informe_cierre_pdf.py").read_text(encoding="utf-8")
+    assert "'Bajo la meta · no usadas'" in srv and "'No usadas · no se descuentan'" in srv, \
+        "en la Bolsa lo que falta para la meta dejó de mostrarse como no usado (no es descuento)"
 
 
 def test_los_textos_sobreviven_al_minificador():
     import pytest
     rjsmin = pytest.importorskip("rjsmin")
     m = rjsmin.jsmin((RAIZ / "frontend/js/marcaciones_ui.js").read_text(encoding="utf-8"))
-    for frase in (
-        "Bolsa Flexible — avance del tramo (",
-        " de ",
-        " hrs de meta",
-        " · faltan ",
-        " días del tramo",
-        "La meta es mensual: lo que falta aún no es deuda.",
-    ):
+    for frase in ("Lo que se va a cargar en remuneraciones", "Balance de horas", "Lo que se carga", " personas</span></header>"):
         assert frase in m, f"el minificador rompe el texto: {frase!r}"

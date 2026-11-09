@@ -737,7 +737,7 @@ class CierreService:
             from backend.repositories.asistencia import AsistenciaRepository
             from backend.services.asistencia_service import AsistenciaService
             from backend.services.report_service import ReportService
-            from backend.services.informe_cierre_pdf import generar_informes_cierre
+            from backend.services.informe_cierre_pdf import cierre_completo
             from backend.repositories.configuracion import ConfiguracionRepository
             from backend.services.configuracion_service import ConfiguracionService
             from backend.services.notification_service import NotificationService
@@ -751,10 +751,12 @@ class CierreService:
             except Exception:
                 pass
 
-            adjuntos = []
+            adjuntos, resumen_tipos = [], []
             try:
                 logger.info(f"📬 Generando informe PDF de cierre para '{area}' ({fecha_inicio} a {fecha_fin})...")
-                adjuntos = await generar_informes_cierre(self.db, asistencia_service, fecha_inicio, fecha_fin, area, cerro)
+                cc = await cierre_completo(self.db, asistencia_service, fecha_inicio, fecha_fin, area, cerro)
+                adjuntos = [{"filename": a["filename"], "content": a["content"]} for a in cc["archivos"]]
+                resumen_tipos = cc["resumen"]
             except Exception as e_pdf:
                 logger.error(f"❌ No se pudo generar el informe PDF de cierre: {e_pdf}")
             if not adjuntos:
@@ -776,7 +778,8 @@ class CierreService:
                     tipo_cierre=tipo_cierre,
                     resumen=evaluacion.get("resumen", {}),
                     adjuntos=adjuntos,
-                    recipients=recipients
+                    recipients=recipients,
+                    resumen_tipos=resumen_tipos
                 )
             else:
                 logger.warning(f"⚠️ No hay destinatarios configurados para recibir la notificación de cierre de área '{area}'.")

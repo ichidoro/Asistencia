@@ -29,6 +29,8 @@ from backend.core.rut import rut_visible
 TIPOS_BOLSA = ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
 # Siglas de la grilla (ReportService._format_concepto_cell) que son un día programado y trabajado
 SIGLAS_TRABAJADAS = {'OK', 'ATR', 'SAD', 'ATR-SAD'}
+# Estados de un día programado y trabajado: sus horas teóricas son la base del balance (la deuda solo nace en ellos)
+ESTADOS_TRABAJADOS = ('OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD')
 # Estados de justificación que la grilla muestra con su sigla aunque no traigan nomenclatura
 ESTADOS_JUSTIFICADOS = {'VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'LCM', 'LMU', 'CUM', 'DUE'}
 
@@ -124,7 +126,7 @@ def horas_ciclo(libro: Dict[str, Any]) -> Dict[str, int]:
          'descontar': _seg(libro.get('pendiente')),
          'he_trab': _seg(libro.get('he_trabajadas')), 'he_noap': _seg(libro.get('he_no_pagadas')),
          'he_decidir': _seg(libro.get('he_por_decidir')), 'he_inas': _seg(libro.get('he_usadas_inasistencia')),
-         'pagar': _seg(libro.get('he_a_pagar'))}
+         'pagar': _seg(libro.get('he_a_pagar')), 'sin_desc': _seg(libro.get('perdonado'))}
     causas = ('atr', 'sad', 'col', 'h_per', 'otros')
     total = s['comp_inas'] + s['cubren'] + s['descontar']
     dif = total - sum(s[k] for k in causas)
@@ -168,8 +170,127 @@ def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]
              'bonos': {b: bool(v and v.get('aplica') is not False and v.get('califica')) for b, v in (r.get('bonos') or {}).items()}}
         p.update(dias_persona(dd, datos['rango_dias'], es_bolsa, etiqueta, justif))
         p.update(horas_bolsa(r) if es_bolsa else horas_ciclo(r.get('libro') or {}))
+        if not es_bolsa:
+            hd_ = horas_dias(dd, datos['rango_dias'])
+            p['h_prog'], p['h_trab_dias'], p['h_otros'] = hd_['prog'], hd_['trab'], hd_['otros']
+            # Lo no trabajado que no se descuenta (perdonado en el día o en el cuadre, días condonados sin minutos
+            # anotados): lo que falta para que programadas − no trabajadas dé lo trabajado en el horario.
+            causas = p['atr'] + p['sad'] + p['col'] + p['h_per'] + p['otros']
+            p['sin_desc'] = p['h_prog'] - causas - (p['h_trab_dias'] - p['he_trab'])
         out.append(p)
     return out
+
+
+# Horas trabajadas en días que no son de horario: entran al balance después de las horas extra
+OTROS_DIAS = {'JORNADA_COMPENSATORIA': 'Jornadas compensatorias', 'INASISTENCIA_COMPENSADA': 'Jornadas compensatorias',
+              'JORNADA_ESPECIAL': 'Jornadas especiales', 'EXTRA': 'Jornadas especiales', 'FERIADO Y JORNADA EXTRA': 'Jornadas especiales',
+              'DÍA LIBRE Y JORNADA EXTRA': 'Jornadas especiales', 'PERMISO': 'Días con permiso'}
+
+
+def horas_dias(dias_dict: Dict[str, Any], rango_dias: List) -> Dict[str, Any]:
+    """Segundos del período, desde la misma matriz: programados y trabajados en los días con horario trabajados, y lo
+    trabajado en los demás días (jornadas compensatorias, especiales, días con permiso u otros)."""
+    prog = trab = 0.0
+    otros: Dict[str, float] = {}
+    for d in rango_dias:
+        di = dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}')
+        if not isinstance(di, dict):
+            continue
+        est = di.get('estado') or ''
+        h = float(di.get('horas_trabajadas') or 0.0)
+        if est in ESTADOS_TRABAJADOS:
+            prog += float(di.get('horas_teoricas') or 0.0)
+            trab += h
+        elif h > 0:
+            k = OTROS_DIAS.get(est, 'Otros días trabajados')
+            otros[k] = otros.get(k, 0.0) + h
+    return {'prog': int(round(prog * 3600)), 'trab': int(round(trab * 3600)),
+            'otros': {k: int(round(v * 3600)) for k, v in otros.items()}}
+
+
+def pct(parte: float, total: float) -> str:
+    return '' if not total else f'{parte / total * 100:.2f}'.replace('.', ',') + ' %'
+
+
+def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Resumen ejecutivo de un tipo de horario (paso 5 del cierre y correo): un balance que parte de las horas
+    totales y termina en lo que se carga, cada parte con su porcentaje. Filas: {t, v, q, c} (texto, HH:MM:SS, %, clase).
+    Ciclo: programadas (días trabajados) − no trabajadas (por causa y «sin descuento») = trabajadas en el horario;
+    + horas extra = total trabajado. Bolsa: meta − no usadas + sobre la meta = trabajadas."""
+    ps = inf['personas']
+    T = lambda k: sum(p.get(k, 0) for p in ps)
+    n = len(ps)
+    cuenta = lambda k: sum(1 for p in ps if p.get(k))
+    fila = lambda t, v, base, c='', signo='': {'t': t, 'v': (signo + hms(v)) if v else '—',
+                                              'q': ('100 %' if c == 'base' else pct(v, base)) if base else '', 'c': c}
+    # jornadas (días)
+    aus = {}
+    for p in ps:
+        for cod, k in p['aus'].items():
+            aus[cod] = aus.get(cod, 0) + k
+    nombres = {(t.get('nomenclatura') or t.get('nombre') or '').strip().upper(): t.get('nombre') for t in justif}
+    prog_d = sum(p['trab'] + sum(p['aus'].values()) + p['per'] + p['comp'] + p['ina'] + p['ano'] for p in ps)
+    qd = lambda k: pct(k, prog_d)
+    jornadas = ([{'t': 'Programadas', 'v': str(prog_d), 'q': '100 %', 'c': 'base'}]
+                + [{'t': nombres.get(cod, cod), 'v': f'− {k}', 'q': qd(k), 'c': ''} for cod, k in aus.items()]
+                + ([{'t': 'Permisos del día', 'v': f"− {T('per')}", 'q': qd(T('per')), 'c': ''}] if T('per') else [])
+                + ([{'t': 'Inasistencias compensadas', 'v': f"− {T('comp')}", 'q': qd(T('comp')), 'c': ''}] if T('comp') else [])
+                + ([{'t': 'Inasistencias', 'v': f"− {T('ina')}", 'q': qd(T('ina')), 'c': ''}] if T('ina') else [])
+                + ([{'t': 'Sin resolver', 'v': f"− {T('ano')}", 'q': qd(T('ano')), 'c': ''}] if T('ano') else [])
+                + [{'t': 'Trabajadas', 'v': str(T('trab')), 'q': qd(T('trab')), 'c': 'tot'}])
+    out = {'tipo': inf['tipo'], 'titulo': inf['titulo_horas'], 'personas': n, 'jornadas': jornadas}
+    if inf['tipo'] == 'BOLSA':
+        meta = T('meta')
+        sobre = sum(max(p['acum'] - p['meta'], 0) for p in ps)
+        nou = sum(max(p['meta'] - p['acum'], 0) for p in ps)
+        out['balance'] = [fila('Meta del tramo', meta, meta, 'base'), fila('Bajo la meta · no usadas', nou, meta, 'menos', '− '),
+                          fila('Sobre la meta', sobre, meta, 'menos', '+ '), fila('Trabajadas', meta - nou + sobre, meta, 'tot')]
+        out['cargar'] = [{'t': 'Pagar horas extra', 'v': hms(T('pagar')), 'c': 'he', 'q': pct(T('pagar'), meta) + ' de la meta' if meta else '',
+                          'n': f"{cuenta('pagar')} de {n} personas"},
+                         {'t': 'No usadas · no se descuentan', 'v': hms(nou), 'c': 'nu', 'q': pct(nou, meta) + ' de la meta' if meta else '',
+                          'n': f"{cuenta('no_usadas')} de {n} personas"}]
+        out['de_donde'] = []
+        out['quienes'] = [{'t': 'A quién se pagan horas extra', 'c': 'he', 'filas': _quienes(ps, 'pagar')}]
+        return out
+    base = T('h_prog')
+    sin = T('sin_desc')
+    causas = [['Atrasos', T('atr')], ['Salidas anticipadas', T('sad')], ['Colación', T('col')], ['Permisos', T('h_per')], ['Otros', T('otros')]]
+    if abs(sin) < 60:  # menos de un minuto es redondeo de segundos: va a la causa mayor, para que la fila no aparezca
+        max(causas, key=lambda c: c[1])[1] += sin
+        sin = 0
+    causas = [(t, v) for t, v in causas] + [('Sin descuento', sin)]
+    nt = sum(v for _, v in causas)
+    he = T('he_trab')
+    otros = {}
+    for p in ps:
+        for k, v in (p.get('h_otros') or {}).items():
+            otros[k] = otros.get(k, 0) + v
+    orden = ['Jornadas compensatorias', 'Jornadas especiales', 'Días con permiso', 'Otros días trabajados']
+    filas_otros = [fila(f'Horas en {k[0].lower() + k[1:]}', otros[k], base, 'menos', '+ ') for k in orden if otros.get(k)]
+    total = base - nt + he + sum(otros.values())
+    out['balance'] = ([fila('Programadas en días trabajados', base, base, 'base'), fila('Horas no trabajadas', nt, base, 'menos', '− ')]
+                      + [fila(t, v, base, 'det') for t, v in causas if v]
+                      + [fila('Trabajadas en el horario', base - nt, base, 'tot'), fila('Horas extra trabajadas', he, base, 'menos', '+ ')]
+                      + filas_otros + [fila('Total trabajado', total, base, 'tot')])
+    out['cargar'] = [{'t': 'Descontar', 'v': hms(T('descontar')), 'c': 'ds', 'q': pct(T('descontar'), base) + ' de lo programado' if base else '',
+                      'n': f"{cuenta('descontar')} de {n} personas"},
+                     {'t': 'Pagar horas extra', 'v': hms(T('pagar')), 'c': 'he', 'q': pct(T('pagar'), base) + ' de lo programado' if base else '',
+                      'n': f"{cuenta('pagar')} de {n} personas"}]
+    nt_rows = ([fila('Sin descuento', sin, nt)] if sin else []) \
+        + ([fila('Inasistencias compensadas', T('comp_inas'), nt)] if T('comp_inas') else []) \
+        + [fila('Se cubren con horas extra', T('cubren'), nt), fila('Se descuentan', T('descontar'), nt, 'tot')]
+    he_rows = ([fila('No aprobadas', T('he_noap'), he)] if T('he_noap') else []) \
+        + ([fila('Por decidir', T('he_decidir'), he)] if T('he_decidir') else []) \
+        + ([fila('Compensan inasistencias', T('he_inas'), he)] if T('he_inas') else []) \
+        + [fila('Cubren descuentos', T('cubren'), he), fila('Se pagan', T('pagar'), he, 'tot')]
+    out['de_donde'] = [{'t': f'De las {hms(nt)} no trabajadas', 'filas': nt_rows}, {'t': f'De las {hms(he)} horas extra', 'filas': he_rows}]
+    out['quienes'] = [{'t': 'A quién se descuenta', 'c': 'ds', 'filas': _quienes(ps, 'descontar')},
+                      {'t': 'A quién se pagan horas extra', 'c': 'he', 'filas': _quienes(ps, 'pagar')}]
+    return out
+
+
+def _quienes(ps, k):
+    return [{'t': p['nombre'].title(), 'v': hms(p[k])} for p in sorted((p for p in ps if p.get(k)), key=lambda p: -p[k])]
 
 
 def separar_informes(personas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -543,9 +664,7 @@ def nombre_archivo(area: str, inf: Dict[str, Any], fecha_inicio: str, fecha_fin:
 
 # ───────────────────────────── punto de entrada ─────────────────────────────
 
-async def generar_informes_cierre(db, asistencia_service, fecha_inicio: str, fecha_fin: str, area: str, cerro: str,
-                                  preinforme: bool = False) -> List[Dict[str, Any]]:
-    """Los PDF del cierre de un área: [{'filename', 'titulo', 'content'}], uno por tipo de horario."""
+async def _personas_del_area(db, asistencia_service, fecha_inicio: str, fecha_fin: str, area: str):
     from backend.services.report_service import ReportService
     rs = ReportService(asistencia_service)
     datos = await rs.datos_periodo(fecha_inicio, fecha_fin, area)
@@ -555,15 +674,42 @@ async def generar_informes_cierre(db, asistencia_service, fecha_inicio: str, fec
         'WHERE a.nombre = ? ORDER BY b.id', (area,))] if area else []
     if not bonos:
         bonos = list(datos.get('lista_bonos') or [])
-    personas = armar_personas(datos, rs._format_concepto_cell, justif)
+    return armar_personas(datos, rs._format_concepto_cell, justif), justif, bonos
+
+
+async def resumen_del_area(db, asistencia_service, fecha_inicio: str, fecha_fin: str, area: str) -> List[Dict[str, Any]]:
+    """El resumen ejecutivo del área, uno por tipo de horario (paso 5 del cierre)."""
+    personas, justif, _ = await _personas_del_area(db, asistencia_service, fecha_inicio, fecha_fin, area)
+    return [resumen_tipo(inf, justif) for inf in separar_informes(personas)]
+
+
+async def cierre_completo(db, asistencia_service, fecha_inicio: str, fecha_fin: str, area: str, cerro: str) -> Dict[str, Any]:
+    """Para el correo de cierre, con un solo cálculo: los PDF y el resumen de cada tipo de horario."""
+    personas, justif, bonos = await _personas_del_area(db, asistencia_service, fecha_inicio, fecha_fin, area)
+    infs = separar_informes(personas)
+    return {'archivos': [{'tipo': inf['tipo'], 'filename': nombre_archivo(area, inf, fecha_inicio, fecha_fin), 'titulo': inf['titulo_horas'],
+                          'content': render_pdf(area, fecha_inicio, fecha_fin, cerro, inf, justif, bonos)} for inf in infs],
+            'resumen': [resumen_tipo(inf, justif) for inf in infs]}
+
+
+async def generar_informes_cierre(db, asistencia_service, fecha_inicio: str, fecha_fin: str, area: str, cerro: str,
+                                  preinforme: bool = False, tipo: Optional[str] = None,
+                                  solo_lista: bool = False) -> List[Dict[str, Any]]:
+    """Los PDF del cierre de un área: [{'tipo', 'filename', 'titulo', 'content'}], uno por tipo de horario.
+    tipo ('CICLO' | 'BOLSA') deja solo ese informe; solo_lista no dibuja los PDF (content None)."""
+    personas, justif, bonos = await _personas_del_area(db, asistencia_service, fecha_inicio, fecha_fin, area)
     out = []
     for inf in separar_informes(personas):
-        out.append({'filename': nombre_archivo(area, inf, fecha_inicio, fecha_fin, preinforme), 'titulo': inf['titulo_horas'],
-                    'content': render_pdf(area, fecha_inicio, fecha_fin, cerro, inf, justif, bonos, preinforme)})
+        if tipo and inf['tipo'] != tipo:
+            continue
+        out.append({'tipo': inf['tipo'], 'filename': nombre_archivo(area, inf, fecha_inicio, fecha_fin, preinforme),
+                    'titulo': inf['titulo_horas'],
+                    'content': None if solo_lista else render_pdf(area, fecha_inicio, fecha_fin, cerro, inf, justif, bonos, preinforme)})
     return out
 
 
-async def informes_del_area(db, asistencia_service, fecha_inicio: str, fecha_fin: str, area: str) -> Dict[str, Any]:
+async def informes_del_area(db, asistencia_service, fecha_inicio: str, fecha_fin: str, area: str,
+                            tipo: Optional[str] = None, solo_lista: bool = False) -> Dict[str, Any]:
     """Para descargar desde la app: con el área ya cerrada en ese tramo, el informe definitivo (el mismo del correo:
     un período cerrado ya no se recalcula); si no, el preinforme sin cerrar."""
     cierre = await db.fetch_one(
@@ -572,5 +718,6 @@ async def informes_del_area(db, asistencia_service, fecha_inicio: str, fecha_fin
         (area, fecha_inicio, fecha_fin))
     preinforme = not cierre
     cerro = '' if preinforme else ((cierre.get('nombre_completo') or cierre.get('username') or 'sistema'))
-    archivos = await generar_informes_cierre(db, asistencia_service, fecha_inicio, fecha_fin, area, cerro, preinforme)
+    archivos = await generar_informes_cierre(db, asistencia_service, fecha_inicio, fecha_fin, area, cerro, preinforme,
+                                             tipo=tipo, solo_lista=solo_lista)
     return {'preinforme': preinforme, 'archivos': archivos}

@@ -66,21 +66,26 @@ def _destinatarios() -> List[str]:
     return [x.strip() for x in crudo.split(",") if x.strip()]
 
 
-async def _enviar(asunto: str, detalle: str, color: str) -> None:
+def _fmt_vista(v: Optional[str]) -> str:
+    """«2026-11-09 12:02:00» → «09-11-2026 12:02» para el correo."""
+    d = _parse(v) if isinstance(v, str) else v
+    return d.strftime("%d-%m-%Y %H:%M") if d else "—"
+
+
+async def _enviar(asunto: str, detalle: str, tono: str, filas=None, pasos=None, etiqueta: str = "Aviso del sistema") -> None:
+    """Correo del monitor con la plantilla «Banda azul» (correo_plantilla.py)."""
     para = _destinatarios()
     if not para:
         logger.warning(f"[Monitor sync] sin destinatarios para: {asunto}")
         return
-    html = (
-        f'<div style="font-family:Arial,sans-serif;max-width:560px">'
-        f'<h3 style="color:{color};margin:0 0 8px">{asunto}</h3>'
-        f'<p style="margin:0 0 8px">{detalle}</p>'
-        f'<p style="color:#64748b;font-size:12px;margin:0">Sistema de Asistencia · {_fmt(_ahora())} (hora Chile). '
-        f'El detalle está en logs/cron_sync.log del servidor.</p></div>'
-    )
     try:
+        from backend.services import correo_plantilla as cp
+        cuerpo = (cp.filas(list(filas or []) + [("Detalle técnico", "logs/cron_sync.log del servidor")], "42%")
+                  + cp.pasos(list(pasos or []), "rojo" if tono == "rojo" else "ok") + cp.boton("Abrir Asistencia"))
+        html = cp.correo(etiqueta, tono, asunto, detalle, cuerpo,
+                         pie_extra=f"Hora de Chile: {_ahora().strftime('%d-%m-%Y %H:%M')}.")
         from backend.services.notification_service import NotificationService
-        await NotificationService()._send_email(para, asunto, html)
+        await NotificationService()._send_email(para, f"Asistencia · {asunto}", html, cp.imagenes())
     except Exception as e:
         logger.error(f"[Monitor sync] no se pudo enviar el correo '{asunto}': {e}")
 
@@ -131,16 +136,32 @@ async def registrar_ciclo(ok: bool, nuevas: int = 0, error: Optional[str] = None
         for tipo, detalle in activas.items():
             ult = _parse(enviadas.get(tipo))
             if ult is None or (ahora - ult).total_seconds() >= COOLDOWN_HORAS[tipo] * 3600:
-                titulo = ("⚠️ Asistencia: la sincronización de marcaciones está fallando" if tipo == "error"
-                          else "⚠️ Asistencia: no llegan marcas nuevas")
-                await _enviar(titulo, detalle, "#dc2626")
+                if tipo == "error":
+                    ult_e = estado.get("ultimo_error") or {}
+                    filas = [("Falla desde", _fmt_vista(estado.get("error_desde"))),
+                             ("Ciclos seguidos con error", str(estado.get("errores_seguidos", 0))),
+                             ("Qué falló", ult_e.get("msg") or "desconocido"),
+                             ("Último ciclo correcto", _fmt_vista(estado.get("ultimo_ok")))]
+                    pasos = ["Revisar que EasyTime y los relojes estén encendidos y con red.",
+                             "En Asistencia, «Sincronizar» para probar a mano.",
+                             "Cuando vuelva a funcionar llegará un aviso de sincronización restablecida."]
+                    await _enviar("La sincronización de marcaciones está fallando", detalle, "rojo", filas, pasos)
+                else:
+                    filas = [("Última marca nueva", _fmt_vista(estado.get("ultimas_nuevas"))),
+                             ("Último ciclo correcto", _fmt_vista(estado.get("ultimo_ok")))]
+                    pasos = ["Revisar que los relojes estén enviando marcas a EasyTime.",
+                             "Si hoy es feriado o un día sin turnos, se puede ignorar."]
+                    await _enviar("No llegan marcas nuevas", detalle, "rojo", filas, pasos)
                 enviadas[tipo] = _fmt(ahora)
 
         for tipo in list(enviadas.keys()):
             if tipo not in activas and (tipo == "error" and ok or tipo == "sin_marcas" and ok and nuevas > 0):
-                titulo = ("✅ Asistencia: la sincronización de marcaciones se recuperó" if tipo == "error"
-                          else "✅ Asistencia: volvieron a llegar marcas")
-                await _enviar(titulo, "El sistema volvió a funcionar con normalidad.", "#059669")
+                titulo = ("La sincronización de marcaciones se recuperó" if tipo == "error"
+                          else "Volvieron a llegar marcas")
+                await _enviar(titulo, "El sistema volvió a funcionar con normalidad.", "ok",
+                              [("Último ciclo correcto", _fmt_vista(estado.get("ultimo_ok"))),
+                               ("Última marca nueva", _fmt_vista(estado.get("ultimas_nuevas")))],
+                              etiqueta="Sincronización restablecida")
                 enviadas.pop(tipo, None)
 
         estado["alertas"] = enviadas

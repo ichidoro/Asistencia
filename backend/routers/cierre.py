@@ -151,9 +151,20 @@ async def reabrir_cierre(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _validar_informe(fecha_inicio: str, fecha_fin: str, area: str, current_user: SecurityContext):
+    if not area or area == 'Todas' or area.strip() == '':
+        raise HTTPException(status_code=400, detail="Debe seleccionar un área específica.")
+    d_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+    d_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
+    if (d_fin - d_ini).days + 1 > 35:
+        raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 35 días.")
+    if not current_user.check_area_access(area):
+        raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
+
+
 @router.get(
     "/informe-pdf",
-    summary="Informe de cierre en PDF del área (preinforme si aún no se cierra)"
+    summary="Qué informes de cierre tiene el área (preinforme si aún no se cierra)"
 )
 async def informe_pdf(
     fecha_inicio: str = Query(..., description="Fecha inicio (YYYY-MM-DD)"),
@@ -162,29 +173,78 @@ async def informe_pdf(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
 ):
-    """Los PDF del informe de cierre del área, uno por tipo de horario, en base64 para descargarlos por separado.
-    Con el área cerrada en ese tramo es el informe definitivo (el mismo del correo); si no, el preinforme."""
-    import base64
+    """La lista de informes del área, uno por tipo de horario (sin dibujarlos): el navegador descarga cada uno desde
+    /informe-pdf/archivo. Con el área cerrada en ese tramo es el informe definitivo; si no, el preinforme."""
     from backend.repositories.asistencia import AsistenciaRepository
     from backend.services.asistencia_service import AsistenciaService
     from backend.services.informe_cierre_pdf import informes_del_area
     try:
-        if not area or area == 'Todas' or area.strip() == '':
-            raise HTTPException(status_code=400, detail="Debe seleccionar un área específica.")
-        d_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-        d_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
-        if (d_fin - d_ini).days + 1 > 35:
-            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 35 días.")
-        if not current_user.check_area_access(area):
-            raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
-        res = await informes_del_area(db, AsistenciaService(AsistenciaRepository(db)), fecha_inicio, fecha_fin, area)
-        return {
-            "preinforme": res["preinforme"],
-            "archivos": [{"filename": a["filename"], "titulo": a["titulo"],
-                          "content_b64": base64.b64encode(a["content"]).decode("ascii")} for a in res["archivos"]],
-        }
+        _validar_informe(fecha_inicio, fecha_fin, area, current_user)
+        res = await informes_del_area(db, AsistenciaService(AsistenciaRepository(db)), fecha_inicio, fecha_fin, area,
+                                      solo_lista=True)
+        return {"preinforme": res["preinforme"],
+                "archivos": [{"tipo": a["tipo"], "filename": a["filename"], "titulo": a["titulo"]} for a in res["archivos"]]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al preparar el informe de cierre en PDF: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo generar el informe de cierre.")
+
+
+@router.get(
+    "/informe-pdf/archivo",
+    summary="Descarga un informe de cierre en PDF (un tipo de horario del área)"
+)
+async def informe_pdf_archivo(
+    fecha_inicio: str = Query(..., description="Fecha inicio (YYYY-MM-DD)"),
+    fecha_fin: str = Query(..., description="Fecha fin (YYYY-MM-DD)"),
+    area: str = Query(..., description="Área"),
+    tipo: str = Query(..., description="CICLO o BOLSA"),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
+):
+    """El PDF como archivo adjunto (igual que el Excel): el navegador lo descarga directo."""
+    from fastapi.responses import Response
+    from backend.repositories.asistencia import AsistenciaRepository
+    from backend.services.asistencia_service import AsistenciaService
+    from backend.services.informe_cierre_pdf import informes_del_area
+    try:
+        _validar_informe(fecha_inicio, fecha_fin, area, current_user)
+        if tipo not in ('CICLO', 'BOLSA'):
+            raise HTTPException(status_code=400, detail="Tipo de horario no válido.")
+        res = await informes_del_area(db, AsistenciaService(AsistenciaRepository(db)), fecha_inicio, fecha_fin, area, tipo=tipo)
+        if not res["archivos"]:
+            raise HTTPException(status_code=404, detail="El área no tiene personas de ese tipo de horario en el tramo.")
+        a = res["archivos"][0]
+        return Response(content=a["content"], media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{a["filename"]}"'})
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error al generar el informe de cierre en PDF: {e}")
         raise HTTPException(status_code=500, detail="No se pudo generar el informe de cierre.")
+
+
+@router.get(
+    "/resumen",
+    summary="Resumen ejecutivo del área antes de sellar (balance de horas por tipo de horario)"
+)
+async def resumen_cierre(
+    fecha_inicio: str = Query(..., description="Fecha inicio (YYYY-MM-DD)"),
+    fecha_fin: str = Query(..., description="Fecha fin (YYYY-MM-DD)"),
+    area: str = Query(..., description="Área"),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
+):
+    """Las mismas cifras del informe PDF, en un balance que parte de las horas totales y termina en lo que se carga."""
+    from backend.repositories.asistencia import AsistenciaRepository
+    from backend.services.asistencia_service import AsistenciaService
+    from backend.services.informe_cierre_pdf import resumen_del_area
+    try:
+        _validar_informe(fecha_inicio, fecha_fin, area, current_user)
+        return {"tipos": await resumen_del_area(db, AsistenciaService(AsistenciaRepository(db)), fecha_inicio, fecha_fin, area)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al preparar el resumen de cierre: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo preparar el resumen del cierre.")

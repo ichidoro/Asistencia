@@ -1,6 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 from typing import List, Optional
 from loguru import logger
 from backend.core.config import settings
@@ -88,623 +89,118 @@ class NotificationService:
             logger.error(f"Error enviando email: {e}")
             return False
 
-    def _get_logo_html(self):
-        """Retorna el HTML del logo embebido o fallback"""
-        return """
-        <img src="cid:logo_aguacol" alt="Aguacol SPA" style="height: 50px; display: block;" width="180">
-        """
+    # ── Correos con la plantilla «Banda azul» (correo_plantilla.py, decisión del dueño 09-11-2026) ──────────────
+    _CONTRATO = {
+        'RENOVAR': ('Contrato renovado', 'ok', 'Se renovó el contrato de {n}', [
+            'Preparar el nuevo contrato o el anexo de prórroga.', 'Actualizar la carpeta personal.', 'Avisar a la jefatura directa.']),
+        'NO_RENOVAR': ('Término de contrato', 'rojo', 'Termina el contrato de {n}', [
+            'Enviar la carta de aviso dentro del plazo legal.', 'Preparar el finiquito y las vacaciones proporcionales.',
+            'Coordinar la devolución de EPP, llaves y herramientas.', 'Cerrar los accesos el último día.']),
+        'DESACTIVAR': ('Término de contrato', 'rojo', 'Termina el contrato de {n}', [
+            'Enviar la carta de aviso dentro del plazo legal.', 'Preparar el finiquito y las vacaciones proporcionales.',
+            'Coordinar la devolución de EPP, llaves y herramientas.', 'Cerrar los accesos el último día.']),
+        'INDEFINIDO': ('Contrato indefinido', 'navy', '{n} pasa a contrato indefinido', [
+            'Firmar el anexo de contrato indefinido.', 'Revisar los beneficios que cambian con el contrato indefinido.']),
+        'BAJA_MANUAL': ('Baja', 'gris', 'Baja de {n}', [
+            'Recibir la carta de renuncia o emitir la carta de despido.', 'Calcular el finiquito y los haberes pendientes.',
+            'Pedir la devolución de activos y credenciales.']),
+    }
 
-    async def send_contract_decision_email(self, employee_data: dict, decision_type: str, 
+    async def send_contract_decision_email(self, employee_data: dict, decision_type: str,
                                           details: str, recipients: List[str]):
-        """Notificar a RRHH sobre una decisión de contrato con diseño Corporativo Aguacol Prime"""
-        
-        # Mapeo de términos... (se mantiene igual)
-        action_map = {
-            "RENOVAR": {
-                "label": "Extensión de Vínculo Laboral (Renovación)",
-                "color": "#10b981", # Emerald
-                "icon": "📝",
-                "checklist": [
-                    "Preparar nuevo contrato o anexo de prórroga.",
-                    "Actualizar registros en carpeta personal del empleado.",
-                    "Notificar a jefatura directa sobre la continuidad."
-                ]
-            },
-            "NO_RENOVAR": {
-                "label": "Término de Contrato Programado (No Renovación)",
-                "color": "#ef4444", # Red
-                "icon": "⚠️",
-                "checklist": [
-                    "Emitir y enviar carta certificada de aviso (30 días o plazo legal).",
-                    "Preparar cálculo de finiquito y vacaciones proporcionales.",
-                    "Coordinar devolución de activos (EPP, llaves, herramientas).",
-                    "Cerrar accesos informáticos el último día de funciones."
-                ]
-            },
-            "INDEFINIDO": {
-                "label": "Pase a Planta (Contrato Indefinido)",
-                "color": "#8b5cf6", # Violet
-                "icon": "⭐",
-                "checklist": [
-                    "Firmar anexo de contrato indefinido.",
-                    "Evaluar ajustes de beneficios corporativos por planta.",
-                    "Felicitar formalmente al colaborador por su estabilidad."
-                ]
-            },
-            "DESACTIVAR": {
-                "label": "Término de Contrato Programado (No Renovación)",
-                "color": "#ef4444", 
-                "icon": "⚠️",
-                "checklist": [
-                    "Emitir y enviar carta certificada de aviso (30 días o plazo legal).",
-                    "Preparar cálculo de finiquito y vacaciones proporcionales.",
-                    "Coordinar devolución de activos (EPP, llaves, herramientas).",
-                    "Cerrar accesos informáticos el último día de funciones."
-                ]
-            },
-            "BAJA_MANUAL": {
-                "label": "Baja de Empleado (Renuncia / Desvinculación)",
-                "color": "#ef4444",
-                "icon": "🚪",
-                "checklist": [
-                    "Recepcionar carta de renuncia o emitir carta de despido.",
-                    "Calcular finiquito y haberes pendientes.",
-                    "Coordinar entrevista de salida (si aplica).",
-                    "Solicitar devolución de activos y credenciales."
-                ]
-            }
-        }
+        """Avisa a RR.HH. una decisión de contrato (renovar, término, indefinido o baja)."""
+        from backend.services import correo_plantilla as cp
+        tipo = (decision_type or '').upper()
+        etiqueta, tono, titulo_f, pasos = self._CONTRATO.get(
+            tipo, ('Decisión de contrato', 'navy', 'Decisión de contrato de {n}', ['Revisar la ficha de la persona.']))
+        nombre = employee_data.get('nombre_completo') or ''
+        if tipo == 'BAJA_MANUAL' and 'por:' in (details or ''):
+            motivo = details.split('por:', 1)[1].strip().rstrip('.')
+            if motivo:
+                etiqueta = motivo[:1].upper() + motivo[1:]
+        filas = [('Decisión', etiqueta)]
+        if employee_data.get('cant_contratos'):
+            filas.append(('Contrato', f"N° {employee_data['cant_contratos']}"))
+        fs = employee_data.get('fecha_salida_fmt')
+        if fs and fs != 'No definida':
+            filas.append(('Fecha de término', cp.fecha(fs)))
+        fi = employee_data.get('fecha_ingreso_fmt')
+        if fi and fi != 'No registrada':
+            ant = employee_data.get('antiguedad')
+            filas.append(('Ingreso', cp.fecha(fi) + (f' · {ant}' if ant and ant != 'No calculada' else '')))
+        if details:
+            filas.append(('Detalle', details))
+        filas.append(('Fecha del aviso', datetime.now().strftime('%d-%m-%Y')))
+        detalle_p = ' · '.join(x for x in (str(employee_data.get('cargo') or '').title(), str(employee_data.get('area') or '').title()) if x)
+        cuerpo = (cp.persona(nombre, employee_data.get('rut_formateado') or '', detalle_p) + '<div style="height:14px"></div>'
+                  + cp.filas(filas, '42%') + cp.pasos(pasos, tono) + cp.boton('Ver la ficha en Asistencia'))
+        intro = details or 'Se registró una decisión de contrato en Asistencia.'
+        html = cp.correo(etiqueta, tono, titulo_f.format(n=nombre.title()), intro, cuerpo)
+        area = str(employee_data.get('area') or '').title()
+        subject = ' · '.join(x for x in (etiqueta, nombre, area) if x)
+        return await self._send_email(recipients, subject, html, cp.imagenes())
 
-        # Fallback si el tipo no está mapeado
-        info = action_map.get(decision_type.upper(), {
-            "label": decision_type.upper(),
-            "color": "#3b82f6",
-            "icon": "ℹ️",
-            "checklist": ["Revisar ficha del empleado para determinar pasos a seguir."]
-        })
-
-        # OVERRIDE LABEL FOR BAJA_MANUAL IF DETAILS CONTAINS MOTIVE
-        # El usuario quiere que el título sea el motivo específico (ej: Renuncia Voluntaria)
-        if decision_type.upper() == "BAJA_MANUAL" and "por:" in details:
-            try:
-                # details formato: "El empleado ha sido dado de baja por: Renuncia Voluntaria."
-                motive_part = details.split("por:")[1].strip().rstrip(".")
-                if motive_part:
-                    info['label'] = motive_part.title() # "Renuncia Voluntaria"
-            except:
-                pass
-
-        subject = f"{info['icon']} {info['label']}: {employee_data.get('nombre_completo')}"
-        
-        # Cálculo de fechas para la línea de tiempo
-        from datetime import date
-        today_fmt = date.today().strftime("%d/%m/%Y")
-        fecha_salida_fmt = employee_data.get('fecha_salida_fmt', 'No definida')
-        
-        # Generar HTML del checklist
-        checklist_html = "".join([f'<li style="margin-bottom: 8px;">{item}</li>' for item in info['checklist']])
-
-        # Datos enriquecidos
-        entry_date = employee_data.get('fecha_ingreso_fmt', 'No registrada')
-        tenure = employee_data.get('antiguedad', 'No calculada')
-
-        html = f"""
-        <html>
-            <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif;">
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 20px 0;">
-                    <tr>
-                        <td align="center">
-                            <table width="650" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
-                                <!-- Header Corporativo Aguacol -->
-                                <tr>
-                                    <td align="left" style="background-color: #1e293b; padding: 30px 40px; border-bottom: 4px solid #3b82f6;">
-                                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                            <tr>
-                                                <td align="left">
-                                                    {self._get_logo_html()}
-                                                </td>
-                                                <td align="right" valign="bottom">
-                                                    <div style="color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
-                                                        Notificación RRHH
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Banner de Acción -->
-                                <tr>
-                                    <td style="padding: 35px 40px 10px 40px;">
-                                        <div style="display: inline-block; padding: 6px 14px; border-radius: 8px; background-color: {info['color']}15; color: {info['color']}; font-size: 13px; font-weight: 700; margin-bottom: 15px;">
-                                            CONFIRMACIÓN DE GESTIÓN
-                                        </div>
-                                        <h1 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2;">
-                                            {info['label']}
-                                        </h1>
-                                    </td>
-                                </tr>
-
-                                <!-- Tarjeta de Identidad del Empleado (ID Card) -->
-                                <tr>
-                                    <td style="padding: 20px 40px;">
-                                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px;">
-                                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                                <tr>
-                                                    <td width="70" valign="top">
-                                                        <div style="width: 55px; height: 55px; background-color: #314d9b; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 22px; font-weight: bold; text-align: center; line-height: 55px;">
-                                                            {employee_data.get('nombre')[0] if employee_data.get('nombre') else 'E'}
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div style="color: #0f172a; font-size: 18px; font-weight: 700;">{employee_data.get('nombre_completo')}</div>
-                                                        <div style="color: #64748b; font-size: 14px;">RUT: {employee_data.get('rut_formateado')}</div>
-                                                        <div style="margin-top: 8px;">
-                                                            <span style="background-color: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">{employee_data.get('cargo') or 'Cargo no definido'}</span>
-                                                            <span style="background-color: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 5px;">{employee_data.get('area') or 'Área no definida'}</span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </table>
-                                            
-                                            <!-- Datos de Antigüedad -->
-                                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #cbd5e1; font-size: 13px; color: #475569; display: flex; gap: 20px;">
-                                                <div><strong>Fecha Ingreso:</strong> {entry_date}</div>
-                                                <div><strong>Antigüedad:</strong> {tenure}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <!-- Detalles y Timeline -->
-                                <tr>
-                                    <td style="padding: 10px 40px 30px 40px;">
-                                        <h3 style="color: #334155; font-size: 15px; font-weight: 700; margin-bottom: 12px;">RESUMEN DE LA ACCIÓN</h3>
-                                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 14px; border-collapse: separate; border-spacing: 0 10px;">
-                                            <tr>
-                                                <td width="180" style="color: #64748b;">Efectividad de Decisión:</td>
-                                                <td style="color: #1e293b; font-weight: 600;">{today_fmt}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="color: #64748b;">Fecha Término Contrato:</td>
-                                                <td style="color: #1e293b; font-weight: 600;">{fecha_salida_fmt}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="color: #64748b;">Correlativo Contrato:</td>
-                                                <td style="color: #1e293b; font-weight: 600;">Contrato N° {employee_data.get('cant_contratos', 1)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td valign="top" style="color: #64748b;">Comentario/Motivo:</td>
-                                                <td style="color: #1e293b; font-style: italic; background-color: #fffbeb; padding: 10px; border-left: 3px solid #fde047; border-radius: 4px;">"{details}"</td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-
-                                <!-- Checklist para RRHH -->
-                                <tr>
-                                    <td style="padding: 0 40px 40px 40px;">
-                                        <div style="background-color: {info['color']}05; border: 1px dashed {info['color']}; border-radius: 12px; padding: 25px;">
-                                            <h3 style="color: {info['color']}; font-size: 15px; font-weight: 700; margin: 0 0 15px 0;">📋 PRÓXIMOS PASOS (GESTIÓN RRHH)</h3>
-                                            <ul style="color: #475569; font-size: 13px; margin: 0; padding-left: 20px; line-height: 1.5;">
-                                                {checklist_html}
-                                            </ul>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <!-- Footer Corporativo -->
-                                <tr>
-                                    <td style="background-color: #f8fafc; padding: 30px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-                                        <p style="color: #94a3b8; margin: 0; font-size: 13px; line-height: 1.5;">
-                                            Este es un documento electrónico generado automáticamente por el Sistema de Asistencia Aguacol.<br>
-                                            <strong>© 2026 Aguacol SPA | Departamento de Recursos Humanos</strong>
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                </table>
-            </body>
-        </html>
-        """
-        
-        # Path al logo
-        import os
-        logo_path = os.path.join(settings.BASE_DIR, "frontend", "assets", "img", "logo.jpg")
-        
-        images = []
-        if os.path.exists(logo_path):
-            images.append({'cid': 'logo_aguacol', 'path': logo_path})
-            
-        return await self._send_email(recipients, subject, html, images)
-
-    async def send_justification_email(self, employee_data: dict, type_name: str, 
+    async def send_justification_email(self, employee_data: dict, type_name: str,
                                      start_date: str, end_date: str, recipients: List[str],
                                      observations: str = None, days_count: int = 1):
-        """Notificar a RRHH sobre una nueva justificación con diseño Corporativo Aguacol Prime"""
-        subject = f"📅 Justificación: {employee_data.get('nombre_completo')} ({type_name})"
-        
-        obs_html = ""
+        """Avisa a RR.HH. una justificación registrada (vacaciones, licencia, permiso, etc.)."""
+        from backend.services import correo_plantilla as cp
+        nombre = employee_data.get('nombre_completo') or ''
+        desde, hasta = cp.fecha(start_date), cp.fecha(end_date)
+        rango = desde if desde == hasta else f'del {desde} al {hasta}'
+        filas = [('Tipo', type_name), ('Desde', desde), ('Hasta', hasta), ('Días', str(days_count))]
         if observations:
-            obs_html = f"""
-            <tr>
-                <td valign="top" style="color: #64748b;">Observaciones:</td>
-                <td style="color: #1e293b; font-style: italic; background-color: #fffbeb; padding: 10px; border-left: 3px solid #fde047; border-radius: 4px;">"{observations}"</td>
-            </tr>
-            """
-            
-        html = f"""
-        <html>
-            <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif;">
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 20px 0;">
-                    <tr>
-                        <td align="center">
-                            <table width="650" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
-                                <!-- Header Corporativo Aguacol -->
-                                <tr>
-                                    <td align="left" style="background-color: #059669; padding: 25px 40px; border-bottom: 5px solid #10b981;">
-                                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                            <tr>
-                                                <td>
-                                                    {self._get_logo_html()}
-                                                </td>
-                                                <td align="right">
-                                                    <div style="background-color: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px; color: #ffffff; font-size: 11px; text-transform: uppercase; font-weight: 600;">
-                                                        Control de Asistencia
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Banner de Acción -->
-                                <tr>
-                                    <td style="padding: 35px 40px 10px 40px;">
-                                        <div style="display: inline-block; padding: 6px 14px; border-radius: 8px; background-color: #f0fdf4; color: #059669; font-size: 13px; font-weight: 700; margin-bottom: 15px;">
-                                            NUEVA JUSTIFICACIÓN REGISTRADA
-                                        </div>
-                                        <h1 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2;">
-                                            {type_name}
-                                        </h1>
-                                    </td>
-                                </tr>
+            filas.append(('Observación', observations))
+        detalle_p = ' · '.join(x for x in (str(employee_data.get('cargo') or '').title(), str(employee_data.get('area') or '').title()) if x)
+        cuerpo = (cp.persona(nombre, employee_data.get('rut_formateado') or '', detalle_p) + '<div style="height:14px"></div>'
+                  + cp.filas(filas, '42%') + cp.boton('Ver en Asistencia'))
+        html = cp.correo('Justificación registrada', 'navy', f'{type_name} de {nombre.title()}',
+                         'Se registró una justificación en Asistencia. Los días ya aparecen en la grilla con su código.', cuerpo,
+                         previa=f'{type_name} de {nombre}: {days_count} {"día" if days_count == 1 else "días"}, {rango}.')
+        subject = f'Justificación registrada · {nombre} · {type_name} {rango}'
+        return await self._send_email(recipients, subject, html, cp.imagenes())
 
-                                <!-- Tarjeta de Identidad del Empleado -->
-                                <tr>
-                                    <td style="padding: 20px 40px;">
-                                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px;">
-                                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                                <tr>
-                                                    <td width="70" valign="top">
-                                                        <div style="width: 55px; height: 55px; background-color: #059669; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 22px; font-weight: bold; text-align: center; line-height: 55px;">
-                                                            {employee_data.get('nombre')[0] if employee_data.get('nombre') else 'E'}
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div style="color: #0f172a; font-size: 18px; font-weight: 700;">{employee_data.get('nombre_completo')}</div>
-                                                        <div style="color: #64748b; font-size: 14px;">RUT: {employee_data.get('rut_formateado')}</div>
-                                                        <div style="margin-top: 8px;">
-                                                            <span style="background-color: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">{employee_data.get('cargo') or 'Cargo no definido'}</span>
-                                                            <span style="background-color: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 5px;">{employee_data.get('area') or 'Área no definida'}</span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </table>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <!-- Detalles del Periodo -->
-                                <tr>
-                                    <td style="padding: 10px 40px 40px 40px;">
-                                        <h3 style="color: #334155; font-size: 15px; font-weight: 700; margin-bottom: 12px;">DETALLES DEL PERIODO</h3>
-                                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 14px; border-collapse: separate; border-spacing: 0 10px;">
-                                            <tr>
-                                                <td width="180" style="color: #64748b;">Fecha Inicio:</td>
-                                                <td style="color: #1e293b; font-weight: 600;">{start_date}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="color: #64748b;">Fecha Término:</td>
-                                                <td style="color: #1e293b; font-weight: 600;">{end_date}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="color: #64748b;">Días Solicitados:</td>
-                                                <td style="color: #1e293b; font-weight: 600;">{days_count} día(s)</td>
-                                            </tr>
-                                            {obs_html}
-                                        </table>
-                                    </td>
-                                </tr>
-
-                                <!-- Footer Corporativo -->
-                                <tr>
-                                    <td style="background-color: #f8fafc; padding: 30px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-                                        <p style="color: #94a3b8; margin: 0; font-size: 13px; line-height: 1.5;">
-                                            Este es un documento electrónico generado automáticamente por el Sistema de Asistencia Aguacol.<br>
-                                            <strong>© 2026 Aguacol SPA | Departamento de Recursos Humanos</strong>
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                </table>
-            </body>
-        </html>
-        """
-        
-        # Path al logo
-        import os
-        logo_path = os.path.join(settings.BASE_DIR, "frontend", "assets", "img", "logo.jpg")
-        
-        images = []
-        if os.path.exists(logo_path):
-            images.append({'cid': 'logo_aguacol', 'path': logo_path})
-
-        return await self._send_email(recipients, subject, html, images)
-
-    async def send_cierre_email(self, 
-                                  area: str, 
-                                  fecha_inicio: str, 
-                                  fecha_fin: str, 
-                                  user_name: str, 
+    async def send_cierre_email(self,
+                                  area: str,
+                                  fecha_inicio: str,
+                                  fecha_fin: str,
+                                  user_name: str,
                                   tipo_cierre: str,
                                   resumen: dict,
                                   adjuntos: List[dict],
-                                  recipients: List[str]):
-        """Notificar a RRHH sobre el cierre definitivo de un periodo de asistencia, con el informe de cierre adjunto.
-        adjuntos: [{'filename', 'content'}]; los PDF del cierre (uno por tipo de horario del área)."""
-        from datetime import datetime
-
+                                  recipients: List[str],
+                                  resumen_tipos: Optional[List[dict]] = None):
+        """Avisa a RR.HH. el cierre de un área: balance de horas por tipo de horario y lo que se carga; los PDF del
+        informe van adjuntos (el Excel con el detalle día a día se descarga desde la app)."""
+        from backend.services import correo_plantilla as cp
+        meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        try:
+            ff = datetime.strptime(fecha_fin, '%Y-%m-%d')
+            mes = f'{meses[ff.month - 1].capitalize()} {ff.year}'
+        except Exception:
+            mes = 'el período'
+        area_t = (area or 'Todas').title()
         nombres = [a['filename'] for a in (adjuntos or [])]
+        tipos = resumen_tipos or []
+        personas = sum(int(t.get('personas') or 0) for t in tipos) or (resumen or {}).get('total_empleados', '')
+        datos = [('Área', area_t), ('Tramo', f'{cp.fecha(fecha_inicio)} al {cp.fecha(fecha_fin)}'), ('Cerró', user_name),
+                 ('Fecha del cierre', datetime.now().strftime('%d-%m-%Y %H:%M')), ('Personas', str(personas))]
+        cuerpo = cp.filas(datos, '42%', tam=13) + ''.join(cp.bloque_resumen(t) for t in tipos)
+        cuerpo += '<div style="height:16px"></div>' + cp.adjuntos_html(nombres)
         son_pdf = bool(nombres) and all(n.lower().endswith('.pdf') for n in nombres)
         if son_pdf:
-            texto_adjunto = (f"Se adjunta{'n' if len(nombres) > 1 else ''} el informe de cierre en PDF "
-                             f"({'uno por tipo de horario' if len(nombres) > 1 else 'uno por el tipo de horario del área'}): "
-                             f"<strong>{', '.join(nombres)}</strong>. El Excel con el detalle día a día se descarga desde la aplicación.")
+            nota = 'El Excel con el detalle día a día se descarga desde Asistencia. Horas en HH:MM:SS.'
         elif nombres:
-            texto_adjunto = (f"Se adjunta el Excel del cierre <strong>{', '.join(nombres)}</strong> "
-                             f"(no se pudo generar el informe en PDF).")
+            nota = 'No se pudo generar el informe en PDF: va el Excel del cierre.'
         else:
-            texto_adjunto = "No se pudo adjuntar el informe; descárguelo desde la aplicación."
-
-        subject = f"🔒 Cierre de Periodo Sellado Definitivamente: {area} ({fecha_inicio} al {fecha_fin})"
-        
-        # Mapear datos del resumen
-        total_emp = resumen.get("total_empleados", 0)
-        dias_ok = resumen.get("dias_ok", 0)
-        dias_con_novedad = resumen.get("dias_con_novedad", 0)
-        vacaciones = resumen.get("vacaciones", 0)
-        licencias = resumen.get("licencias", 0)
-        jornadas_especiales = resumen.get("jornadas_especiales", 0)
-        inasistencias = resumen.get("inasistencias", 0)
-        anomalias = resumen.get("anomalias", 0)
-        
-        # Haberes (HE al 50%)
-        he_total_haberes_horas = resumen.get("he_total_haberes_horas", resumen.get("he_aprobadas_horas", 0.0))
-        he_aprobadas_fijos_horas = resumen.get("he_aprobadas_fijos_horas", he_total_haberes_horas)
-        he_aprobadas_fijos_count = resumen.get("he_aprobadas_fijos_count", resumen.get("he_aprobadas_count", 0))
-        he_exceso_bolsa_horas = resumen.get("he_exceso_bolsa_horas", 0.0)
-        
-        # Débitos (Tiempo no trabajado al 100%)
-        deuda_total_debitos_horas = resumen.get("deuda_total_debitos_horas", resumen.get("deuda_neta_horas", 0.0))
-        deuda_fijos_horas = resumen.get("deuda_fijos_horas", deuda_total_debitos_horas)
-        deuda_atrasos_horas = resumen.get("deuda_atrasos_horas", 0.0)
-        deuda_colacion_horas = resumen.get("deuda_colacion_horas", 0.0)
-        deuda_salidas_horas = resumen.get("deuda_salidas_horas", 0.0)
-        deuda_permisos_horas = resumen.get("deuda_permisos_horas", 0.0)
-        deficit_bolsa_horas = resumen.get("deficit_bolsa_horas", 0.0)
-        
-        # Balance Operativo Neto
-        balance_operativo_horas = resumen.get("balance_operativo_horas", round(he_total_haberes_horas - deuda_total_debitos_horas, 2))
-
-        # Generar HTML corporativo Aguacol Premium
-        html = f"""
-        <html>
-            <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif;">
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 20px 0;">
-                    <tr>
-                        <td align="center">
-                            <table width="650" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
-                                <!-- Header Corporativo Aguacol (Dark Slate Blue) -->
-                                <tr>
-                                    <td align="left" style="background-color: #1e293b; padding: 25px 40px; border-bottom: 5px solid #3b82f6;">
-                                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                            <tr>
-                                                <td>
-                                                    {self._get_logo_html()}
-                                                </td>
-                                                <td align="right">
-                                                    <div style="background-color: rgba(59, 130, 246, 0.1); padding: 5px 15px; border-radius: 20px; color: #3b82f6; font-size: 11px; text-transform: uppercase; font-weight: 600; border: 1px solid rgba(59, 130, 246, 0.3);">
-                                                        Cierre de Periodo
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Banner de Título -->
-                                <tr>
-                                    <td style="padding: 35px 40px 10px 40px;">
-                                        <div style="display: inline-block; padding: 6px 14px; border-radius: 8px; background-color: #eff6ff; color: #1d4ed8; font-size: 13px; font-weight: 700; margin-bottom: 15px;">
-                                            NOTIFICACIÓN OFICIAL DE RECURSOS HUMANOS
-                                        </div>
-                                        <h1 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2;">
-                                             Periodo Sellado Definitivamente
-                                        </h1>
-                                        <p style="color: #64748b; font-size: 14px; margin-top: 8px; margin-bottom: 0;">
-                                            Se ha procedido al cierre definitivo del periodo de asistencia para el área y rango indicados a continuación.
-                                        </p>
-                                    </td>
-                                </tr>
-
-                                <!-- Detalles del Cierre (Bento Card) -->
-                                <tr>
-                                    <td style="padding: 20px 40px;">
-                                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
-                                            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 14px;">
-                                                <tr>
-                                                    <td width="40%" style="color: #64748b; padding-bottom: 10px;"><strong>Área Cerrada:</strong></td>
-                                                    <td style="color: #0f172a; font-weight: 700; padding-bottom: 10px;">{area}</td>
-                                                </tr>
-                                                <tr>
-                                                    <td style="color: #64748b; padding-bottom: 10px;"><strong>Rango de Fechas:</strong></td>
-                                                    <td style="color: #0f172a; font-weight: 600; padding-bottom: 10px;">{fecha_inicio} al {fecha_fin}</td>
-                                                </tr>
-                                                <tr>
-                                                    <td style="color: #64748b; padding-bottom: 10px;"><strong>Cerrado por:</strong></td>
-                                                    <td style="color: #0f172a; padding-bottom: 10px;">{user_name} <span style="background-color: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 5px;">{tipo_cierre}</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td style="color: #64748b;"><strong>Fecha Cierre:</strong></td>
-                                                    <td style="color: #0f172a;">{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</td>
-                                                </tr>
-                                            </table>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <!-- Resumen Ejecutivo Bento-Grid (3 Columnas Proporcionales) -->
-                                <tr>
-                                    <td style="padding: 10px 40px 20px 40px;">
-                                        <h3 style="color: #334155; font-size: 15px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Resumen Consolidado del Periodo</h3>
-                                        
-                                        <!-- Bento-Grid de 3 columnas -->
-                                        <table width="100%" border="0" cellspacing="10" cellpadding="0" style="margin-left: -10px; margin-right: -10px;">
-                                            <tr>
-                                                <!-- Columna 1: Haberes HE (+50%) -->
-                                                <td width="33%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 15px; text-align: center; vertical-align: top;">
-                                                    <div style="color: #1d4ed8; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Haberes HE (+50%)</div>
-                                                    <div style="color: #1e3a8a; font-size: 22px; font-weight: 800; margin-top: 6px;">{he_total_haberes_horas} hrs</div>
-                                                    <div style="color: #64748b; font-size: 11px; margin-top: 5px; line-height: 1.3;">
-                                                        <div>Fijos: {he_aprobadas_fijos_horas} hrs</div>
-                                                        <div style="font-size: 10px; color: #94a3b8;">({he_aprobadas_fijos_count} reg. aprobados)</div>
-                                                        {f'<div style="color: #0284c7; font-weight: 600; margin-top: 2px;">Bolsa: +{he_exceso_bolsa_horas} hrs</div>' if he_exceso_bolsa_horas > 0 else ''}
-                                                    </div>
-                                                </td>
-                                                <!-- Columna 2: Débitos Tiempo (100%) -->
-                                                <td width="33%" style="background-color: #fff5f5; border: 1px solid #feb2b2; border-radius: 10px; padding: 15px; text-align: center; vertical-align: top;">
-                                                    <div style="color: #c53030; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Débitos Tiempo (100%)</div>
-                                                    <div style="color: #9b2c2c; font-size: 22px; font-weight: 800; margin-top: 6px;">{deuda_total_debitos_horas} hrs</div>
-                                                    <div style="color: #64748b; font-size: 11px; margin-top: 5px; line-height: 1.3;">
-                                                        <div>Fijos: {deuda_fijos_horas} hrs</div>
-                                                        <div style="font-size: 10px; color: #94a3b8;">(Atrasos, salidas, colación)</div>
-                                                        {f'<div style="color: #dc2626; font-weight: 600; margin-top: 2px;">Déficit Bolsa: -{deficit_bolsa_horas} hrs</div>' if deficit_bolsa_horas > 0 else ''}
-                                                    </div>
-                                                </td>
-                                                <!-- Columna 3: Balance Operativo Neto -->
-                                                <td width="33%" style="background-color: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 15px; text-align: center; vertical-align: top;">
-                                                    <div style="color: #7e22ce; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Balance Operativo</div>
-                                                    <div style="color: #581c87; font-size: 22px; font-weight: 800; margin-top: 6px;">{'+' if balance_operativo_horas > 0 else ''}{balance_operativo_horas} hrs</div>
-                                                    <div style="color: #64748b; font-size: 11px; margin-top: 5px; line-height: 1.3;">
-                                                        <div>Saldo Neto Conciliado</div>
-                                                        <div style="font-size: 10px; color: #94a3b8;">(Colaboradores: {total_emp})</div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </table>
-
-                                        <!-- Tabla 1: Detalle de Asistencia y Novedades -->
-                                        <table width="100%" border="0" cellspacing="0" cellpadding="8" style="font-size: 13px; margin-top: 15px; border-collapse: collapse; border: 1px solid #e2e8f0;">
-                                            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                                                <th align="left" style="color: #475569; font-weight: 600;">Concepto / Incidencia</th>
-                                                <th align="center" style="color: #475569; font-weight: 600; width: 140px;">Cantidad / Días</th>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155;">Días con asistencia normal (OK)</td>
-                                                <td align="center" style="color: #0f172a; font-weight: 600;">{dias_ok}</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155;">Días con novedades (Atrasos, salidas adelantadas)</td>
-                                                <td align="center" style="color: #0f172a; font-weight: 600;">{dias_con_novedad}</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155;">Jornadas Especiales y Coberturas (+2)</td>
-                                                <td align="center" style="color: #0284c7; font-weight: 600;">{jornadas_especiales}</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155;">Vacaciones solicitadas en periodo</td>
-                                                <td align="center" style="color: #0f172a; font-weight: 600;">{vacaciones}</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155;">Licencias médicas</td>
-                                                <td align="center" style="color: #0f172a; font-weight: 600;">{licencias}</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155;">Inasistencias justificadas/aceptadas</td>
-                                                <td align="center" style="color: #ef4444; font-weight: 600;">{inasistencias}</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155;">Anomalías sin marcas u otras</td>
-                                                <td align="center" style="color: #0f172a; font-weight: 600;">{anomalias}</td>
-                                            </tr>
-                                            
-                                            <!-- Tabla 2: Desglose de Débitos por Tiempo No Trabajado -->
-                                            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; border-top: 2px solid #e2e8f0;">
-                                                <th align="left" style="color: #475569; font-weight: 600;">Detalle de Débitos por Tiempo No Trabajado</th>
-                                                <th align="center" style="color: #475569; font-weight: 600;">Horas</th>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Atrasos Netos</td>
-                                                <td align="center" style="color: #0f172a;">{deuda_atrasos_horas} hrs</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Exceso de Colación</td>
-                                                <td align="center" style="color: #0f172a;">{deuda_colacion_horas} hrs</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Salidas Adelantadas</td>
-                                                <td align="center" style="color: #0f172a;">{deuda_salidas_horas} hrs</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Permisos Personales</td>
-                                                <td align="center" style="color: #0f172a;">{deuda_permisos_horas} hrs</td>
-                                            </tr>
-                                            {f'<tr style="border-bottom: 1px solid #f1f5f9;"><td style="color: #dc2626; padding-left: 15px; font-weight: 600;">• Déficit Bolsa Flexible Choferes</td><td align="center" style="color: #dc2626; font-weight: 600;">{deficit_bolsa_horas} hrs</td></tr>' if deficit_bolsa_horas > 0 else ''}
-                                        </table>
-                                    </td>
-                                </tr>
-
-                                <!-- Aviso de Adjunto -->
-                                <tr>
-                                    <td style="padding: 10px 40px 30px 40px;">
-                                        <div style="background-color: #f0fdf4; border: 1px dashed #10b981; border-radius: 12px; padding: 18px; display: flex; align-items: center; gap: 12px;">
-                                            <div style="font-size: 24px; line-height: 1;">📎</div>
-                                            <div style="color: #166534; font-size: 13px; line-height: 1.5;">
-                                                <strong>Informe de cierre:</strong> {texto_adjunto}
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <!-- Footer Corporativo -->
-                                <tr>
-                                    <td style="background-color: #f8fafc; padding: 30px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-                                        <p style="color: #94a3b8; margin: 0; font-size: 13px; line-height: 1.5;">
-                                            Este es un documento electrónico generado automáticamente por el Sistema de Asistencia Aguacol.<br>
-                                            <strong>© 2026 Aguacol SPA | Departamento de Recursos Humanos</strong>
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                </table>
-            </body>
-        </html>
-        """
-        
-        # Path al logo
-        import os
-        logo_path = os.path.join(settings.BASE_DIR, "frontend", "assets", "img", "logo.jpg")
-        
-        images = []
-        if os.path.exists(logo_path):
-            images.append({'cid': 'logo_aguacol', 'path': logo_path})
-
-        return await self._send_email(recipients, subject, html, images, list(adjuntos or []))
-
+            nota = 'No se pudo adjuntar el informe; descárguelo desde Asistencia.'
+        cuerpo += f'<p style="margin:8px 0 0;font:400 13px {cp.FONT};color:{cp.INK2}">{cp.e(nota)}</p>' + cp.boton('Abrir Tramos de cierre')
+        titulos = ' y '.join(t['titulo'] for t in tipos)
+        previa = f'Se cerró {mes} ({cp.fecha(fecha_inicio)} al {cp.fecha(fecha_fin)}) para {area_t}.'
+        if son_pdf and titulos:
+            previa += f' Van {len(nombres)} PDF: {titulos}.'
+        html = cp.correo('Cierre de período', 'navy', f'Se cerró {mes} de {area_t}',
+                         'El período quedó cerrado y ya no admite cambios. Este es el balance de horas de cada tipo de horario y lo que se '
+                         'carga en remuneraciones; el detalle por persona va en los PDF adjuntos.', cuerpo, previa=previa)
+        subject = f'Cierre de {mes} · {area_t} · informe adjunto'
+        return await self._send_email(recipients, subject, html, cp.imagenes(), list(adjuntos or []))

@@ -30,16 +30,19 @@ def test_el_resumen_entrega_otros_y_compensaciones():
 
 
 def test_la_pantalla_del_cierre_muestra_ambas_lineas():
+    # Desde el 09-11-2026 (decisión del dueño) el paso 5 del cierre es el «Resumen antes de sellar» (propuesta A):
+    # lo dibuja cargarResumenCierre con /api/cierre/resumen, las mismas cifras del informe PDF.
+    srv = _leer("backend/services/informe_cierre_pdf.py")
+    assert "['Otros', T('otros')]" in srv, "el resumen antes de sellar perdió la fila «otros»"
+    assert "'Inasistencias compensadas'" in srv and "'Compensan inasistencias'" in srv, \
+        "el resumen antes de sellar perdió las compensaciones"
     js = _leer("frontend/js/marcaciones_ui.js")
-    assert "deuda_otros_horas" in js, "el paso final del cierre perdió la fila «otros»"
-    assert "compensaciones_horas" in js, "el paso final del cierre perdió las compensaciones"
-    assert "Otros (jornadas incompletas sin categoría)" in js
-    assert "Compensaciones descontadas" in js
+    assert "window.cargarResumenCierre = async function" in js
 
 
 def test_los_textos_sobreviven_al_minificador():
     import pytest
     rjsmin = pytest.importorskip("rjsmin")
     m = rjsmin.jsmin(_leer("frontend/js/marcaciones_ui.js"))
-    for frase in ("Otros (jornadas incompletas sin categoría)", "Compensaciones descontadas: "):
+    for frase in ("Lo que se va a cargar en remuneraciones", "Calculando el resumen del área…"):
         assert frase in m, f"el minificador rompe el texto: {frase!r}"
