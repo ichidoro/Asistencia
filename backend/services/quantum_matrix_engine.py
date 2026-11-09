@@ -2097,50 +2097,13 @@ class QuantumMatrixEngine:
             if p_out < p_in:
                 es_nocturno = True
 
-        ext_horizon_bolsa = None
         if is_bolsa:
-            # En Bolsa Flexible Local no hay horario rígido diario de entrada/salida (meta mensual 180h).
-            # El horizonte de observación inicia a las 00:00:00 del día natural (captura ingresos de madrugada).
+            # En Bolsa Flexible no hay horario rígido diario (meta del tramo) y la jornada es el día natural, de 00:00:00 a
+            # 23:59:59: no cruza la noche ni hay viajes largos (decisión del dueño, 09-11-2026). Antes, un día que terminaba en
+            # ENTRADA (o con marcas impares) se llevaba la marca del día siguiente como «viaje de noche»; con una salida
+            # marcada con el botón equivocado eso encadenaba días en anomalía. Ahora cada día usa solo sus propias marcas.
             start_horizon = dt_fecha
-
-            # Detección continua de viaje inter-día / turno nocturno para Bolsa Flexible:
-            # Si hoy tiene marcas no consumidas donde la última es Entrada (o número impar de marcas),
-            # y en el día siguiente existe una marca de Salida dentro de un rango razonable (<= 24h):
-            marcas_hoy = []
-            marcas_manana = []
-            f_manana_str = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d")
-            for l in marcas_no_consumidas:
-                f_l = str(l.get('fecha_hora', ''))[:10]
-                if f_l == fecha:
-                    marcas_hoy.append(l)
-                elif f_l == f_manana_str:
-                    marcas_manana.append(l)
-
-            if marcas_hoy:
-                ultima_hoy = marcas_hoy[-1]
-                tipo_u = str(ultima_hoy.get('tipo', '')).strip().lower()
-                dt_u = MultiBlockTensorSolver.parse_dt(ultima_hoy)
-
-                es_candidato_noche = False
-                if len(marcas_hoy) % 2 == 1:
-                    es_candidato_noche = True
-                elif tipo_u in {'entrada', 'entry', 'e', 'in', '1'}:
-                    es_candidato_noche = True
-
-                if es_candidato_noche and dt_u and marcas_manana:
-                    for m_cand in marcas_manana:
-                        dt_cand = MultiBlockTensorSolver.parse_dt(m_cand)
-                        if dt_cand and dt_cand > dt_u:
-                            delta_h = (dt_cand - dt_u).total_seconds() / 3600.0
-                            if delta_h <= 24.0:
-                                es_nocturno = True
-                                ext_horizon_bolsa = dt_cand + timedelta(seconds=1)
-                                break
-
-            if ext_horizon_bolsa:
-                end_horizon = ext_horizon_bolsa
-            else:
-                end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
+            end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
         else:
             # Sin banda fija (orden del dueño, 27-10-2026): cada marca de alrededor de la jornada es de la jornada cuyo borde del
             # horario le queda más cerca, entre esta jornada y los otros ciclos del día o los del día siguiente.
