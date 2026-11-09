@@ -16,7 +16,8 @@ from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
 from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine, libreta_es_inasistencia
 from backend.services import gps_nexacol
-from backend.services.reglas_marcas_def import TIPO_NO_SE_USA, propuesta_tres_marcas, secuencia_en_revision
+from backend.services.reglas_marcas_def import (TIPO_NO_SE_USA, propuesta_cinco_marcas, propuesta_tres_marcas,
+                                                 secuencia_en_revision)
 from backend.services import libreta_orden
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
@@ -1859,8 +1860,11 @@ async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usad
     if tipica is None and hd.get("turno_asignado_id"):
         tipica = await _colacion_tipica(db, hd.get("turno_asignado_id"), horario["entrada"])
     fhs = [str(r["fecha_hora"])[:19] for r in usadas]
-    p = propuesta_tres_marcas(fhs, horario["entrada"], horario["salida"], int(vc.get("min", 20)), int(vc.get("max", 150)),
-                              col_horario, tipica, tipos=[r["tipo"] for r in usadas])
+    if len(usadas) == 5:
+        p = propuesta_cinco_marcas(fhs, [r["tipo"] for r in usadas], col_horario)
+    else:
+        p = propuesta_tres_marcas(fhs, horario["entrada"], horario["salida"], int(vc.get("min", 20)), int(vc.get("max", 150)),
+                                  col_horario, tipica, tipos=[r["tipo"] for r in usadas])
     if not p:
         return None
     marcas_dt = [datetime.strptime(x, "%Y-%m-%d %H:%M:%S") for x in fhs]
@@ -2009,7 +2013,7 @@ async def marcaciones_del_dia(
         except Exception as e:
             logger.warning(f"Colación típica ({empleado_id} {fecha}): {e}")
     propuesta = None
-    if len(usadas) == 3 and hd and secuencia_en_revision(hd.get("observaciones")):
+    if len(usadas) in (3, 5) and hd and secuencia_en_revision(hd.get("observaciones")):
         try:
             propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario, tipica,
                                                      doble_toque)

@@ -410,3 +410,45 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
             'FALTA_ENTRADA', 'Faltó la ENTRADA', ['Salida', 'Entrada', 'Salida'], {'tipo': 'Entrada', 'hora': hora(he)},
             f'Regla de marcaciones: faltó la ENTRADA (se usó la de su horario, {hora(he)})')]}
     return None
+
+
+def propuesta_cinco_marcas(marcas, tipos, colacion_horario: int = 0):
+    """Propuesta para un día con 5 marcas que se usan (reglas 16 a 21; decisión del dueño, 09-11-2026): sobra una. La primera
+    y la última quedan fijas; de las 3 del medio, una no se usa y, si hace falta, otra cambia de tipo, para que el día quede
+    ENTRADA · SALIDA · ENTRADA · SALIDA (regla 2). Gana la que cambia menos tipos; con empate, la que deja la colación más
+    parecida a `colacion_horario` (la del horario; el mismo criterio «la que más se parece» de las reglas). Si las dos
+    primeras empatan en cambios de tipo, se ofrecen las dos. Al final, siempre, «solo la primera y la última» (regla 1).
+    `marcas`: 'YYYY-MM-DD HH:MM:SS' en orden; `tipos`: el tipo de hoy de cada marca. None si no son 5 o no parten con
+    ENTRADA y terminan con SALIDA."""
+    if len(marcas or []) != 5 or len(tipos or []) != 5:
+        return None
+    from datetime import datetime as _dt
+    try:
+        t = [_dt.strptime(str(m)[:19], '%Y-%m-%d %H:%M:%S') for m in marcas]
+    except ValueError:
+        return None
+    letras = [str(x or '')[:1].upper() for x in tipos]
+    if letras[0] != 'E' or letras[4] != 'S':
+        return None
+    hora = lambda d: d.strftime('%H:%M')
+    palabra = {'E': 'Entrada', 'S': 'Salida'}
+    col = int(colacion_horario or 0)
+    cands = []
+    for k in (1, 2, 3):
+        quedan = [i for i in range(5) if i != k]
+        cambia = [i for j, i in enumerate(quedan) if letras[i] != 'ESES'[j]]
+        pausa = (t[quedan[2]] - t[quedan[1]]).total_seconds() / 60.0
+        cands.append((len(cambia), abs(pausa - col), k, cambia, pausa))
+    cands.sort(key=lambda c: (c[0], c[1], c[2]))
+    elegidas = [c for c in cands[:2] if c[0] == cands[0][0]]
+    opciones = []
+    for n_camb, _, k, cambia, pausa in elegidas:
+        nuevos = [TIPO_NO_SE_USA if i == k else palabra['ESES'[[x for x in range(5) if x != k].index(i)]] for i in range(5)]
+        titulo = f'La de las {hora(t[k])} no se usa'
+        if cambia:
+            titulo += ' y ' + ', '.join(f'la de las {hora(t[i])} es {nuevos[i].upper()}' for i in cambia)
+        titulo += f' (colación {int(round(pausa))} min)'
+        opciones.append({'clave': 'SOBRA_UNA', 'titulo': titulo, 'tipos': nuevos, 'marca': None, 'motivo': None})
+    opciones.append({'clave': 'EXTREMOS', 'titulo': f'Solo la primera ({hora(t[0])}) y la última ({hora(t[4])})',
+                     'tipos': ['Entrada', TIPO_NO_SE_USA, TIPO_NO_SE_USA, TIPO_NO_SE_USA, 'Salida'], 'marca': None, 'motivo': None})
+    return {'combinacion': 5, 'opciones': opciones}

@@ -604,6 +604,34 @@ def test_entrada_salida_salida_falta_la_vuelta_de_colacion():
     router = open(os.path.join(base, "routers", "asistencia.py"), encoding="utf-8").read()
     assert "tipos_op[str(id_dt)] = TIPO_NO_SE_USA" in router and "doble_toque=None):" in router
 
+def test_cinco_marcas_sobra_una_y_queda_como_la_regla_2():
+    """Reglas 16 a 21 (5 marcas): la primera y la última fijas; una del medio no se usa y, si hace falta, otra cambia de
+    tipo (queda E·S·E·S). Gana la que cambia menos tipos y, con empate, la colación más parecida a la del horario; si las
+    dos primeras empatan en cambios se ofrecen las dos. Al final, siempre, solo la primera y la última."""
+    from backend.services.reglas_marcas_def import propuesta_cinco_marcas
+    d = lambda *hs: [f'2026-07-02 {h}:00' for h in hs]
+    tp = lambda s: ['Entrada' if c == 'E' else 'Salida' for c in s]
+    N = 'No se usa'
+    ext = ['Entrada', N, N, N, 'Salida']
+    resumen = lambda r: [o['tipos'] for o in r['opciones']]
+    # E·S·E·S·S: sobra la penúltima salida (la última es la salida del día)
+    r = propuesta_cinco_marcas(d('06:53', '12:55', '13:32', '15:30', '15:37'), tp('ESESS'), 30)
+    assert r['combinacion'] == 5 and resumen(r) == [['Entrada', 'Salida', 'Entrada', N, 'Salida'], ext]
+    assert r['opciones'][0]['titulo'].startswith('La de las 15:30 no se usa')
+    # E·E·S·S·S: sobra la segunda entrada y la vuelta estaba marcada como salida
+    r = propuesta_cinco_marcas(d('06:48', '06:56', '12:55', '13:32', '15:34'), tp('EESSS'), 30)
+    assert resumen(r) == [['Entrada', N, 'Salida', 'Entrada', 'Salida'], ext]
+    assert 'la de las 13:32 es ENTRADA' in r['opciones'][0]['titulo']
+    # E·S·E·E·S: empate en cambios → las dos, primero la colación más parecida a la del horario (35 vs 20 min, horario 30)
+    r = propuesta_cinco_marcas(d('06:55', '12:56', '13:16', '13:31', '16:34'), tp('ESEES'), 30)
+    assert resumen(r) == [['Entrada', 'Salida', N, 'Entrada', 'Salida'], ['Entrada', 'Salida', 'Entrada', N, 'Salida'], ext]
+    # E·S·S·S·S: tres con un cambio; se ofrecen las dos de colación más parecida (31 y 27 min)
+    r = propuesta_cinco_marcas(d('06:51', '13:01', '13:28', '13:32', '15:35'), tp('ESSSS'), 30)
+    assert resumen(r)[:2] == [['Entrada', 'Salida', N, 'Entrada', 'Salida'], ['Entrada', 'Salida', 'Entrada', N, 'Salida']]
+    # No empieza con ENTRADA o no son 5: decide la persona
+    assert propuesta_cinco_marcas(d('06:51', '13:01', '13:28', '13:32', '15:35'), tp('SESES'), 30) is None
+    assert propuesta_cinco_marcas(d('06:51', '13:01', '15:35'), tp('ESS'), 30) is None
+
 def test_ventana_de_tres_marcas_con_opciones_y_un_solo_guardar():
     """La ventana muestra las opciones completas (la primera elegida), lo que paga cada una, «Otra cosa» y un solo Guardar;
     la colación de su horario sale de las marcas reales (mediana), sin horas escritas en el código."""
