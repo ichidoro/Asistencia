@@ -5652,8 +5652,8 @@ window.descargarPreinformeGrilla = function (btn) {
 // ── RESUMEN ANTES DE SELLAR (paso 5 del cierre) ─────────────────────────────
 // Propuesta A elegida por el dueño (09-11-2026): una columna por tipo de horario con el balance de horas (las horas
 // totales son el punto de partida), lo que se carga con su porcentaje, de dónde sale y las jornadas.
-window.cargarResumenCierre = async function (st) {
-    const caja = document.getElementById('cz-resumen');
+window.cargarResumenCierre = async function (st, idCaja) {
+    const caja = document.getElementById(idCaja || 'cz-resumen');
     if (!caja || !st) return;
     const e = window.escHtml || (x => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
     try {
@@ -5681,6 +5681,54 @@ window.cargarResumenCierre = async function (st) {
         console.error(err);
         caja.innerHTML = '<div class="alert alert-danger">' + e(err.message || 'No se pudo preparar el resumen del cierre.') + '</div>';
     }
+};
+
+// Ventana «Resumen» de un área ya cerrada (botón de Configuración → Tramos de cierre, dueño 09-11-2026): la misma
+// vista del paso 5. Un período cerrado ya no se recalcula, así que muestra las cifras del cierre.
+window.verResumenCierre = function (fIni, fFin, area, cerro) {
+    const e = window.escHtml || (x => String(x == null ? '' : x));
+    const f = window.formatFechaDDMMYYYY || (x => x);
+    const viejo = document.getElementById('modal-resumen-cierre');
+    if (viejo) viejo.remove();
+    const st = { fIni: fIni, fFin: fFin, area: area };
+    window._resumenCierreVista = st;
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="modal fade" id="modal-resumen-cierre" tabindex="-1" aria-labelledby="modal-resumen-cierre-t" aria-hidden="true">
+          <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="modal-resumen-cierre-t"><i class="bi bi-shield-lock-fill"></i> Resumen del cierre</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+              </div>
+              <div class="modal-body">
+                <div class="cz-r-per"><span class="chip-cerrada"><i class="bi bi-lock-fill"></i> Cerrada</span>
+                  <span>Área <b>${e(area)}</b></span><span>Tramo <b>${e(f(fIni))} al ${e(f(fFin))}</b></span>${cerro ? `<span>Cerró <b>${e(cerro)}</b></span>` : ''}</div>
+                <h4 class="fw-bold mb-1 mt-3"><i class="bi bi-file-text"></i> Lo que se cargó en remuneraciones</h4>
+                <p class="cz-r-sub">Una columna por tipo de horario: la cuenta parte de las horas totales y termina en lo que se descuenta y lo que se paga.</p>
+                <div id="cz-resumen-vista" class="cz-r-cols"><div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Preparando el resumen del área…</div></div>
+                <div class="d-flex gap-2 mt-3">
+                  <button class="btn btn-outline-success fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.descargarExcelCierre(window._resumenCierreVista)">
+                    <i class="bi bi-file-earmark-excel-fill me-2"></i> Descargar Excel (detalle día a día)
+                  </button>
+                  <button class="btn btn-outline-primary fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.descargarInformeCierre(window._resumenCierreVista.fIni, window._resumenCierreVista.fFin, window._resumenCierreVista.area, this)">
+                    <i class="bi bi-file-earmark-pdf-fill me-2"></i> Descargar informe (PDF)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`);
+    const el = document.getElementById('modal-resumen-cierre');
+    el.addEventListener('hidden.bs.modal', () => el.remove());
+    new bootstrap.Modal(el).show();
+    window.cargarResumenCierre(st, 'cz-resumen-vista');
+};
+
+window.descargarExcelCierre = function (st) {
+    if (!st || !st.fIni || !st.fFin) return;
+    const token = typeof AuthService !== 'undefined' ? AuthService.getToken() : localStorage.getItem('access_token');
+    window.location.href = '/api/reports/asistencia/excel/?fecha_inicio=' + st.fIni + '&fecha_fin=' + st.fFin + '&area=' + encodeURIComponent(st.area)
+        + (token ? '&token=' + encodeURIComponent(token) : '');
 };
 
 // ── INFORME DE CIERRE (PDF) ──────────────────────────────────────────────────

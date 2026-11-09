@@ -277,3 +277,11 @@ def test_horas_de_otros_dias_entran_al_balance():
           '2026-05-03': {'estado': 'PERMISO', 'horas_teoricas': 8, 'horas_trabajadas': 2}}
     h = icp.horas_dias(dd, [date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3)])
     assert h == {'prog': 8 * 3600, 'trab': 8 * 3600, 'otros': {'Jornadas compensatorias': 4 * 3600, 'Días con permiso': 2 * 3600}}
+
+
+def test_resumen_de_un_area_cerrada_desde_tramos():
+    raiz = os.path.join(os.path.dirname(__file__), '..', '..')
+    js = open(os.path.join(raiz, 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
+    cfg = open(os.path.join(raiz, 'frontend', 'js', 'configuracion_ui.js'), encoding='utf-8').read()
+    assert "window.verResumenCierre = function" in js and "window.cargarResumenCierre(st, 'cz-resumen-vista')" in js
+    assert "verResumenCierre('" in cfg and ">Resumen</button>" in cfg and ">Informe</button>" in cfg

@@ -2086,11 +2086,13 @@ window.renderPeriodosRRHH = function(periodos) {
             if (cerradas.has(a)) {
                 const c = cierres[a] || {};
                 const acta = "descargarInformeCierre('" + p.fecha_inicio + "','" + p.fecha_fin + "','" + esc(a) + "',this)";
+                const resumen = "verResumenCierre('" + p.fecha_inicio + "','" + p.fecha_fin + "','" + esc(a) + "','" + esc((c.por || '').replace(/'/g, '')) + "')";
                 html += '<td><div class="c-ok" title="' + esc(a) + ': cerrada' + (c.fecha ? ' el ' + formatDateDMY(c.fecha) : '') + (c.por ? ' por ' + esc(c.por) : '') + '">'
                     + '<i class="bi bi-check-circle-fill" aria-hidden="true"></i>'
                     + (c.fecha ? '<b>' + corta(c.fecha) + '</b>' : '<b>Cerrada</b>')
                     + (c.por ? '<small>' + esc(c.por) + '</small>' : '')
-                    + '<button type="button" class="tA-acta" onclick="' + acta + '" aria-label="Descargar el informe de cierre de ' + esc(a) + ' (PDF, uno por tipo de horario)"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>Informe</button>'
+                    + '<span class="tA-bts"><button type="button" class="tA-acta" onclick="' + resumen + '" aria-label="Ver el resumen del cierre de ' + esc(a) + '"><i class="bi bi-file-text" aria-hidden="true"></i>Resumen</button>'
+                    + '<button type="button" class="tA-acta" onclick="' + acta + '" aria-label="Descargar el informe de cierre de ' + esc(a) + ' (PDF, uno por tipo de horario)"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>Informe</button></span>'
                     + '</div></td>';
             } else if (pendientes.has(a)) {
                 html += '<td><span class="c-wait"><i class="bi bi-clock" aria-hidden="true"></i>Falta</span></td>';
@@ -2110,7 +2112,7 @@ window.renderPeriodosRRHH = function(periodos) {
     });
 
     html += '</tbody></table></div>'
-        + '<div class="tA-leg"><span class="ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Cerrada: fecha y quién cerró; «Informe» descarga un PDF por tipo de horario</span>'
+        + '<div class="tA-leg"><span class="ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Cerrada: fecha y quién cerró; «Resumen» muestra el balance y «Informe» descarga un PDF por tipo de horario</span>'
         + '<span class="wait"><i class="bi bi-clock" aria-hidden="true"></i>Falta cerrar</span><span>— Sin cierre en ese tramo</span></div>';
     container.innerHTML = html;
 };

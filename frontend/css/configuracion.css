@@ -73,6 +73,7 @@
 .tA .c-ok b { font-size: 12px; font-weight: 600; }
 .tA .c-ok small { font-size: 11px; color: var(--ta-ink3); }
 .tA-acta { display: inline-flex; align-items: center; gap: 4px; height: 26px; margin-top: 4px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--ta-line); background: #fff; color: var(--ta-ink2); font: 600 12px 'Barlow', sans-serif; cursor: pointer; }
+.tA-bts { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
 .tA-acta:hover { border-color: var(--ta-ok); color: var(--ta-ok); background: var(--ta-ok-bg); }
 .tA-acta:focus-visible, .tA-ico:focus-visible { outline: 2px solid var(--ta-navy); outline-offset: 2px; }
 .tA .c-wait { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--ta-wait-bg); color: var(--ta-wait); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
