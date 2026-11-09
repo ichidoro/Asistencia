@@ -750,6 +750,11 @@ span.tw-mt { display: block; }
 #modal-marcacion-manual .mm-quitar:focus-visible { outline: 2px solid #b0352c; outline-offset: 1px; }
 #modal-marcacion-manual .mm-aviso:not(:empty) { margin-top: 10px; font-size: 12px; color: var(--vn-amber); }
 #modal-marcacion-manual .mm-pie-marcas { margin-top: 12px; }
+/* «Guardar clasificación / el cambio de tipo»: botón con borde y relleno suave (la base .btn le quita el borde) */
+#modal-marcacion-manual #btn-marcas-guardar { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 16px; border: 1.5px solid var(--vn-navy); border-radius: 10px; background: var(--vn-navy-soft); color: var(--vn-navy); font: 600 13px "Barlow", system-ui, sans-serif; white-space: nowrap; }
+#modal-marcacion-manual #btn-marcas-guardar:hover:not(:disabled) { background: var(--vn-navy); color: #fff; }
+#modal-marcacion-manual #btn-marcas-guardar:focus-visible { outline: 2px solid var(--vn-navy); outline-offset: 2px; }
+#modal-marcacion-manual #btn-marcas-guardar:disabled { opacity: .45; cursor: not-allowed; }
 #modal-marcacion-manual .mm-cerrado { margin-top: 10px; font-size: 12.5px; color: var(--ov-ink-3); }
 /* Opciones de un día de 3 marcas: tarjetas iguales y «Otra cosa» */
 #modal-marcacion-manual .mm-ops-tit { margin: 14px 0 8px; font-size: 12.5px; font-weight: 600; color: var(--ov-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
