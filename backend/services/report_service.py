@@ -181,6 +181,340 @@ class ReportService:
             logger.error(f"Error en generate_excel_custom_range: {e}")
             raise
 
+    async def _calcular_filas(self, matrix_data: dict, rango_dias: List[date]) -> Dict[str, Any]:
+        """Resumen por persona del período (réplica de la grilla analítica): lo usan el Excel y el informe PDF de
+        cierre, para que los dos documentos escriban las mismas cifras."""
+        empleados = matrix_data.get("empleados", [])
+        emp_matrix = matrix_data.get("matrix", {})
+        feriados_set = {f['fecha'] for f in matrix_data.get("feriados", [])}
+        # Evaluar bonos desde el backend
+        from backend.services.bono_service import BonoService
+        bono_srv = BonoService(self.asistencia_service.repository.db)
+        bonos_eval = await bono_srv.evaluar_bonos_directo(
+            empleados, 
+            matrix_data.get("data", []), 
+            matrix_data.get("justificaciones", []), 
+            matrix_data.get("matrix", {})
+        )
+        
+        todos_bonos = set()
+        for emp_bonos in bonos_eval.values():
+            todos_bonos.update(emp_bonos.keys())
+        lista_bonos = sorted(list(todos_bonos))
+
+        # 1. Calcular resumen completo de cada empleado (réplica exacta de la grilla analítica)
+        rows_calc = []
+        hay_bolsa = False
+        
+        for emp in empleados:
+            emp_id = emp['id']
+            es_bolsa = emp.get('tipo_programacion') == 'BOLSA_FLEXIBLE'
+            if es_bolsa:
+                hay_bolsa = True
+                
+            he_bruto = 0
+            he_apr = 0
+            he_rec = 0
+            he_pend = 0
+            he_compensado = 0
+            d_tot = 0
+            min_col = 0
+            min_per = 0
+            min_atr = 0
+            min_sad = 0
+            
+            cnt_atr = 0
+            cnt_sad = 0
+            cnt_inas = 0
+            cnt_esp = 0
+            cnt_per = 0
+            cnt_efectivos = 0
+            
+            acum_bolsa = 0
+            excedido = False
+            meta_min = 0
+            
+            # Cargar dias guardados de la matriz de asistencia
+            dias_dict = emp_matrix.get(str(emp_id), {})
+            if not dias_dict and emp_id in emp_matrix:
+                dias_dict = emp_matrix[emp_id]
+
+            if es_bolsa:
+                meta_original = emp.get("meta_mensual_minutos")
+                if not meta_original:
+                    meta_original = round((emp.get("meta_horas_semanales") or 0.0) * 60)
+                # Vigencia parcial (ingreso/egreso a mitad del tramo): meta proporcional
+                # a los días corridos disponibles (calculada una sola vez en la matriz).
+                pror_bolsa = emp.get("bolsa_prorrateo")
+                meta_original = aplicar_prorrateo(meta_original, pror_bolsa)
+
+                dias_programados = 0
+                dias_justificados = 0
+
+                for d in rango_dias:
+                    f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
+                    if not fecha_en_vigencia(f_str, pror_bolsa):
+                        continue
+                    is_fer = f_str in feriados_set
+                    di_check = dias_dict.get(f_str, {})
+                    
+                    day_db = d.weekday()
+                    turno_dias = emp.get("turno_dias", {})
+                    day_info = turno_dias.get(str(day_db), {}) or turno_dias.get(day_db, {})
+                    is_structurally_libre = day_info.get("es_libre") == 1
+                    
+                    is_descanso = is_fer or is_structurally_libre or (di_check.get("estado") == 'LIBRE')
+                    
+                    if not is_descanso:
+                        dias_programados += 1
+                        estados_justificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION']
+                        di_estado = di_check.get("estado", "") or ""
+                        di_nomen = di_check.get("nomenclatura", "") or ""
+                        is_justificado = (
+                            any(ej in di_estado.upper() for ej in estados_justificados) or
+                            (bool(di_nomen) and str(di_nomen).strip().upper() != 'DEOP')
+                        )
+                        
+                        if is_justificado:
+                            dias_justificados += 1
+                            
+                # Evitar división por cero
+                if dias_programados > 0:
+                    if dias_justificados > 0:
+                        valor_turno_min = meta_original / dias_programados
+                        meta_min = round(meta_original - (valor_turno_min * dias_justificados))
+                    else:
+                        meta_min = meta_original
+                else:
+                    meta_min = meta_original
+                    
+                if emp.get("meta_ajustada_minutos_descuento") and dias_justificados == 0:
+                    meta_min = max(0, meta_min - emp.get("meta_ajustada_minutos_descuento"))
+            
+            acum_semanal = 0
+            start_day_db = emp.get("primer_dia_semana_turno", 0)
+            
+            for d in rango_dias:
+                if d.weekday() == start_day_db:
+                    acum_semanal = 0
+                    
+                f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
+                di = dias_dict.get(f_str)
+                if not di:
+                    continue
+                    
+                trab = round((di.get("horas_trabajadas") or 0.0) * 60)
+                di_estado = di.get("estado") or ""
+                
+                # Detección exhaustiva de Jornada Especial y Coberturas (idéntico a marcaciones_ui.js líneas 4665-4678)
+                ja = di.get("jornada_adicional") or {}
+                ja_est = ja.get("estado")
+                es_ja_rechazada = (ja_est == 'RECHAZADA')
+                es_ja_he = (ja_est == 'HORAS_EXTRAS')
+                tiene_ja_activa = bool(ja and (ja_est in ('PENDIENTE', 'JORNADA_ESPECIAL', 'EXTRA') or not ja_est))
+                # Una jornada gastada en compensar una inasistencia ya no se paga como jornada especial
+                es_compensatoria = ja_est == 'COMPENSATORIA' or di_estado == 'JORNADA_COMPENSATORIA'
+                es_dia_esp_valido = not es_ja_rechazada and not es_ja_he and not es_compensatoria and (
+                    di_estado in ('JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA') or
+                    (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0 and di_estado != 'RECHAZADA')
+                )
+                
+                is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)
+                
+                if not es_bolsa and not is_esp:
+                    acum_semanal += trab
+                    
+                di["_acumuladoSemanalSnap"] = acum_semanal
+                
+                if not is_esp and not es_bolsa:
+                    cond_tipo = int(di.get("deuda_condonada") or 0)
+
+                    raw_col = float(di.get("minutos_exceso_colacion") or 0.0)
+                    # Permiso del día: el tomado entre marcas o el ingresado por horas; cuando están los dos son el
+                    # mismo permiso (la justificación se ingresa sobre la pausa marcada): el mayor, nunca la suma.
+                    raw_per = max(float(di.get("minutos_permisos_detectados") or 0.0),
+                                  float(di.get("minutos_permiso_personal_deuda") or 0.0))
+
+                    condona_atr = cond_tipo in (2, 3, 5)
+                    raw_atr = 0.0 if condona_atr else float(di.get("minutos_atraso") or 0.0)
+
+                    condona_sad = cond_tipo in (1, 3, 5)
+                    raw_sad = 0.0 if condona_sad else float(di.get("minutos_salida_adelantada") or 0.0)
+
+                    day_net_deuda = 0.0
+                    day_col = 0.0
+                    day_per = 0.0
+                    day_atr = 0.0
+                    day_sad = 0.0
+
+                    if cond_tipo == 5:
+                        # Cierre de Faena / Turno completo condonado
+                        day_net_deuda = 0.0
+                        day_col = 0.0
+                        day_per = 0.0
+                        day_atr = 0.0
+                        day_sad = 0.0
+                    else:
+                        base_deuda = float(di.get("minutos_deuda") or 0.0)
+                        if base_deuda > 0:
+                            day_net_deuda = base_deuda
+                            raw_total = raw_col + raw_per + raw_atr + raw_sad
+                            if raw_total > 0:
+                                if base_deuda >= raw_total:
+                                    day_col = raw_col
+                                    day_per = raw_per
+                                    day_atr = raw_atr
+                                    day_sad = raw_sad
+                                else:
+                                    factor = base_deuda / raw_total
+                                    day_col = raw_col * factor
+                                    day_per = raw_per * factor
+                                    day_atr = raw_atr * factor
+                                    day_sad = raw_sad * factor
+                        else:
+                            day_net_deuda = 0.0
+                            day_col = 0.0
+                            day_per = 0.0
+                            day_atr = 0.0
+                            day_sad = 0.0
+
+                    d_tot += day_net_deuda
+                    min_col += day_col
+                    min_per += day_per
+                    min_atr += day_atr
+                    min_sad += day_sad
+
+                    if (di.get("minutos_atraso") or 0) > 0 and not condona_atr:
+                        cnt_atr += 1
+                    if (di.get("minutos_salida_adelantada") or 0) > 0 and not condona_sad:
+                        cnt_sad += 1
+                    if di.get("tiene_permiso_hora") or di.get("permiso_activo") or raw_per > 0:
+                        cnt_per += 1
+
+                if di_estado == 'INASISTENCIA':
+                    cnt_inas += 1
+                if tiene_ja_activa or es_dia_esp_valido:
+                    cnt_esp += 1
+                if di.get("hora_entrada_real") and not is_esp and di_estado not in ['LIBRE', 'FERIADO', 'INASISTENCIA']:
+                    cnt_efectivos += 1
+                    
+                # HE calculations
+                if not is_esp:
+                    if es_bolsa:
+                        snap_antes = acum_bolsa
+                        acum_bolsa += trab
+                        di["_acumuladoBolsaSnapPrev"] = snap_antes
+                        di["_acumuladoBolsaSnap"] = acum_bolsa
+                        di["_metaMinBolsa"] = meta_min
+                        
+                        if excedido:
+                            he_bruto += trab
+                        elif acum_bolsa > meta_min and trab > 0:
+                            he_bruto += (acum_bolsa - meta_min)
+                            excedido = True
+                    else:
+                        he_bruto += max(di.get("minutos_extra_bruto") or 0, di.get("minutos_extra_autorizados") or 0)
+                elif es_bolsa:
+                    di["_acumuladoBolsaSnapPrev"] = acum_bolsa
+                    di["_acumuladoBolsaSnap"] = acum_bolsa
+                    di["_metaMinBolsa"] = meta_min
+                    
+                if not is_esp:
+                    if di.get("estado_he") == 'APROBADO':
+                        he_apr += (di.get("minutos_extra_autorizados") or 0)
+                    elif di.get("estado_he") == 'RECHAZADO':
+                        he_rec += (di.get("minutos_extra_bruto") or 0)
+                    elif (di.get("minutos_extra_bruto") or 0) > 0:
+                        he_pend += (di.get("minutos_extra_bruto") or 0)
+                elif es_ja_he:
+                    # Jornada adicional aprobada como HE
+                    min_ja_he = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
+                    he_apr += min_ja_he
+                # Llamado de un día no laborable aprobado como horas extra (se valida aparte, 05-11-2026)
+                llam_d = (ja or {}).get("llamado") or {}
+                if is_esp and llam_d.get("estado") == 'HORAS_EXTRAS':
+                    he_apr += float(llam_d.get("minutos_autorizados") or llam_d.get("minutos") or 0.0)
+                # Llamado aprobado como jornada EXTRA: cuenta como una jornada especial más
+                if llam_d.get("estado") == 'EXTRA':
+                    cnt_esp += 1
+                    
+                # FIX: he_compensado se acumula para TODOS los días (incluidos JORNADA_ESPECIAL),
+                # igual que en el frontend (marcaciones_ui.js línea 4266)
+                he_compensado += (di.get("minutos_compensados_he") or 0)
+                        
+            # FIX: Redondeo con 4 decimales para coincidir con el frontend
+            he_bruto = round(he_bruto, 4)
+            he_apr = round(he_apr, 4)
+            he_rec = round(he_rec, 4)
+            he_pend = round(he_pend, 4)
+            
+            saldo = he_apr - d_tot - he_compensado
+            # Libro mayor de minutos (lo calcula el servidor en la matriz): el Excel escribe los mismos
+            # totales que la grilla y la ventana de cuadre, y su saldo manda (25-10-2026).
+            libro = ((dias_dict.get('info') or {}) if isinstance(dias_dict, dict) else {}).get('libro') if not es_bolsa else None
+            if libro and libro.get('saldo') is not None:
+                saldo = float(libro.get('saldo') or 0.0)
+            saldo_meta = (acum_bolsa - meta_min) if es_bolsa else None
+            
+            # Total incidencias exacto
+            tot_incidencias_emp = cnt_per + cnt_atr + cnt_sad + cnt_inas + cnt_esp
+            
+            # DEBUG: Log de auditoría para detectar discrepancia Excel vs Grilla
+            emp_nombre = f"{emp['apellido_paterno']} {emp.get('apellido_materno', '')} {emp['nombre']}".strip()
+            logger.info(
+                f"📊 [EXCEL_DEBUG] {emp_nombre}: "
+                f"he_apr={he_apr} d_tot={d_tot} he_comp={he_compensado} "
+                f"saldo={saldo} ({self._format_hhmmss(saldo)}) | "
+                f"cnt_esp={cnt_esp} tot_incidencias={tot_incidencias_emp} | "
+                f"dias_procesados={sum(1 for d in rango_dias if dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}'))}"
+            )
+            
+            rows_calc.append({
+                "emp_id": emp_id,
+                "nombre": f"{emp['apellido_paterno']} {emp.get('apellido_materno', '')} {emp['nombre']}".strip().replace('  ', ' '),
+                "rut": emp.get("rut", ""),
+                "activo": "SÍ" if emp.get("activo", 1) else "NO",
+                "esBolsa": es_bolsa,
+                "he_bruto": he_bruto,
+                "he_apr": he_apr,
+                "he_rec": he_rec,
+                "he_pend": he_pend,
+                "d_tot": d_tot,
+                "min_col": round(min_col),
+                "min_per": round(min_per),
+                "min_atr": round(min_atr),
+                "min_sad": round(min_sad),
+                "cnt_atr": cnt_atr,
+                "cnt_sad": cnt_sad,
+                "cnt_inas": cnt_inas,
+                "cnt_esp": cnt_esp,
+                "cnt_per": cnt_per,
+                "tot_incidencias": tot_incidencias_emp,
+                "cnt_efectivos": cnt_efectivos,
+                "saldo": saldo,
+                "libro": libro or {},
+                "metaMin": meta_min,
+                "acumBolsa": acum_bolsa,
+                "saldoMeta": saldo_meta,
+                "bonos": bonos_eval.get(emp_id) or bonos_eval.get(str(emp_id), {})
+            })
+        return {"filas": rows_calc, "hay_bolsa": hay_bolsa, "lista_bonos": lista_bonos}
+
+    async def datos_periodo(self, fecha_inicio: str, fecha_fin: str, area: str = None) -> Dict[str, Any]:
+        """Matriz del período (la misma del Excel de cierre) y el resumen por persona, para el informe PDF."""
+        try:
+            fila = await self.asistencia_service.repository.db.fetch_one(
+                "SELECT short_label FROM estados_asistencia WHERE codigo = 'LLAMADO_EMERGENCIA'")
+            self._sigla_llamado = (fila or {}).get('short_label') or 'EME'
+        except Exception:
+            self._sigla_llamado = 'EME'
+        f_ini, f_fin = date.fromisoformat(fecha_inicio), date.fromisoformat(fecha_fin)
+        rango_dias = [(f_ini + timedelta(days=i)) for i in range((f_fin - f_ini).days + 1)]
+        matrix_data = await self.asistencia_service.get_matrix_data_with_projections(
+            f_ini.month, f_ini.year, area=area, turno_id=None, fecha_inicio_override=fecha_inicio, fecha_fin_override=fecha_fin)
+        calc = await self._calcular_filas(matrix_data, rango_dias)
+        return {"matrix_data": matrix_data, "rango_dias": rango_dias, **calc}
+
     async def _generate_excel_workbook(self, matrix_data: dict, rango_dias: List[date], area: Optional[str]) -> BytesIO:
         # Sigla del llamado de un día no laborable: la de Configuración → Estados (por defecto «EME»)
         try:
@@ -195,317 +529,11 @@ class ReportService:
             feriados = matrix_data.get("feriados", [])
             feriados_set = {f['fecha'] for f in feriados}
             
-            # Evaluar bonos desde el backend
-            from backend.services.bono_service import BonoService
-            bono_srv = BonoService(self.asistencia_service.repository.db)
-            bonos_eval = await bono_srv.evaluar_bonos_directo(
-                empleados, 
-                matrix_data.get("data", []), 
-                matrix_data.get("justificaciones", []), 
-                matrix_data.get("matrix", {})
-            )
-            
-            todos_bonos = set()
-            for emp_bonos in bonos_eval.values():
-                todos_bonos.update(emp_bonos.keys())
-            lista_bonos = sorted(list(todos_bonos))
-
-            # 1. Calcular resumen completo de cada empleado (réplica exacta de la grilla analítica)
-            rows_calc = []
-            hay_bolsa = False
-            
-            for emp in empleados:
-                emp_id = emp['id']
-                es_bolsa = emp.get('tipo_programacion') == 'BOLSA_FLEXIBLE'
-                if es_bolsa:
-                    hay_bolsa = True
-                    
-                he_bruto = 0
-                he_apr = 0
-                he_rec = 0
-                he_pend = 0
-                he_compensado = 0
-                d_tot = 0
-                min_col = 0
-                min_per = 0
-                min_atr = 0
-                min_sad = 0
-                
-                cnt_atr = 0
-                cnt_sad = 0
-                cnt_inas = 0
-                cnt_esp = 0
-                cnt_per = 0
-                cnt_efectivos = 0
-                
-                acum_bolsa = 0
-                excedido = False
-                meta_min = 0
-                
-                # Cargar dias guardados de la matriz de asistencia
-                dias_dict = emp_matrix.get(str(emp_id), {})
-                if not dias_dict and emp_id in emp_matrix:
-                    dias_dict = emp_matrix[emp_id]
-
-                if es_bolsa:
-                    meta_original = emp.get("meta_mensual_minutos")
-                    if not meta_original:
-                        meta_original = round((emp.get("meta_horas_semanales") or 0.0) * 60)
-                    # Vigencia parcial (ingreso/egreso a mitad del tramo): meta proporcional
-                    # a los días corridos disponibles (calculada una sola vez en la matriz).
-                    pror_bolsa = emp.get("bolsa_prorrateo")
-                    meta_original = aplicar_prorrateo(meta_original, pror_bolsa)
-
-                    dias_programados = 0
-                    dias_justificados = 0
-
-                    for d in rango_dias:
-                        f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
-                        if not fecha_en_vigencia(f_str, pror_bolsa):
-                            continue
-                        is_fer = f_str in feriados_set
-                        di_check = dias_dict.get(f_str, {})
-                        
-                        day_db = d.weekday()
-                        turno_dias = emp.get("turno_dias", {})
-                        day_info = turno_dias.get(str(day_db), {}) or turno_dias.get(day_db, {})
-                        is_structurally_libre = day_info.get("es_libre") == 1
-                        
-                        is_descanso = is_fer or is_structurally_libre or (di_check.get("estado") == 'LIBRE')
-                        
-                        if not is_descanso:
-                            dias_programados += 1
-                            estados_justificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION']
-                            di_estado = di_check.get("estado", "") or ""
-                            di_nomen = di_check.get("nomenclatura", "") or ""
-                            is_justificado = (
-                                any(ej in di_estado.upper() for ej in estados_justificados) or
-                                (bool(di_nomen) and str(di_nomen).strip().upper() != 'DEOP')
-                            )
-                            
-                            if is_justificado:
-                                dias_justificados += 1
-                                
-                    # Evitar división por cero
-                    if dias_programados > 0:
-                        if dias_justificados > 0:
-                            valor_turno_min = meta_original / dias_programados
-                            meta_min = round(meta_original - (valor_turno_min * dias_justificados))
-                        else:
-                            meta_min = meta_original
-                    else:
-                        meta_min = meta_original
-                        
-                    if emp.get("meta_ajustada_minutos_descuento") and dias_justificados == 0:
-                        meta_min = max(0, meta_min - emp.get("meta_ajustada_minutos_descuento"))
-                
-                acum_semanal = 0
-                start_day_db = emp.get("primer_dia_semana_turno", 0)
-                
-                for d in rango_dias:
-                    if d.weekday() == start_day_db:
-                        acum_semanal = 0
-                        
-                    f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
-                    di = dias_dict.get(f_str)
-                    if not di:
-                        continue
-                        
-                    trab = round((di.get("horas_trabajadas") or 0.0) * 60)
-                    di_estado = di.get("estado") or ""
-                    
-                    # Detección exhaustiva de Jornada Especial y Coberturas (idéntico a marcaciones_ui.js líneas 4665-4678)
-                    ja = di.get("jornada_adicional") or {}
-                    ja_est = ja.get("estado")
-                    es_ja_rechazada = (ja_est == 'RECHAZADA')
-                    es_ja_he = (ja_est == 'HORAS_EXTRAS')
-                    tiene_ja_activa = bool(ja and (ja_est in ('PENDIENTE', 'JORNADA_ESPECIAL', 'EXTRA') or not ja_est))
-                    # Una jornada gastada en compensar una inasistencia ya no se paga como jornada especial
-                    es_compensatoria = ja_est == 'COMPENSATORIA' or di_estado == 'JORNADA_COMPENSATORIA'
-                    es_dia_esp_valido = not es_ja_rechazada and not es_ja_he and not es_compensatoria and (
-                        di_estado in ('JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA') or
-                        (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0 and di_estado != 'RECHAZADA')
-                    )
-                    
-                    is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)
-                    
-                    if not es_bolsa and not is_esp:
-                        acum_semanal += trab
-                        
-                    di["_acumuladoSemanalSnap"] = acum_semanal
-                    
-                    if not is_esp and not es_bolsa:
-                        cond_tipo = int(di.get("deuda_condonada") or 0)
-
-                        raw_col = float(di.get("minutos_exceso_colacion") or 0.0)
-                        # Permiso del día: el tomado entre marcas o el ingresado por horas; cuando están los dos son el
-                        # mismo permiso (la justificación se ingresa sobre la pausa marcada): el mayor, nunca la suma.
-                        raw_per = max(float(di.get("minutos_permisos_detectados") or 0.0),
-                                      float(di.get("minutos_permiso_personal_deuda") or 0.0))
-
-                        condona_atr = cond_tipo in (2, 3, 5)
-                        raw_atr = 0.0 if condona_atr else float(di.get("minutos_atraso") or 0.0)
-
-                        condona_sad = cond_tipo in (1, 3, 5)
-                        raw_sad = 0.0 if condona_sad else float(di.get("minutos_salida_adelantada") or 0.0)
-
-                        day_net_deuda = 0.0
-                        day_col = 0.0
-                        day_per = 0.0
-                        day_atr = 0.0
-                        day_sad = 0.0
-
-                        if cond_tipo == 5:
-                            # Cierre de Faena / Turno completo condonado
-                            day_net_deuda = 0.0
-                            day_col = 0.0
-                            day_per = 0.0
-                            day_atr = 0.0
-                            day_sad = 0.0
-                        else:
-                            base_deuda = float(di.get("minutos_deuda") or 0.0)
-                            if base_deuda > 0:
-                                day_net_deuda = base_deuda
-                                raw_total = raw_col + raw_per + raw_atr + raw_sad
-                                if raw_total > 0:
-                                    if base_deuda >= raw_total:
-                                        day_col = raw_col
-                                        day_per = raw_per
-                                        day_atr = raw_atr
-                                        day_sad = raw_sad
-                                    else:
-                                        factor = base_deuda / raw_total
-                                        day_col = raw_col * factor
-                                        day_per = raw_per * factor
-                                        day_atr = raw_atr * factor
-                                        day_sad = raw_sad * factor
-                            else:
-                                day_net_deuda = 0.0
-                                day_col = 0.0
-                                day_per = 0.0
-                                day_atr = 0.0
-                                day_sad = 0.0
-
-                        d_tot += day_net_deuda
-                        min_col += day_col
-                        min_per += day_per
-                        min_atr += day_atr
-                        min_sad += day_sad
-
-                        if (di.get("minutos_atraso") or 0) > 0 and not condona_atr:
-                            cnt_atr += 1
-                        if (di.get("minutos_salida_adelantada") or 0) > 0 and not condona_sad:
-                            cnt_sad += 1
-                        if di.get("tiene_permiso_hora") or di.get("permiso_activo") or raw_per > 0:
-                            cnt_per += 1
-
-                    if di_estado == 'INASISTENCIA':
-                        cnt_inas += 1
-                    if tiene_ja_activa or es_dia_esp_valido:
-                        cnt_esp += 1
-                    if di.get("hora_entrada_real") and not is_esp and di_estado not in ['LIBRE', 'FERIADO', 'INASISTENCIA']:
-                        cnt_efectivos += 1
-                        
-                    # HE calculations
-                    if not is_esp:
-                        if es_bolsa:
-                            snap_antes = acum_bolsa
-                            acum_bolsa += trab
-                            di["_acumuladoBolsaSnapPrev"] = snap_antes
-                            di["_acumuladoBolsaSnap"] = acum_bolsa
-                            di["_metaMinBolsa"] = meta_min
-                            
-                            if excedido:
-                                he_bruto += trab
-                            elif acum_bolsa > meta_min and trab > 0:
-                                he_bruto += (acum_bolsa - meta_min)
-                                excedido = True
-                        else:
-                            he_bruto += max(di.get("minutos_extra_bruto") or 0, di.get("minutos_extra_autorizados") or 0)
-                    elif es_bolsa:
-                        di["_acumuladoBolsaSnapPrev"] = acum_bolsa
-                        di["_acumuladoBolsaSnap"] = acum_bolsa
-                        di["_metaMinBolsa"] = meta_min
-                        
-                    if not is_esp:
-                        if di.get("estado_he") == 'APROBADO':
-                            he_apr += (di.get("minutos_extra_autorizados") or 0)
-                        elif di.get("estado_he") == 'RECHAZADO':
-                            he_rec += (di.get("minutos_extra_bruto") or 0)
-                        elif (di.get("minutos_extra_bruto") or 0) > 0:
-                            he_pend += (di.get("minutos_extra_bruto") or 0)
-                    elif es_ja_he:
-                        # Jornada adicional aprobada como HE
-                        min_ja_he = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
-                        he_apr += min_ja_he
-                    # Llamado de un día no laborable aprobado como horas extra (se valida aparte, 05-11-2026)
-                    llam_d = (ja or {}).get("llamado") or {}
-                    if is_esp and llam_d.get("estado") == 'HORAS_EXTRAS':
-                        he_apr += float(llam_d.get("minutos_autorizados") or llam_d.get("minutos") or 0.0)
-                    # Llamado aprobado como jornada EXTRA: cuenta como una jornada especial más
-                    if llam_d.get("estado") == 'EXTRA':
-                        cnt_esp += 1
-                        
-                    # FIX: he_compensado se acumula para TODOS los días (incluidos JORNADA_ESPECIAL),
-                    # igual que en el frontend (marcaciones_ui.js línea 4266)
-                    he_compensado += (di.get("minutos_compensados_he") or 0)
-                            
-                # FIX: Redondeo con 4 decimales para coincidir con el frontend
-                he_bruto = round(he_bruto, 4)
-                he_apr = round(he_apr, 4)
-                he_rec = round(he_rec, 4)
-                he_pend = round(he_pend, 4)
-                
-                saldo = he_apr - d_tot - he_compensado
-                # Libro mayor de minutos (lo calcula el servidor en la matriz): el Excel escribe los mismos
-                # totales que la grilla y la ventana de cuadre, y su saldo manda (25-10-2026).
-                libro = ((dias_dict.get('info') or {}) if isinstance(dias_dict, dict) else {}).get('libro') if not es_bolsa else None
-                if libro and libro.get('saldo') is not None:
-                    saldo = float(libro.get('saldo') or 0.0)
-                saldo_meta = (acum_bolsa - meta_min) if es_bolsa else None
-                
-                # Total incidencias exacto
-                tot_incidencias_emp = cnt_per + cnt_atr + cnt_sad + cnt_inas + cnt_esp
-                
-                # DEBUG: Log de auditoría para detectar discrepancia Excel vs Grilla
-                emp_nombre = f"{emp['apellido_paterno']} {emp.get('apellido_materno', '')} {emp['nombre']}".strip()
-                logger.info(
-                    f"📊 [EXCEL_DEBUG] {emp_nombre}: "
-                    f"he_apr={he_apr} d_tot={d_tot} he_comp={he_compensado} "
-                    f"saldo={saldo} ({self._format_hhmmss(saldo)}) | "
-                    f"cnt_esp={cnt_esp} tot_incidencias={tot_incidencias_emp} | "
-                    f"dias_procesados={sum(1 for d in rango_dias if dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}'))}"
-                )
-                
-                rows_calc.append({
-                    "emp_id": emp_id,
-                    "nombre": f"{emp['apellido_paterno']} {emp.get('apellido_materno', '')} {emp['nombre']}".strip().replace('  ', ' '),
-                    "rut": emp.get("rut", ""),
-                    "activo": "SÍ" if emp.get("activo", 1) else "NO",
-                    "esBolsa": es_bolsa,
-                    "he_bruto": he_bruto,
-                    "he_apr": he_apr,
-                    "he_rec": he_rec,
-                    "he_pend": he_pend,
-                    "d_tot": d_tot,
-                    "min_col": round(min_col),
-                    "min_per": round(min_per),
-                    "min_atr": round(min_atr),
-                    "min_sad": round(min_sad),
-                    "cnt_atr": cnt_atr,
-                    "cnt_sad": cnt_sad,
-                    "cnt_inas": cnt_inas,
-                    "cnt_esp": cnt_esp,
-                    "cnt_per": cnt_per,
-                    "tot_incidencias": tot_incidencias_emp,
-                    "cnt_efectivos": cnt_efectivos,
-                    "saldo": saldo,
-                    "libro": libro or {},
-                    "metaMin": meta_min,
-                    "acumBolsa": acum_bolsa,
-                    "saldoMeta": saldo_meta,
-                    "bonos": bonos_eval.get(emp_id) or bonos_eval.get(str(emp_id), {})
-                })
+            calc = await self._calcular_filas(matrix_data, rango_dias)
+            rows_calc, hay_bolsa, lista_bonos = calc["filas"], calc["hay_bolsa"], calc["lista_bonos"]
+            # Igual que antes de separar el cálculo: más abajo, en los días sin registro, `emp` es la última persona
+            # del ciclo de cálculo (comportamiento heredado, se mantiene para que el Excel no cambie).
+            emp = empleados[-1] if empleados else {}
 
             # 2. Inicializar openpyxl Workbook
             wb = Workbook()

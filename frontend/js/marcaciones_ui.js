@@ -5503,9 +5503,12 @@ function renderWizardStep(step) {
                 </div>
             </div>
             
-            <div class="text-center my-3">
-                <button class="btn btn-outline-success fw-bold px-4 py-2.5 w-100 shadow-sm" onclick="window.cierreWizardDownloadExcel()">
+            <div class="d-flex gap-2 my-3">
+                <button class="btn btn-outline-success fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.cierreWizardDownloadExcel()">
                     <i class="bi bi-file-earmark-excel-fill me-2"></i> Descargar Excel de Previsualización
+                </button>
+                <button class="btn btn-outline-primary fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.descargarInformeCierre(window.cierreWizardState.fIni, window.cierreWizardState.fFin, window.cierreWizardState.area, this)" title="El informe para Recursos Humanos, aún sin cerrar: un PDF por tipo de horario">
+                    <i class="bi bi-file-earmark-pdf-fill me-2"></i> Descargar preinforme (PDF)
                 </button>
             </div>
 
@@ -5699,14 +5702,14 @@ async function confirmarCierreRRHH() {
                 html: '<div class="cz-sello"><div class="cz-pasos" role="list" aria-label="Pasos del cierre">'
                     + pasos.map(p => '<i role="listitem" title="' + p + '" aria-label="' + p + ': listo"></i>').join('')
                     + '</div><b class="cz-que">' + e(queMes) + ' cerrado · ' + e(s.area) + '</b></div>'
-                    + '<p class="cz-tx">El acta trae el resumen completo: haberes, tiempo no trabajado, compensaciones, bolsa y espera.</p>',
+                    + '<p class="cz-tx">El informe de cierre, un PDF por tipo de horario, se envió a Recursos Humanos. También queda en Configuración → Tramos de cierre.</p>',
                 icon: 'success',
                 iconHtml: '<svg class="cz-candado" viewBox="0 0 40 48" aria-hidden="true"><path class="cz-arco" d="M11 22 V14 a9 9 0 0 1 18 0 V22" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><rect x="5" y="21" width="30" height="24" rx="6" fill="currentColor"/></svg>',
                 customClass: { popup: 'cz-cerrado' },
                 showCancelButton: true,
-                confirmButtonText: 'Descargar acta (PDF)',
+                confirmButtonText: 'Descargar informe (PDF)',
                 cancelButtonText: 'Cerrar'
-            }).then(r2 => { if (r2.isConfirmed) window.descargarActaCierre(s.fIni, s.fFin, s.area); });
+            }).then(r2 => { if (r2.isConfirmed) window.descargarInformeCierre(s.fIni, s.fFin, s.area); });
         } else {
             showToast(res.detail || "No se pudo cerrar el período.", "error");
             btn.disabled = false;
@@ -5719,6 +5722,52 @@ async function confirmarCierreRRHH() {
         btn.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
     }
 }
+
+// ── INFORME DE CIERRE (PDF) ──────────────────────────────────────────────────
+// El informe para RR.HH. (el mismo del correo de cierre), un PDF por tipo de horario del área. Con el área sin cerrar
+// es el preinforme. Se descarga desde Tramos de cierre, al sellar y en la previsualización del cierre (09-11-2026).
+window.descargarInformeCierre = async function (fIni, fFin, area, btn) {
+    if (btn) {
+        if (btn.disabled) return;
+        btn.disabled = true;
+    }
+    try {
+        showToast('Preparando el informe de cierre de ' + area + '…', 'info');
+        const resp = await fetch('/api/cierre/informe-pdf?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area), {
+            headers: { 'Authorization': 'Bearer ' + AuthService.getToken() }
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.detail || 'No se pudo generar el informe de cierre.');
+        const archivos = d.archivos || [];
+        if (!archivos.length) {
+            showToast('El área no tiene personas en ese tramo: no hay informe que descargar.', 'warning');
+            return;
+        }
+        archivos.forEach(function (a, i) {
+            const bin = atob(a.content_b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+            const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+            setTimeout(function () {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = a.filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+            }, i * 500);
+        });
+        const que = d.preinforme ? 'Preinforme' : 'Informe';
+        showToast(que + ' de cierre de ' + area + ': ' + archivos.length + (archivos.length === 1 ? ' PDF' : ' PDF, uno por tipo de horario')
+            + ' (' + archivos.map(function (a) { return a.titulo; }).join(' y ') + ').', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast(e.message || 'No se pudo generar el informe de cierre.', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+};
 
 // ── ACTA DE CIERRE (PDF) ─────────────────────────────────────────────────────
 // El acta trae al menos lo mismo que la previsualización: haberes, débitos con

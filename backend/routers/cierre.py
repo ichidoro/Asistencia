@@ -152,6 +152,45 @@ async def reabrir_cierre(
 
 
 @router.get(
+    "/informe-pdf",
+    summary="Informe de cierre en PDF del área (preinforme si aún no se cierra)"
+)
+async def informe_pdf(
+    fecha_inicio: str = Query(..., description="Fecha inicio (YYYY-MM-DD)"),
+    fecha_fin: str = Query(..., description="Fecha fin (YYYY-MM-DD)"),
+    area: str = Query(..., description="Área"),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
+):
+    """Los PDF del informe de cierre del área, uno por tipo de horario, en base64 para descargarlos por separado.
+    Con el área cerrada en ese tramo es el informe definitivo (el mismo del correo); si no, el preinforme."""
+    import base64
+    from backend.repositories.asistencia import AsistenciaRepository
+    from backend.services.asistencia_service import AsistenciaService
+    from backend.services.informe_cierre_pdf import informes_del_area
+    try:
+        if not area or area == 'Todas' or area.strip() == '':
+            raise HTTPException(status_code=400, detail="Debe seleccionar un área específica.")
+        d_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+        d_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
+        if (d_fin - d_ini).days + 1 > 35:
+            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 35 días.")
+        if not current_user.check_area_access(area):
+            raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
+        res = await informes_del_area(db, AsistenciaService(AsistenciaRepository(db)), fecha_inicio, fecha_fin, area)
+        return {
+            "preinforme": res["preinforme"],
+            "archivos": [{"filename": a["filename"], "titulo": a["titulo"],
+                          "content_b64": base64.b64encode(a["content"]).decode("ascii")} for a in res["archivos"]],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al generar el informe de cierre en PDF: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo generar el informe de cierre.")
+
+
+@router.get(
     "/acta-resumen",
     summary="Resumen completo para Acta PDF"
 )

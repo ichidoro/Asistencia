@@ -44,12 +44,12 @@ def test_el_acta_pdf_existe_y_tiene_sus_secciones():
         "Espera usada (tope 88 h por persona)",
         "BALANCE OPERATIVO (haberes − débitos − compensaciones)",
         "tramo en curso: el déficit aún no es exigible",
-        "Descargar acta (PDF)",
     ):
         assert frase in js, f"el acta perdió la sección: {frase!r}"
+    # Desde el 09-11-2026 (decisión del dueño) los chips de Áreas cerradas y el aviso al sellar descargan el informe
+    # de cierre nuevo (un PDF por tipo de horario), no esta acta: ver test_informe_cierre_pdf.py.
     cfg = _leer("frontend/js/configuracion_ui.js")
-    assert "descargarActaCierre" in cfg, \
-        "los chips de Áreas cerradas ya no descargan el acta"
+    assert "descargarInformeCierre" in cfg and "descargarActaCierre" not in cfg
 
 
 def test_los_textos_sobreviven_al_minificador():

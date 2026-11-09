@@ -730,47 +730,58 @@ class CierreService:
         except Exception as e_close_rrhh:
             logger.warning(f"⚠️ No se pudo actualizar el estado/vigencia en periodos_rrhh: {e_close_rrhh}")
 
-        # Generar Excel oficial del periodo y área y enviar por email a RRHH
+        # Informe de cierre en PDF (uno por tipo de horario del área) y correo a RRHH. El Excel con el detalle día a
+        # día ya no va adjunto: se descarga desde la aplicación (Reportes). Solo si los PDF fallan se adjunta el Excel,
+        # para que RRHH no se quede sin el cierre.
         try:
             from backend.repositories.asistencia import AsistenciaRepository
             from backend.services.asistencia_service import AsistenciaService
             from backend.services.report_service import ReportService
+            from backend.services.informe_cierre_pdf import generar_informes_cierre
             from backend.repositories.configuracion import ConfiguracionRepository
             from backend.services.configuracion_service import ConfiguracionService
             from backend.services.notification_service import NotificationService
 
-            logger.info(f"📬 Generando reporte Excel de cierre para área '{area}' en el rango {fecha_inicio} a {fecha_fin}...")
-            asistencia_repo = AsistenciaRepository(self.db)
-            asistencia_service = AsistenciaService(asistencia_repo)
-            report_service = ReportService(asistencia_service)
-            
-            excel_file = await report_service.generate_excel_report(fecha_inicio, fecha_fin, area)
-            if excel_file:
-                excel_bytes = excel_file.getvalue()
-                
-                config_repo = ConfiguracionRepository(self.db)
-                config_service = ConfiguracionService(config_repo)
-                recipients = await config_service.get_destinatarios_cierre(area)
-                
-                if recipients:
-                    logger.info(f"📧 Enviando email de notificación de cierre a {recipients}...")
-                    notification_service = NotificationService()
-                    await notification_service.send_cierre_email(
-                        area=area,
-                        fecha_inicio=fecha_inicio,
-                        fecha_fin=fecha_fin,
-                        user_name=user.get("username", "sistema"),
-                        tipo_cierre=tipo_cierre,
-                        resumen=evaluacion.get("resumen", {}),
-                        excel_content=excel_bytes,
-                        recipients=recipients
-                    )
-                else:
-                    logger.warning(f"⚠️ No hay destinatarios configurados para recibir la notificación de cierre de área '{area}'.")
+            asistencia_service = AsistenciaService(AsistenciaRepository(self.db))
+            cerro = user.get("username") or "sistema"
+            try:
+                fila_u = await self.db.fetch_one("SELECT nombre_completo FROM usuarios WHERE id = ?", (user.get("id"),))
+                if fila_u and fila_u.get("nombre_completo"):
+                    cerro = fila_u["nombre_completo"]
+            except Exception:
+                pass
+
+            adjuntos = []
+            try:
+                logger.info(f"📬 Generando informe PDF de cierre para '{area}' ({fecha_inicio} a {fecha_fin})...")
+                adjuntos = await generar_informes_cierre(self.db, asistencia_service, fecha_inicio, fecha_fin, area, cerro)
+            except Exception as e_pdf:
+                logger.error(f"❌ No se pudo generar el informe PDF de cierre: {e_pdf}")
+            if not adjuntos:
+                import re as _re
+                excel_file = await ReportService(asistencia_service).generate_excel_report(fecha_inicio, fecha_fin, area)
+                if excel_file:
+                    safe_area = _re.sub(r'[^a-zA-Z0-9_\-]', '_', area) if area else "Todas"
+                    adjuntos = [{"filename": f"Reporte_Asistencia_{safe_area}_{fecha_inicio}_{fecha_fin}.xlsx",
+                                 "content": excel_file.getvalue()}]
+
+            recipients = await ConfiguracionService(ConfiguracionRepository(self.db)).get_destinatarios_cierre(area)
+            if recipients:
+                logger.info(f"📧 Enviando email de notificación de cierre a {recipients}...")
+                await NotificationService().send_cierre_email(
+                    area=area,
+                    fecha_inicio=fecha_inicio,
+                    fecha_fin=fecha_fin,
+                    user_name=cerro,
+                    tipo_cierre=tipo_cierre,
+                    resumen=evaluacion.get("resumen", {}),
+                    adjuntos=adjuntos,
+                    recipients=recipients
+                )
             else:
-                logger.error("❌ No se pudo generar el reporte Excel de cierre (generate_excel_report retornó None).")
+                logger.warning(f"⚠️ No hay destinatarios configurados para recibir la notificación de cierre de área '{area}'.")
         except Exception as e_email:
-            logger.error(f"❌ Error al generar o enviar el correo de cierre con Excel adjunto: {e_email}")
+            logger.error(f"❌ Error al generar o enviar el correo de cierre: {e_email}")
 
         return {"success": True, "message": "Periodo cerrado exitosamente.", "tipo_cierre": tipo_cierre}
 

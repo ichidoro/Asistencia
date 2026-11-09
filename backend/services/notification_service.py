@@ -72,7 +72,7 @@ class NotificationService:
             for att_data in attachments:
                 filename = att_data['filename']
                 content = att_data['content']
-                part = MIMEApplication(content, Name=filename)
+                part = MIMEApplication(content, _subtype="pdf" if filename.lower().endswith(".pdf") else "octet-stream", Name=filename)
                 part['Content-Disposition'] = f'attachment; filename="{filename}"'
                 msg.attach(part)
 
@@ -453,15 +453,24 @@ class NotificationService:
                                   user_name: str, 
                                   tipo_cierre: str,
                                   resumen: dict,
-                                  excel_content: bytes,
+                                  adjuntos: List[dict],
                                   recipients: List[str]):
-        """Notificar a RRHH sobre el cierre definitivo de un periodo de asistencia, con el reporte Excel adjunto."""
-        import re
+        """Notificar a RRHH sobre el cierre definitivo de un periodo de asistencia, con el informe de cierre adjunto.
+        adjuntos: [{'filename', 'content'}]; los PDF del cierre (uno por tipo de horario del área)."""
         from datetime import datetime
-        
-        safe_area = re.sub(r'[^a-zA-Z0-9_\-]', '_', area) if area else "Todas"
-        filename = f"Reporte_Asistencia_{safe_area}_{fecha_inicio}_{fecha_fin}.xlsx"
-        
+
+        nombres = [a['filename'] for a in (adjuntos or [])]
+        son_pdf = bool(nombres) and all(n.lower().endswith('.pdf') for n in nombres)
+        if son_pdf:
+            texto_adjunto = (f"Se adjunta{'n' if len(nombres) > 1 else ''} el informe de cierre en PDF "
+                             f"({'uno por tipo de horario' if len(nombres) > 1 else 'uno por el tipo de horario del área'}): "
+                             f"<strong>{', '.join(nombres)}</strong>. El Excel con el detalle día a día se descarga desde la aplicación.")
+        elif nombres:
+            texto_adjunto = (f"Se adjunta el Excel del cierre <strong>{', '.join(nombres)}</strong> "
+                             f"(no se pudo generar el informe en PDF).")
+        else:
+            texto_adjunto = "No se pudo adjuntar el informe; descárguelo desde la aplicación."
+
         subject = f"🔒 Cierre de Periodo Sellado Definitivamente: {area} ({fecha_inicio} al {fecha_fin})"
         
         # Mapear datos del resumen
@@ -666,7 +675,7 @@ class NotificationService:
                                         <div style="background-color: #f0fdf4; border: 1px dashed #10b981; border-radius: 12px; padding: 18px; display: flex; align-items: center; gap: 12px;">
                                             <div style="font-size: 24px; line-height: 1;">📎</div>
                                             <div style="color: #166534; font-size: 13px; line-height: 1.5;">
-                                                <strong>Reporte Oficial Adjunto:</strong> Se adjunta el archivo Excel oficial <strong>{filename}</strong>, el cual contiene las 6 pestañas de visualización (Conceptos, Horas Reales, Colación, Permisos, Horas Extras y Acumulado), replicando fielmente el diseño y formato de la grilla analítica.
+                                                <strong>Informe de cierre:</strong> {texto_adjunto}
                                             </div>
                                         </div>
                                     </td>
@@ -697,10 +706,5 @@ class NotificationService:
         if os.path.exists(logo_path):
             images.append({'cid': 'logo_aguacol', 'path': logo_path})
 
-        attachments = [{
-            'filename': filename,
-            'content': excel_content
-        }]
-
-        return await self._send_email(recipients, subject, html, images, attachments)
+        return await self._send_email(recipients, subject, html, images, list(adjuntos or []))
 
