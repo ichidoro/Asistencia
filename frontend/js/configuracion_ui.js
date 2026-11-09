@@ -1485,7 +1485,7 @@ async function correoFichaB() {
             if (x.id === 'general') {
                 panel.innerHTML = F.cabeza('Avisos generales', 'Para todas las áreas que no tienen correos propios.')
                     + F.campo('Avisos de RRHH', '<input type="text" class="fcB-inp" id="email-notificaciones-rrhh" value="' + F.esc(res[0] || '') + '" placeholder="rrhh@empresa.cl">', 'Separe varios correos con coma.', 'email-notificaciones-rrhh')
-                    + F.campo('Avisos de cierre del período', '<input type="text" class="fcB-inp" id="email-notificaciones-cierre-rrhh" value="' + F.esc(res[1] || '') + '" placeholder="gerencia@empresa.cl">', 'Reciben el acta cuando se cierra un tramo.', 'email-notificaciones-cierre-rrhh')
+                    + F.campo('Avisos de cierre del período', '<input type="text" class="fcB-inp" id="email-notificaciones-cierre-rrhh" value="' + F.esc(res[1] || '') + '" placeholder="gerencia@empresa.cl">', 'Reciben el informe de cierre (PDF) cuando se cierra un tramo.', 'email-notificaciones-cierre-rrhh')
                     + (canEdit ? F.pie('', '<button type="button" class="fcB-btn" id="fco-descartar">Descartar</button><button type="button" class="fcB-btn pri btn-primary" id="fco-guardar">Guardar cambios</button>') : '');
                 if (!canEdit) { panel.querySelectorAll('input').forEach(function (e) { e.disabled = true; }); return; }
                 panel.querySelector('#fco-descartar').onclick = function () { F.pintarFicha('correo'); };

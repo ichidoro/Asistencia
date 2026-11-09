@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-"""El acta del cierre trae al menos lo mismo que la previsualización.
+"""Haberes y débitos del cierre en un solo cálculo; el acta antigua ya no existe.
 
-Decisión del dueño (23-10-2026), hallazgo 4 del análisis de cierres: el acta
-solo listaba estados y HE aprobadas. Ahora el cálculo de haberes/débitos vive
-en UN método (calcular_haberes_debitos) que usan la previsualización y el
-acta, y el acta en PDF se descarga al sellar y desde los chips de «Áreas
-cerradas» de Tramos de Cierre.
+Decisión del dueño (23-10-2026): el cálculo de haberes/débitos vive en UN método (calcular_haberes_debitos) que usan
+la previsualización del cierre y su resumen. Decisión del dueño (09-11-2026): el acta antigua (PDF armado en el
+navegador desde /api/cierre/acta-resumen) se elimina; lo reemplaza el informe de cierre en PDF por tipo de horario
+(ver test_informe_cierre_pdf.py).
 """
 import os
 from pathlib import Path
@@ -19,44 +18,17 @@ def _leer(rel):
     return (RAIZ / rel).read_text(encoding="utf-8")
 
 
-def test_una_sola_logica_para_previsualizacion_y_acta():
+def test_una_sola_logica_para_la_previsualizacion():
     s = _leer("backend/services/cierre_service.py")
     assert "async def calcular_haberes_debitos" in s
     assert "resumen.update(await self.calcular_haberes_debitos(" in s, \
         "la previsualización dejó de usar el cálculo compartido"
-    r = _leer("backend/routers/cierre.py")
-    assert "calcular_haberes_debitos" in r and '"haberes_debitos"' in r, \
-        "el acta perdió los haberes/débitos"
 
 
-def test_el_acta_pdf_existe_y_tiene_sus_secciones():
+def test_el_acta_antigua_ya_no_existe():
     js = _leer("frontend/js/marcaciones_ui.js")
-    assert "descargarActaCierre" in js
-    for frase in (
-        "ACTA DE CIERRE DE PERÍODO",
-        "Haberes (HE al 50 %)",
-        "TOTAL HABERES",
-        "Débitos (tiempo no trabajado, al 100 %)",
-        "Otros (jornadas incompletas sin categoría)",
-        "Déficit Bolsa Flexible (definitivo)",
-        "TOTAL DÉBITOS",
-        "HE usadas para compensar inasistencias",
-        "Espera usada (tope 88 h por persona)",
-        "BALANCE OPERATIVO (haberes − débitos − compensaciones)",
-        "tramo en curso: el déficit aún no es exigible",
-    ):
-        assert frase in js, f"el acta perdió la sección: {frase!r}"
-    # Desde el 09-11-2026 (decisión del dueño) los chips de Áreas cerradas y el aviso al sellar descargan el informe
-    # de cierre nuevo (un PDF por tipo de horario), no esta acta: ver test_informe_cierre_pdf.py.
     cfg = _leer("frontend/js/configuracion_ui.js")
-    assert "descargarInformeCierre" in cfg and "descargarActaCierre" not in cfg
-
-
-def test_los_textos_sobreviven_al_minificador():
-    import pytest
-    rjsmin = pytest.importorskip("rjsmin")
-    m = rjsmin.jsmin(_leer("frontend/js/marcaciones_ui.js"))
-    for frase in ("ACTA DE CIERRE DE PERÍODO", "TOTAL HABERES",
-                  "BALANCE OPERATIVO (haberes − débitos − compensaciones)",
-                  "tramo en curso: el déficit aún no es exigible"):
-        assert frase in m, f"el minificador rompe el texto: {frase!r}"
+    r = _leer("backend/routers/cierre.py")
+    assert "descargarActaCierre" not in js and "descargarActaCierre" not in cfg
+    assert "ACTA DE CIERRE DE PERÍODO" not in js
+    assert "/acta-resumen" not in r and "/informe-pdf" in r
