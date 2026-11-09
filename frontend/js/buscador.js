@@ -77,6 +77,8 @@
       listo: () => !!document.querySelector(barraAsistencia) && typeof window.openHistorialCierresModal === 'function', run: () => window.openHistorialCierresModal() },
     { titulo: 'Descargar la asistencia en Excel', palabras: 'excel exportar descargar asistencia planilla', page: 'marcaciones', icono: 'file-earmark-spreadsheet',
       listo: () => !!document.querySelector(barraAsistencia) && typeof window.downloadExcelReport === 'function', run: () => window.downloadExcelReport() },
+    { titulo: 'Descargar el preinforme de cierre (PDF)', palabras: 'preinforme informe cierre pdf rrhh remuneraciones', page: 'marcaciones', icono: 'file-earmark-pdf', permiso: 'marcaciones.cierre_periodo',
+      listo: () => !!document.querySelector(barraAsistencia) && typeof window.descargarPreinformeGrilla === 'function', run: () => window.descargarPreinformeGrilla() },
     { titulo: 'Activar el modo perdonazos', palabras: 'perdonazo perdonazos condonar atrasos', page: 'marcaciones', icono: 'gift',
       listo: hay('#perdonazo-switch'), run: () => { const s = document.getElementById('perdonazo-switch'); if (s && !s.checked) s.click(); } },
     { titulo: 'Nueva persona', palabras: 'nueva persona empleado crear agregar ficha', page: 'empleados', icono: 'person-plus', permiso: 'empleados.crear',

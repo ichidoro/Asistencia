@@ -164,3 +164,15 @@ def test_la_app_descarga_el_informe_en_tramos_al_sellar_y_en_la_previsualizacion
     assert "Descargar preinforme (PDF)" in js and "Descargar informe (PDF)" in js
     assert "window.descargarActaCierre(s.fIni" not in js
     assert "descargarInformeCierre(" in cfg and ">Informe</button>" in cfg
+
+
+def test_boton_preinforme_en_la_barra_de_la_grilla():
+    raiz = os.path.join(os.path.dirname(__file__), '..', '..')
+    js = open(os.path.join(raiz, 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
+    i_excel = js.index('onclick="downloadExcelReport()"')
+    i_pre = js.index('onclick="window.descargarPreinformeGrilla(this)"')
+    i_impr = js.index('onclick="window.print()"')
+    assert i_excel < i_pre < i_impr, 'el botón Preinforme va al lado del Excel, en la barra de la grilla'
+    assert "hasPermission('marcaciones.cierre_periodo')" in js[i_excel:i_pre]
+    f = js[js.index('window.descargarPreinformeGrilla = function'):js.index('// ── INFORME DE CIERRE (PDF)')]
+    assert "marcacion-area" in f and "st.fechaInicioRRHH" in f and "descargarInformeCierre(" in f

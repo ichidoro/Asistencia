@@ -498,6 +498,11 @@ function renderMarcacionesToolbar(container) {
                         <i class="bi bi-file-earmark-excel text-success"></i> Excel
                     </button>
                     ` : ''}
+                    ${(typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.cierre_periodo')) ? `
+                    <button class="btn btn-sm btn-outline-secondary bg-white text-nowrap" onclick="window.descargarPreinformeGrilla(this)" title="Informe de cierre del período y área elegidos, sin cerrar: un PDF por tipo de horario">
+                        <i class="bi bi-file-earmark-pdf text-danger"></i> Preinforme
+                    </button>
+                    ` : ''}
                     <button class="btn btn-sm btn-outline-secondary bg-white" onclick="window.print()" title="Imprimir Reporte">
                         <i class="bi bi-printer"></i>
                     </button>
@@ -5722,6 +5727,23 @@ async function confirmarCierreRRHH() {
         btn.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
     }
 }
+
+// Botón «Preinforme» de la barra de la grilla (al lado del Excel): el informe del período y el área elegidos, tal
+// como está hoy, sin pasar por los pasos del cierre; sirve para ver si falta corregir algo (dueño, 09-11-2026).
+window.descargarPreinformeGrilla = function (btn) {
+    const uiArea = document.getElementById('marcacion-area');
+    const area = uiArea ? uiArea.value : '';
+    if (!area || area === 'Todas') {
+        Avisos.falta('Elija un área: el preinforme es por área (un PDF por tipo de horario).');
+        return;
+    }
+    const st = typeof stateMarcacionesApp !== 'undefined' ? stateMarcacionesApp : {};
+    if (!st.fechaInicioRRHH || !st.fechaFinRRHH) {
+        Avisos.falta('Elija un período de cierre para sacar el preinforme.');
+        return;
+    }
+    return window.descargarInformeCierre(st.fechaInicioRRHH, st.fechaFinRRHH, area, btn);
+};
 
 // ── INFORME DE CIERRE (PDF) ──────────────────────────────────────────────────
 // El informe para RR.HH. (el mismo del correo de cierre), un PDF por tipo de horario del área. Con el área sin cerrar
