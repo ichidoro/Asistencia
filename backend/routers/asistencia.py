@@ -16,7 +16,7 @@ from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
 from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine, libreta_es_inasistencia
 from backend.services import gps_nexacol
-from backend.services.reglas_marcas_def import (TIPO_NO_SE_USA, propuesta_cinco_marcas, propuesta_tres_marcas,
+from backend.services.reglas_marcas_def import (TIPO_NO_SE_USA, propuesta_cinco_marcas, propuesta_tres_marcas, propuesta_una_marca,
                                                  secuencia_en_revision)
 from backend.services import libreta_orden
 from backend.services.bono_service import BonoService
@@ -1860,7 +1860,9 @@ async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usad
     if tipica is None and hd.get("turno_asignado_id"):
         tipica = await _colacion_tipica(db, hd.get("turno_asignado_id"), horario["entrada"])
     fhs = [str(r["fecha_hora"])[:19] for r in usadas]
-    if len(usadas) == 5:
+    if len(usadas) == 1:
+        p = propuesta_una_marca(fhs[0], usadas[0]["tipo"], horario["entrada"], horario["salida"])
+    elif len(usadas) == 5:
         p = propuesta_cinco_marcas(fhs, [r["tipo"] for r in usadas], col_horario)
     else:
         p = propuesta_tres_marcas(fhs, horario["entrada"], horario["salida"], int(vc.get("min", 20)), int(vc.get("max", 150)),
@@ -1877,7 +1879,7 @@ async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usad
             if op["clave"] == "FALTA_ENTRADA":
                 ref, antes = marcas_dt[0], True
             elif op["clave"] == "FALTA_SALIDA":
-                ref, antes = marcas_dt[2], False
+                ref, antes = marcas_dt[-1], False
             elif op["clave"] == "FALTA_VUELTA":
                 ref, antes = marcas_dt[1], False
             else:
@@ -2012,13 +2014,6 @@ async def marcaciones_del_dia(
             tipica = await _colacion_tipica(service.repository.db, hd["turno_asignado_id"], horario["entrada"])
         except Exception as e:
             logger.warning(f"Colación típica ({empleado_id} {fecha}): {e}")
-    propuesta = None
-    if len(usadas) in (3, 5) and hd and secuencia_en_revision(hd.get("observaciones")):
-        try:
-            propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario, tipica,
-                                                     doble_toque)
-        except Exception as e:
-            logger.warning(f"Propuesta de tres marcas ({empleado_id} {fecha}): {e}")
     # Con UNA sola marca, el ciclo del día no es seguro (el cálculo lo elige por la marca más cercana, sin mirar su tipo).
     # La propuesta usa el ciclo del horario asignado que calza con esa marca según lo que falte.
     if len(usadas) == 1 and hd and hd.get("turno_asignado_id"):
@@ -2038,6 +2033,15 @@ async def marcaciones_del_dia(
                 horario = {"entrada": como_salida["hora_entrada"], "salida": como_entrada["hora_salida"]}
         except Exception as e:
             logger.warning(f"Ciclo para la marca sola ({empleado_id} {fecha}): {e}")
+    # Una, tres o cinco marcas en un día que una regla dejó en revisión: opciones ya resueltas (con una sola marca, con el
+    # horario del ciclo que calza con ella)
+    propuesta = None
+    if len(usadas) in (1, 3, 5) and hd and secuencia_en_revision(hd.get("observaciones")):
+        try:
+            propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario, tipica,
+                                                     doble_toque)
+        except Exception as e:
+            logger.warning(f"Propuesta de marcas ({empleado_id} {fecha}): {e}")
     return {
         "success": True,
         "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),

@@ -328,7 +328,11 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
     ENTRADA · SALIDA · SALIDA (regla 8) también se lee con esos tipos: la del medio es la salida a colación y faltó la
     vuelta, a la hora de la salida a colación + `colacion_horario` minutos. Si esa hora no queda antes de la última marca,
     la del medio pasa a ser la vuelta (ENTRADA) y faltó la salida a colación, a esa hora − esos minutos. La segunda opción
-    es siempre que la del medio no se usa. Sin minutos de colación, o si ninguna de las dos horas cabe, None."""
+    es siempre que la del medio no se usa. Sin minutos de colación, o si ninguna de las dos horas cabe, None.
+    También con los tipos: ENTRADA · SALIDA · ENTRADA (regla 26) → faltó la SALIDA del horario; SALIDA · ENTRADA · SALIDA
+    (regla 27) → faltó la ENTRADA del horario; ENTRADA · ENTRADA · ENTRADA (regla 6) → la del medio es la salida a colación
+    y gana lo que más se parece: la pausa 2.ª–3.ª a la colación del horario (faltó la SALIDA) o la 3.ª a la salida del
+    horario (faltó la vuelta); y siempre «la del medio no se usa». La marca que se escribe debe caer dentro de la jornada."""
     if len(marcas or []) != 3 or not entrada or not salida:
         return None
     from datetime import datetime as _dt
@@ -370,6 +374,47 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
                  'motivo': f'Regla de marcaciones: faltó la salida a colación (la de las {hora(m[1])} es la vuelta; '
                            f'{col} min de colación de su horario)'}, sobra]}
         return None
+    tp = [str(x or '')[:1].upper() for x in tipos] if tipos is not None else None
+    # Minutos que dura el horario: la marca que se escribe debe caer dentro de la jornada (si no, decide la persona)
+    largo = (hs - he) % 1440
+    if tp == ['E', 'S', 'E']:
+        # Regla 26: la 2.ª y la 3.ª son la colación; faltó la SALIDA final, a la hora de salida del horario (queda la regla 2)
+        if (hs - m[2]) % 1440 > largo:
+            return None
+        return {'combinacion': 26, 'opciones': [
+            {'clave': 'FALTA_SALIDA', 'titulo': 'Faltó la SALIDA', 'tipos': ['Entrada', 'Salida', 'Entrada'],
+             'marca': {'tipo': 'Salida', 'hora': hora(hs)},
+             'motivo': f'Regla de marcaciones: faltó la SALIDA (se usó la de su horario, {hora(hs)})'}]}
+    if tp == ['S', 'E', 'S']:
+        # Regla 27: la 1.ª y la 2.ª son la colación; faltó la ENTRADA inicial, a la hora de entrada del horario (regla 2)
+        if (m[0] - he) % 1440 > largo:
+            return None
+        return {'combinacion': 27, 'opciones': [
+            {'clave': 'FALTA_ENTRADA', 'titulo': 'Faltó la ENTRADA', 'tipos': ['Salida', 'Entrada', 'Salida'],
+             'marca': {'tipo': 'Entrada', 'hora': hora(he)},
+             'motivo': f'Regla de marcaciones: faltó la ENTRADA (se usó la de su horario, {hora(he)})'}]}
+    if tp == ['E', 'E', 'E']:
+        # Regla 6: la 1.ª es la entrada y la del medio la salida a colación. Si la pausa entre la 2.ª y la 3.ª se parece más
+        # a la colación del horario que la 3.ª a la hora de salida, la 3.ª es la vuelta y faltó la SALIDA final; si no, la 3.ª
+        # es la SALIDA y faltó la vuelta de colación. La segunda opción es siempre que la del medio no se usa.
+        col = int(colacion_horario or 0)
+        sobra = {'clave': 'SOBRA_MEDIO', 'titulo': f'La de las {hora(m[1])} no se usa',
+                 'tipos': ['Entrada', TIPO_NO_SE_USA, 'Salida'], 'marca': None, 'motivo': None}
+        opciones = []
+        if col > 0:
+            pausa = (t[2] - t[1]).total_seconds() / 60.0
+            if abs(pausa - col) < _dist_reloj(m[2], hs):
+                if (hs - m[2]) % 1440 <= largo:
+                    opciones.append({'clave': 'FALTA_SALIDA', 'titulo': 'Faltó la SALIDA', 'tipos': ['Entrada', 'Salida', 'Entrada'],
+                                     'marca': {'tipo': 'Salida', 'hora': hora(hs)},
+                                     'motivo': f'Regla de marcaciones: faltó la SALIDA (se usó la de su horario, {hora(hs)}; '
+                                               f'la de las {hora(m[1])} es la salida a colación)'})
+            elif t[1] + _td(minutes=col) < t[2]:
+                opciones.append({'clave': 'FALTA_VUELTA', 'titulo': 'Faltó la vuelta de colación', 'tipos': ['Entrada', 'Salida', 'Salida'],
+                                 'marca': {'tipo': 'Entrada', 'hora': hora(m[1] + col)},
+                                 'motivo': f'Regla de marcaciones: faltó la vuelta de colación (salió a las {hora(m[1])}; '
+                                           f'{col} min de colación de su horario)'})
+        return {'combinacion': 6, 'opciones': opciones + [sobra]}
     g12 = (t[1] - t[0]).total_seconds() / 60.0
     g23 = (t[2] - t[1]).total_seconds() / 60.0
     es_col = lambda g: colacion_min <= g <= colacion_max
@@ -410,6 +455,27 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
             'FALTA_ENTRADA', 'Faltó la ENTRADA', ['Salida', 'Entrada', 'Salida'], {'tipo': 'Entrada', 'hora': hora(he)},
             f'Regla de marcaciones: faltó la ENTRADA (se usó la de su horario, {hora(he)})')]}
     return None
+
+
+def propuesta_una_marca(marca, tipo, entrada, salida):
+    """Propuesta para un día con una sola marca que se usa (regla 28, ENTRADA sola; regla 29, SALIDA sola). Con una ENTRADA
+    faltó la SALIDA, a la hora de salida del horario; con una SALIDA faltó la ENTRADA, a la hora de entrada del horario. El
+    día queda como la regla 1. `entrada`/`salida`: el horario del ciclo que calza con la marca (ver ciclo_para_marca_sola)."""
+    t = str(tipo or '')[:1].upper()
+    if not marca or t not in ('E', 'S'):
+        return None
+    try:
+        h = _min_reloj(salida if t == 'E' else entrada)
+    except (ValueError, IndexError, AttributeError):
+        return None
+    hora = f'{h // 60:02d}:{h % 60:02d}'
+    if t == 'E':
+        return {'combinacion': 28, 'opciones': [
+            {'clave': 'FALTA_SALIDA', 'titulo': 'Faltó la SALIDA', 'tipos': ['Entrada'], 'marca': {'tipo': 'Salida', 'hora': hora},
+             'motivo': f'Regla de marcaciones: faltó la SALIDA (se usó la de su horario, {hora})'}]}
+    return {'combinacion': 29, 'opciones': [
+        {'clave': 'FALTA_ENTRADA', 'titulo': 'Faltó la ENTRADA', 'tipos': ['Salida'], 'marca': {'tipo': 'Entrada', 'hora': hora},
+         'motivo': f'Regla de marcaciones: faltó la ENTRADA (se usó la de su horario, {hora})'}]}
 
 
 def propuesta_cinco_marcas(marcas, tipos, colacion_horario: int = 0):

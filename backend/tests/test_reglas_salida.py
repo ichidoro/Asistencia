@@ -632,6 +632,40 @@ def test_cinco_marcas_sobra_una_y_queda_como_la_regla_2():
     assert propuesta_cinco_marcas(d('06:51', '13:01', '13:28', '13:32', '15:35'), tp('SESES'), 30) is None
     assert propuesta_cinco_marcas(d('06:51', '13:01', '15:35'), tp('ESS'), 30) is None
 
+def test_propuesta_reglas_26_27_6_28_29():
+    """Reglas impares con propuesta según los tipos: ESE → faltó la SALIDA del horario; SES → faltó la ENTRADA del horario;
+    EEE → la del medio es la salida a colación y gana lo que más se parece (pausa 2.ª–3.ª vs colación, o 3.ª vs salida);
+    una marca sola → falta la otra, a la hora del horario."""
+    from backend.services.reglas_marcas_def import propuesta_tres_marcas, propuesta_una_marca
+    d = lambda *hs: [f'2026-08-11 {h}:00' for h in hs]
+    tp = lambda s: ['Entrada' if c == 'E' else 'Salida' for c in s]
+    p = lambda m, e, s, col, tipos: propuesta_tres_marcas(m, e, s, 20, 150, col, None, tipos=tp(tipos))
+    resumen = lambda r: [(o['clave'], o['tipos'], (o['marca'] or {}).get('hora')) for o in r['opciones']]
+    N = 'No se usa'
+    # 26 · E·S·E sin la salida final
+    r = p(d('07:01', '12:57', '13:19'), '07:00', '15:30', 30, 'ESE')
+    assert r['combinacion'] == 26 and resumen(r) == [('FALTA_SALIDA', ['Entrada', 'Salida', 'Entrada'], '15:30')]
+    # 27 · S·E·S sin la entrada inicial
+    r = p(d('12:58', '13:32', '15:33'), '07:00', '15:30', 30, 'SES')
+    assert r['combinacion'] == 27 and resumen(r) == [('FALTA_ENTRADA', ['Salida', 'Entrada', 'Salida'], '07:00')]
+    # 6 · E·E·E: pausa de 22 min (colación 30) → la 3.ª es la vuelta, faltó la SALIDA
+    r = p(d('07:54', '15:19', '15:41'), '08:00', '17:30', 30, 'EEE')
+    assert resumen(r) == [('FALTA_SALIDA', ['Entrada', 'Salida', 'Entrada'], '17:30'), ('SOBRA_MEDIO', ['Entrada', N, 'Salida'], None)]
+    # 6 · E·E·E: la 3.ª es justo la salida del horario → faltó la vuelta de colación
+    r = p(d('07:01', '12:56', '15:30'), '07:00', '15:30', 30, 'EEE')
+    assert resumen(r) == [('FALTA_VUELTA', ['Entrada', 'Salida', 'Salida'], '13:26'), ('SOBRA_MEDIO', ['Entrada', N, 'Salida'], None)]
+    # La marca que se escribe debe caer dentro de la jornada: E·S·E que termina después de la salida del horario
+    assert p(d('07:01', '12:57', '16:10'), '07:00', '15:30', 30, 'ESE') is None
+    # 28 y 29 · una sola marca (también de noche)
+    r = propuesta_una_marca('2026-08-11 06:58:00', 'Entrada', '07:00', '16:30')
+    assert r['combinacion'] == 28 and resumen(r) == [('FALTA_SALIDA', ['Entrada'], '16:30')]
+    r = propuesta_una_marca('2026-06-20 04:07:00', 'Salida', '23:00', '04:00')
+    assert r['combinacion'] == 29 and resumen(r) == [('FALTA_ENTRADA', ['Salida'], '23:00')]
+    assert propuesta_una_marca('2026-06-20 04:07:00', 'Salida', None, None) is None
+    base = os.path.join(os.path.dirname(__file__), "..")
+    router = open(os.path.join(base, "routers", "asistencia.py"), encoding="utf-8").read()
+    assert "len(usadas) in (1, 3, 5)" in router and "propuesta_una_marca(fhs[0]" in router
+
 def test_ventana_de_tres_marcas_con_opciones_y_un_solo_guardar():
     """La ventana muestra las opciones completas (la primera elegida), lo que paga cada una, «Otra cosa» y un solo Guardar;
     la colación de su horario sale de las marcas reales (mediana), sin horas escritas en el código."""
