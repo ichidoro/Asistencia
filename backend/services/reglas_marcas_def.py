@@ -324,7 +324,11 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
     `tipos`: el tipo que tiene hoy cada marca. ENTRADA · ENTRADA · SALIDA (regla 9) se lee con esos tipos: la 1.ª es la
     entrada al turno, la del medio es la vuelta de colación y la 3.ª la salida del turno; faltó la salida a colación, a la
     hora de la vuelta − `colacion_horario` minutos (la primera opción; la segunda, la del medio no se usa). Si esa hora
-    no queda después de la primera marca, o el horario no tiene minutos de colación, decide la persona (None)."""
+    no queda después de la primera marca, o el horario no tiene minutos de colación, decide la persona (None).
+    ENTRADA · SALIDA · SALIDA (regla 8) también se lee con esos tipos: la del medio es la salida a colación y faltó la
+    vuelta, a la hora de la salida a colación + `colacion_horario` minutos. Si esa hora no queda antes de la última marca,
+    la del medio pasa a ser la vuelta (ENTRADA) y faltó la salida a colación, a esa hora − esos minutos. La segunda opción
+    es siempre que la del medio no se usa. Sin minutos de colación, o si ninguna de las dos horas cabe, None."""
     if len(marcas or []) != 3 or not entrada or not salida:
         return None
     from datetime import datetime as _dt
@@ -347,6 +351,25 @@ def propuesta_tres_marcas(marcas, entrada, salida, colacion_min: int, colacion_m
                        f'{col} min de colación de su horario)'},
             {'clave': 'SOBRA_MEDIO', 'titulo': f'La de las {hora(m[1])} no se usa',
              'tipos': ['Entrada', TIPO_NO_SE_USA, 'Salida'], 'marca': None, 'motivo': None}]}
+    if tipos is not None and [str(x or '')[:1].upper() for x in tipos] == ['E', 'S', 'S']:
+        col = int(colacion_horario or 0)
+        if col <= 0:
+            return None
+        sobra = {'clave': 'SOBRA_MEDIO', 'titulo': f'La de las {hora(m[1])} no se usa',
+                 'tipos': ['Entrada', TIPO_NO_SE_USA, 'Salida'], 'marca': None, 'motivo': None}
+        if t[1] + _td(minutes=col) < t[2]:
+            return {'combinacion': 8, 'opciones': [
+                {'clave': 'FALTA_VUELTA', 'titulo': 'Faltó la vuelta de colación', 'tipos': ['Entrada', 'Salida', 'Salida'],
+                 'marca': {'tipo': 'Entrada', 'hora': hora(m[1] + col)},
+                 'motivo': f'Regla de marcaciones: faltó la vuelta de colación (salió a las {hora(m[1])}; '
+                           f'{col} min de colación de su horario)'}, sobra]}
+        if t[1] - _td(minutes=col) > t[0]:
+            return {'combinacion': 8, 'opciones': [
+                {'clave': 'FALTA_SALIDA_COLACION', 'titulo': 'Faltó la salida a colación', 'tipos': ['Entrada', 'Entrada', 'Salida'],
+                 'marca': {'tipo': 'Salida', 'hora': hora(m[1] - col)},
+                 'motivo': f'Regla de marcaciones: faltó la salida a colación (la de las {hora(m[1])} es la vuelta; '
+                           f'{col} min de colación de su horario)'}, sobra]}
+        return None
     g12 = (t[1] - t[0]).total_seconds() / 60.0
     g23 = (t[2] - t[1]).total_seconds() / 60.0
     es_col = lambda g: colacion_min <= g <= colacion_max

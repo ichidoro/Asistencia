@@ -571,6 +571,39 @@ def test_entrada_entrada_salida_falta_la_salida_a_colacion():
     assert r['combinacion'] == 6 and r['opciones'][0]['clave'] == 'SOBRA_MEDIO'
 
 
+def test_entrada_salida_salida_falta_la_vuelta_de_colacion():
+    """Regla 8 (E·S·S): con los tipos del reloj, la del medio es la salida a colación → faltó la vuelta, a esa hora + los
+    minutos de colación del horario. Si la vuelta no cabe antes de la última marca, la del medio es la vuelta y faltó la
+    salida a colación. La segunda opción es siempre que la del medio no se usa."""
+    from backend.services.reglas_marcas_def import propuesta_tres_marcas
+    ess = ['Entrada', 'Salida', 'Salida']
+    p = lambda m, e, s, col, tip=None: propuesta_tres_marcas(m, e, s, 20, 150, col, tip, tipos=ess)
+    resumen = lambda r: [(o['clave'], o['tipos'], o['marca']) for o in r['opciones']]
+    sobra = ('SOBRA_MEDIO', ['Entrada', 'No se usa', 'Salida'], None)
+    tip = {'sale': 13 * 60, 'vuelve': 13 * 60 + 31}
+    # Faltó la vuelta, aunque la del medio quede cerca de la hora en que su horario vuelve de colación
+    r = p(['2026-08-25 06:57:00', '2026-08-25 13:28:00', '2026-08-25 16:29:00'], '07:00', '16:30', 30, tip)
+    assert r['combinacion'] == 8
+    assert resumen(r) == [('FALTA_VUELTA', ess, {'tipo': 'Entrada', 'hora': '13:58'}), sobra]
+    assert 'salió a las 13:28' in r['opciones'][0]['motivo'] and '30 min' in r['opciones'][0]['motivo']
+    # Horario con 60 min de colación; salida del turno lejos de su horario: no se toca
+    r = p(['2026-05-22 07:47:00', '2026-05-22 13:18:00', '2026-05-22 20:15:00'], '07:00', '15:00', 60)
+    assert r['opciones'][0]['marca'] == {'tipo': 'Entrada', 'hora': '14:18'}
+    # La vuelta caería después de la última marca: la del medio pasa a ENTRADA y falta la salida a colación
+    r = p(['2026-09-11 07:01:00', '2026-09-11 16:16:00', '2026-09-11 16:25:00'], '11:30', '20:00', 30)
+    assert resumen(r) == [('FALTA_SALIDA_COLACION', ['Entrada', 'Entrada', 'Salida'], {'tipo': 'Salida', 'hora': '15:46'}),
+                          sobra]
+    # Turno de noche que cruza la medianoche
+    r = p(['2026-06-03 20:58:00', '2026-06-03 23:50:00', '2026-06-04 05:56:00'], '21:00', '06:00', 30)
+    assert r['opciones'][0]['marca'] == {'tipo': 'Entrada', 'hora': '00:20'}
+    # Ninguna de las dos cabe, o el horario no tiene minutos de colación: decide la persona
+    assert p(['2026-09-11 16:00:00', '2026-09-11 16:16:00', '2026-09-11 16:25:00'], '11:30', '20:00', 30) is None
+    assert p(['2026-08-25 06:57:00', '2026-08-25 13:28:00', '2026-08-25 16:29:00'], '07:00', '16:30', 0) is None
+    # En la ventana, la marca que no se usa arrastra su doble toque (si no, la descartada vuelve a contar)
+    base = os.path.join(os.path.dirname(__file__), "..")
+    router = open(os.path.join(base, "routers", "asistencia.py"), encoding="utf-8").read()
+    assert "tipos_op[str(id_dt)] = TIPO_NO_SE_USA" in router and "doble_toque=None):" in router
+
 def test_ventana_de_tres_marcas_con_opciones_y_un_solo_guardar():
     """La ventana muestra las opciones completas (la primera elegida), lo que paga cada una, «Otra cosa» y un solo Guardar;
     la colación de su horario sale de las marcas reales (mediana), sin horas escritas en el código."""

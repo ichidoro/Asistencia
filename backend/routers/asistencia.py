@@ -1849,7 +1849,8 @@ async def _colacion_tipica(db, turno_id, hora_entrada) -> Optional[Dict[str, Any
     return {"sale": int(statistics.median(sale)), "vuelve": int(statistics.median(vuelve)), "dias": len(sale)}
 
 
-async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usadas, hd, horario, col_horario: int, tipica=None):
+async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usadas, hd, horario, col_horario: int, tipica=None,
+                                     doble_toque=None):
     """Opciones para la ventana (ver propuesta_tres_marcas), con el tipo de cada marca por id, la marca nueva con su fecha y
     lo que pagaría cada una: el día se calcula en memoria con esas marcas (collect_only, no se guarda nada)."""
     from backend.repositories.reglas_marcas import ReglasMarcasRepository
@@ -1883,8 +1884,15 @@ async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usad
             if not antes and dt < ref:
                 dt += timedelta(days=1)
             marca = dict(op["marca"], fecha_hora=dt.strftime("%Y-%m-%d %H:%M:%S"), fecha=dt.strftime("%Y-%m-%d"))
+        tipos_op = {str(r["id"]): t for r, t in zip(usadas, op["tipos"])}
+        # Una marca que no se usa arrastra su doble toque: si no, la descartada vuelve a contar y el día cambia de secuencia
+        for r, t in zip(usadas, op["tipos"]):
+            if t == TIPO_NO_SE_USA:
+                for id_dt, info in (doble_toque or {}).items():
+                    if str(info.get("hora")) == str(r["fecha_hora"])[11:19]:
+                        tipos_op[str(id_dt)] = TIPO_NO_SE_USA
         opciones.append({"clave": op["clave"], "titulo": op["titulo"], "motivo": op["motivo"], "marca": marca,
-                         "tipos": {str(r["id"]): t for r, t in zip(usadas, op["tipos"])}})
+                         "tipos": tipos_op})
 
     async def paga(op):
         tipos = op["tipos"]
@@ -2003,7 +2011,8 @@ async def marcaciones_del_dia(
     propuesta = None
     if len(usadas) == 3 and hd and secuencia_en_revision(hd.get("observaciones")):
         try:
-            propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario, tipica)
+            propuesta = await _propuesta_dia_tres_marcas(service, empleado_id, fecha, usadas, hd, horario, col_horario, tipica,
+                                                     doble_toque)
         except Exception as e:
             logger.warning(f"Propuesta de tres marcas ({empleado_id} {fecha}): {e}")
     # Con UNA sola marca, el ciclo del día no es seguro (el cálculo lo elige por la marca más cercana, sin mirar su tipo).
