@@ -5731,6 +5731,20 @@ window.descargarExcelCierre = function (st) {
         + (token ? '&token=' + encodeURIComponent(token) : '');
 };
 
+// Un informe de cierre (un tipo de horario) descargado directo del servidor, igual que el Excel: los botones «42 horas»,
+// «180 horas»… de Tramos de cierre (dueño, 09-11-2026).
+window.descargarInformeTipo = function (fIni, fFin, area, tipo, titulo) {
+    const token = AuthService.getToken();
+    const fr = document.createElement('iframe');
+    fr.style.display = 'none';
+    fr.title = 'Descarga del informe ' + titulo;
+    fr.src = '/api/cierre/informe-pdf/archivo?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area)
+        + '&tipo=' + encodeURIComponent(tipo) + (token ? '&token=' + encodeURIComponent(token) : '');
+    document.body.appendChild(fr);
+    setTimeout(function () { fr.remove(); }, 120000);
+    showToast('Informe de cierre de ' + area + ' · ' + titulo + ': revise sus descargas en unos segundos.', 'success');
+};
+
 // ── INFORME DE CIERRE (PDF) ──────────────────────────────────────────────────
 // El informe para RR.HH. (el mismo del correo de cierre), un PDF por tipo de horario del área. Con el área sin cerrar
 // es el preinforme. Se descarga desde Tramos de cierre, al sellar y en la previsualización del cierre (09-11-2026).

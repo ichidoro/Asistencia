@@ -285,3 +285,21 @@ def test_resumen_de_un_area_cerrada_desde_tramos():
     cfg = open(os.path.join(raiz, 'frontend', 'js', 'configuracion_ui.js'), encoding='utf-8').read()
     assert "window.verResumenCierre = function" in js and "window.cargarResumenCierre(st, 'cz-resumen-vista')" in js
     assert "verResumenCierre('" in cfg and ">Resumen</button>" in cfg and ">Informe</button>" in cfg
+
+
+def test_tramos_un_boton_por_tipo_de_horario():
+    from backend.repositories.configuracion import ConfiguracionRepository
+
+    class DB:
+        async def fetch_all(self, q, p=()):
+            return [{'tipo_programacion': 'BOLSA_FLEXIBLE', 'meta_horas_semanales': 180},
+                    {'tipo_programacion': 'CICLO_INTELIGENTE', 'meta_horas_semanales': 42.0}]
+    r = ConfiguracionRepository.__new__(ConfiguracionRepository)
+    r.db = DB()
+    inf = asyncio.run(r._informes_del_area('A', '2026-04-26', '2026-05-25'))
+    assert inf == [{'tipo': 'CICLO', 'titulo': '42 horas'}, {'tipo': 'BOLSA', 'titulo': '180 horas'}]
+    raiz = os.path.join(os.path.dirname(__file__), '..', '..')
+    cfg = open(os.path.join(raiz, 'frontend', 'js', 'configuracion_ui.js'), encoding='utf-8').read()
+    js = open(os.path.join(raiz, 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
+    assert 'c.informes.map(' in cfg and 'descargarInformeTipo(' in cfg
+    assert 'window.descargarInformeTipo = function' in js and '/api/cierre/informe-pdf/archivo?' in js

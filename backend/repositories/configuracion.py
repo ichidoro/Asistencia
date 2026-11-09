@@ -905,6 +905,34 @@ class ConfiguracionRepository:
         except Exception as e_heal:
             logger.warning(f"Error en auto-healing de periodos: {e_heal}")
 
+    async def _informes_del_area(self, area: str, f_ini: str, f_fin: str) -> List[Dict[str, Any]]:
+        """Los informes de cierre del área en el tramo, uno por tipo de horario, desde los horarios asignados (sin
+        recalcular): [{'tipo': 'CICLO' | 'BOLSA', 'titulo': '42 horas'}], en el orden del informe PDF."""
+        from backend.services.informe_cierre_pdf import TIPOS_BOLSA, horas_txt
+        try:
+            filas = await self.db.fetch_all(
+                """
+                SELECT DISTINCT t.tipo_programacion, t.meta_horas_semanales FROM asignacion_turnos at
+                JOIN turnos t ON t.id = at.turno_id
+                JOIN historial_areas ha ON ha.empleado_id = at.empleado_id AND ha.validado = 1
+                    AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
+                JOIN areas ar ON ar.id = ha.area_id
+                WHERE ar.nombre = ? AND at.fecha_inicio <= ? AND (at.fecha_fin IS NULL OR at.fecha_fin = '' OR at.fecha_fin >= ?)
+                """,
+                (f_fin, f_ini, area, f_fin, f_ini))
+        except Exception as e:
+            logger.warning(f"[Tramos] no se pudieron leer los tipos de horario de {area}: {e}")
+            return []
+        horas = {'CICLO': set(), 'BOLSA': set()}
+        for r in filas:
+            tipo = 'BOLSA' if (r['tipo_programacion'] or '') in TIPOS_BOLSA else 'CICLO'
+            horas.setdefault(tipo, set())
+            if r['meta_horas_semanales'] is not None:
+                horas[tipo].add(float(r['meta_horas_semanales']))
+        presentes = {'BOLSA' if (r['tipo_programacion'] or '') in TIPOS_BOLSA else 'CICLO' for r in filas}
+        return [{'tipo': t, 'titulo': ' y '.join(horas_txt(x) for x in sorted(horas[t])) or ('Ciclo' if t == 'CICLO' else 'Bolsa')}
+                for t in ('CICLO', 'BOLSA') if t in presentes]
+
     async def get_all_periodos_rrhh(self) -> List[Dict[str, Any]]:
         await self._auto_heal_periodos()
         periodos = await self.db.fetch_all("SELECT * FROM periodos_rrhh ORDER BY fecha_inicio DESC")
@@ -936,7 +964,8 @@ class ConfiguracionRepository:
                 (f_ini, f_fin)
             )
             closed_areas = {r['area'] for r in closed_res if r['area']}
-            p_dict["cierres"] = {r['area']: {"fecha": str(r['created_at'] or '')[:10], "por": r['username'] or ''}
+            p_dict["cierres"] = {r['area']: {"fecha": str(r['created_at'] or '')[:10], "por": r['username'] or '',
+                                             "informes": await self._informes_del_area(r['area'], f_ini, f_fin)}
                                  for r in closed_res if r['area']}
 
             p_dict["areas_cerradas"] = sorted(list(closed_areas))
