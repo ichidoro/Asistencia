@@ -176,7 +176,9 @@ def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]
             # Lo no trabajado que no se descuenta (perdonado en el día o en el cuadre, días condonados sin minutos
             # anotados): lo que falta para que programadas − no trabajadas dé lo trabajado en el horario.
             causas = p['atr'] + p['sad'] + p['col'] + p['h_per'] + p['otros']
-            p['sin_desc'] = p['h_prog'] - causas - (p['h_trab_dias'] - p['he_trab'])
+            # Nunca negativo: si los días (horas guardadas con 4 decimales, ±0,36 s) suman más que programadas + horas
+            # extra (minutos exactos), ese sobrante no es tiempo no trabajado de nadie; no se pasa a otra persona.
+            p['sin_desc'] = max(p['h_prog'] - causas - (p['h_trab_dias'] - p['he_trab']), 0)
         out.append(p)
     return out
 
@@ -189,23 +191,24 @@ OTROS_DIAS = {'JORNADA_COMPENSATORIA': 'Jornadas compensatorias', 'INASISTENCIA_
 
 def horas_dias(dias_dict: Dict[str, Any], rango_dias: List) -> Dict[str, Any]:
     """Segundos del período, desde la misma matriz: programados y trabajados en los días con horario trabajados, y lo
-    trabajado en los demás días (jornadas compensatorias, especiales, días con permiso u otros)."""
-    prog = trab = 0.0
-    otros: Dict[str, float] = {}
+    trabajado en los demás días (jornadas compensatorias, especiales, días con permiso u otros).
+    Cada día se lleva a segundos enteros antes de sumar: las horas se guardan con decimales (5,8083 h = 05:48:29,88)
+    y sin esto el balance pierde un segundo frente a las causas, que salen de minutos exactos."""
+    prog = trab = 0
+    otros: Dict[str, int] = {}
     for d in rango_dias:
         di = dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}')
         if not isinstance(di, dict):
             continue
         est = di.get('estado') or ''
-        h = float(di.get('horas_trabajadas') or 0.0)
+        h = int(round(float(di.get('horas_trabajadas') or 0.0) * 3600))
         if est in ESTADOS_TRABAJADOS:
-            prog += float(di.get('horas_teoricas') or 0.0)
+            prog += int(round(float(di.get('horas_teoricas') or 0.0) * 3600))
             trab += h
         elif h > 0:
             k = OTROS_DIAS.get(est, 'Otros días trabajados')
-            otros[k] = otros.get(k, 0.0) + h
-    return {'prog': int(round(prog * 3600)), 'trab': int(round(trab * 3600)),
-            'otros': {k: int(round(v * 3600)) for k, v in otros.items()}}
+            otros[k] = otros.get(k, 0) + h
+    return {'prog': prog, 'trab': trab, 'otros': otros}
 
 
 def pct(parte: float, total: float) -> str:

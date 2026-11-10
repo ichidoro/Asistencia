@@ -279,6 +279,29 @@ def test_horas_de_otros_dias_entran_al_balance():
     assert h == {'prog': 8 * 3600, 'trab': 8 * 3600, 'otros': {'Jornadas compensatorias': 4 * 3600, 'Días con permiso': 2 * 3600}}
 
 
+def test_horas_dias_redondea_cada_dia_a_segundos():
+    # 7,5 h programadas, se trabajan 5,8083 h (guardado con 4 decimales = 05:48:29,88): la salida anticipada son
+    # 101,5 minutos exactos = 01:41:30, y el balance debe dar lo mismo, no 01:41:29.
+    dd = {'2026-04-30': {'estado': 'SALIDA_ADELANTADA', 'horas_teoricas': 7.5, 'horas_trabajadas': 5.8083}}
+    h = icp.horas_dias(dd, [date(2026, 4, 30)])
+    assert h['prog'] - h['trab'] == icp._seg(101.5)
+
+
+def test_sobrante_de_redondeo_de_una_persona_no_rebaja_la_causa_de_otra():
+    # Persona A: sin causas, sus días suman 1 s más que programadas + horas extra (redondeo de decimales).
+    # Persona B: 01:41:30 de salida anticipada cubiertas con horas extra. Lo no trabajado debe ser 01:41:30.
+    base = {'tipo': 'CICLO', 'atr': 0, 'col': 0, 'h_per': 0, 'otros': 0, 'h_otros': {}, 'comp_inas': 0, 'descontar': 0,
+            'he_noap': 0, 'he_decidir': 0, 'he_inas': 0, 'pagar': 0, 'bonos': {}, 'emp_id': 0, 'activo': True, 'rut': '',
+            'aus': {}, 'trab': 30, 'per': 0, 'comp': 0, 'ina': 0, 'ano': 0}
+    a = dict(base, h_prog=577800, sad=0, he_trab=12553, cubren=0, sin_desc=max(577800 - 0 - (590354 - 12553), 0))
+    b = dict(base, h_prog=577800, sad=6090, he_trab=7940, cubren=6090, sin_desc=max(577800 - 6090 - (579650 - 7940), 0))
+    a['horario'] = b['horario'] = 'H'; a['horas'] = b['horas'] = 42.0; a['nombre'], b['nombre'] = 'A', 'B'
+    r = icp.resumen_tipo(icp.separar_informes([a, b])[0], [])
+    nt = next(f for f in r['balance'] if f['t'] == 'Horas no trabajadas')
+    cub = next(f for g in r['de_donde'] for f in g['filas'] if f['t'] == 'Se cubren con horas extra')
+    assert nt['v'] == '− 01:41:30' and cub['v'] == '01:41:30' and cub['q'] == '100,00 %'
+
+
 def test_resumen_de_un_area_cerrada_desde_tramos():
     raiz = os.path.join(os.path.dirname(__file__), '..', '..')
     js = open(os.path.join(raiz, 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
