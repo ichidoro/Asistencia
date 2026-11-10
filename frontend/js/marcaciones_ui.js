@@ -700,6 +700,34 @@ window.cambiarPeriodoFiltro = function(val) {
     mxPintarChips();
 };
 
+// El cierre es por área: con un área elegida, un período está «Cerrado» si esa área ya lo cerró (aunque otras áreas no), y «Vigente»
+// si sigue abierto para ella. Sin área (Todas) vale el estado de toda la empresa (dueño, 10-11-2026).
+window.mxPeriodoCerradoParaArea = function (p, area) {
+    if (!p) return false;
+    if (p.estado === 'cerrado') return true;
+    const a = String(area || '').trim().toUpperCase();
+    if (!a || a === 'TODAS' || a === 'TODOS') return false;
+    return (p.areas_cerradas || []).some(x => String(x || '').trim().toUpperCase() === a);
+};
+window.mxEtiquetaPeriodo = function (p, area) {
+    let label = `${p.mes_cierre}`;
+    if (window.mxPeriodoCerradoParaArea(p, area)) label += ' (Cerrado)';
+    else if (p.activo === 1 || p.activo === true) label += ' (Vigente)';
+    return label;
+};
+// Al cambiar de área se reescriben las etiquetas de la lista de períodos, sin volver a pedirla al servidor
+window.mxRefrescarEtiquetasPeriodo = function () {
+    const select = document.getElementById('rrhh-periodo-select');
+    const periodos = window._mxPeriodos;
+    if (!select || !periodos) return;
+    const area = stateMarcacionesApp.area;
+    [...select.options].forEach(o => {
+        const p = periodos.find(x => `${x.fecha_inicio}|${x.fecha_fin}` === o.value);
+        if (p) o.textContent = window.mxEtiquetaPeriodo(p, area);
+    });
+    if (typeof mxComboRefrescar === 'function') mxComboRefrescar(select);
+};
+
 async function cargarPeriodosEnToolbar() {
     try {
         const resp = await fetch('/api/configuracion/periodos/', {
@@ -707,6 +735,7 @@ async function cargarPeriodosEnToolbar() {
         });
         if (resp.ok) {
             const periodos = await resp.json();
+            window._mxPeriodos = periodos;
             const select = document.getElementById('rrhh-periodo-select');
             if (select) {
                 select.innerHTML = '<option value="custom">-- Rango Personalizado --</option>';
@@ -715,17 +744,12 @@ async function cargarPeriodosEnToolbar() {
                     const option = document.createElement('option');
                     option.value = `${p.fecha_inicio}|${p.fecha_fin}`;
                     
-                    let label = `${p.mes_cierre}`;
-                    if (p.estado === 'cerrado') {
-                        label += ' (Cerrado)';
-                    } else if (p.activo === 1 || p.activo === true) {
-                        label += ' (Vigente)';
-                    }
-                    option.textContent = label;
+                    option.textContent = window.mxEtiquetaPeriodo(p, stateMarcacionesApp.area);
                     select.appendChild(option);
                 });
                 
                 window.syncPeriodoDropdownConFechas();
+                window.mxRefrescarEtiquetasPeriodo();
             }
         }
     } catch (e) {
@@ -876,6 +900,7 @@ function updateMarcacionesState(key, value) {
         stateMarcacionesApp.usuarioModificoFechas = false;
     } else {
         stateMarcacionesApp[key] = value;
+        if (key === 'area' && window.mxRefrescarEtiquetasPeriodo) window.mxRefrescarEtiquetasPeriodo();
     }
 
     let shouldLoadFilters = false;
@@ -5091,9 +5116,7 @@ function renderWizardStep(step) {
         // Opciones de período
         const periodosOptions = s.periodos.map(p => {
             const isSelected = (p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin) ? 'selected' : '';
-            let label = `${p.mes_cierre}`;
-            if (p.estado === 'cerrado') label += ' (Cerrado)';
-            else if (p.activo === 1 || p.activo === true) label += ' (Vigente)';
+            const label = window.mxEtiquetaPeriodo(p, s.area);
             return `<option value="${p.fecha_inicio}|${p.fecha_fin}" ${isSelected}>${label}</option>`;
         }).join('');
         
@@ -5113,7 +5136,7 @@ function renderWizardStep(step) {
                     <div class="small text-muted mb-2">
                         <i class="bi bi-calendar-range me-1"></i> Tramo: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
                     </div>
-                    ${vigente.estado === 'cerrado' 
+                    ${window.mxPeriodoCerradoParaArea(vigente, s.area) 
                         ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle align-self-start"><i class="bi bi-lock-fill me-1"></i> Período Cerrado</span>'
                         : '<span class="badge bg-success-subtle text-success border border-success-subtle align-self-start"><i class="bi bi-unlock-fill me-1"></i> Período Abierto & Vigente</span>'
                     }
@@ -5607,6 +5630,7 @@ async function confirmarCierreRRHH() {
             const m = bootstrap.Modal.getInstance(document.getElementById('modal-cierre-wizard'));
             if (m) m.hide();
             loadMarcacionesData();
+            cargarPeriodosEnToolbar();
             // Sello del cierre (diseño HD): los cinco pasos se completan uno a uno, el candado se cierra y el texto dice
             // qué mes y qué área quedaron cerrados
             const e = window.escHtml || (x => String(x == null ? '' : x));
