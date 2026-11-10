@@ -317,7 +317,7 @@ class ConfiguracionRepository:
                 ('PERMISO',           'PERMISO',            'PER', 'El empleado cuenta con un permiso de horas aprobado para ese día.',          'badge-state-info',     'bi-calendar-check-fill',        1, 1, 13),
                 ('INASISTENCIA_COMPENSADA', 'INASISTENCIA COMPENSADA', 'C.HE', 'Inasistencia compensada utilizando la bolsa de horas extras aprobadas.', 'badge-inasistencia-compensada-he', 'bi-clock-history', 1, 1, 14),
                 ('JORNADA_COMPENSATORIA',   'JORNADA COMPENSATORIA',   'COMP', 'Día libre compensatorio por jornada trabajada en día de descanso.', 'badge-compensatorio', 'bi-arrow-left-right', 1, 1, 15),
-                ('HORAS_EXTRAS',            'HORAS EXTRAS',            'HE',   'Jornada especial o cobertura validada como Horas Extras al 50%.',    'badge-state-warning',  'bi-clock-fill',         1, 1, 16),
+                ('HORAS_EXTRAS',            'HORAS EXTRAS',            'HE',   'Jornada especial o cobertura validada como Horas Extras.',    'badge-state-warning',  'bi-clock-fill',         1, 1, 16),
             ]
             for row in seed_data:
                 await self.db.execute(
@@ -332,10 +332,19 @@ class ConfiguracionRepository:
             await self.db.execute("""
                 INSERT OR IGNORE INTO estados_asistencia
                 (codigo, nombre_display, short_label, descripcion, color_clase, icono_bi, es_sistema, activo, orden)
-                VALUES ('HORAS_EXTRAS', 'HORAS EXTRAS', 'HE', 'Jornada especial o cobertura validada como Horas Extras al 50%.', 'badge-state-warning', 'bi-clock-fill', 1, 1, 16)
+                VALUES ('HORAS_EXTRAS', 'HORAS EXTRAS', 'HE', 'Jornada especial o cobertura validada como Horas Extras.', 'badge-state-warning', 'bi-clock-fill', 1, 1, 16)
             """)
         except Exception as mig_he_err:
             logger.warning(f"Migración estados_asistencia (HORAS_EXTRAS): {mig_he_err}")
+        # Horas extra son horas extra, sin «al 50 %» (orden del dueño, 10-11-2026): solo si la descripción sigue siendo la de
+        # la semilla; una que la persona editó en Configuración → Estados no se toca.
+        try:
+            await self.db.execute("""
+                UPDATE estados_asistencia SET descripcion = 'Jornada especial o cobertura validada como Horas Extras.'
+                WHERE codigo = 'HORAS_EXTRAS' AND descripcion = 'Jornada especial o cobertura validada como Horas Extras al 50%.'
+            """)
+        except Exception as mig_he50_err:
+            logger.warning(f"Migración estados_asistencia (HORAS_EXTRAS sin 50 %): {mig_he50_err}")
 
         # Llamado de emergencia en un día que la persona no tenía que trabajar: estado propio en la grilla, debajo de la
         # jornada especial, y se valida aparte (orden del dueño, 05-11-2026). Nombre, etiqueta y color se editan en

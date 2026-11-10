@@ -253,7 +253,7 @@ class CierreService:
                 if acum_espera > meta_espera_min:
                     total_exceso_espera_min += (acum_espera - meta_espera_min)
 
-        # Haberes (recargo 50% Art. 32 CdT)
+        # Haberes: horas extra
         he_fijos_hrs = round(total_he_fijos_min / 60.0, 2)
         he_bolsa_hrs = round(total_exceso_bolsa_min / 60.0, 2)
         he_espera_hrs = round(total_exceso_espera_min / 60.0, 2)

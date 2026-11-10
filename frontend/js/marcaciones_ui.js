@@ -8020,7 +8020,7 @@ function _analiticaCellBadge(di) {
                 const class_esp = 'badge-state-warning badge-he';
                 const label_esp = esMasDos ? '+2 HE' : 'HE';
                 const icon_esp = '<i class="bi bi-clock-fill me-1"></i>';
-                const title_esp = 'Jornada Adicional Aprobada como Horas Extras al 50%';
+                const title_esp = 'Jornada Adicional Aprobada como Horas Extras';
                 primaryBadge = `<div class="badge-status ${class_esp}" style="${stdBadgeStyle}" title="${title_esp}"><span>${icon_esp}${label_esp}</span></div>`;
             } else if (ja.estado === 'EXTRA') {
                 const class_esp = _getEstadoColor('EXTRA') || 'badge-state-info';
@@ -8045,7 +8045,7 @@ function _analiticaCellBadge(di) {
                 const claseL = _getEstadoColor('LLAMADO_EMERGENCIA') || 'color-violeta';
                 const icoL = suf ? '' : '<i class="bi ' + (eme.icono_bi || 'bi-telephone-inbound-fill') + ' me-1"></i>';
                 const queL = esAdic ? 'Segunda jornada (+2)' : 'Llamado de emergencia';
-                const decL = llam.estado === 'HORAS_EXTRAS' ? 'validado como horas extra al 50 %'
+                const decL = llam.estado === 'HORAS_EXTRAS' ? 'validado como horas extra'
                     : (llam.estado === 'EXTRA' ? 'validado como jornada EXTRA' : 'por validar');
                 const titL = queL + ' ' + (llam.hora_entrada || '--:--') + ' a ' + (llam.hora_salida || '--:--') + ' · ' + _fmtMin(llam.minutos) + ' · ' + decL;
                 primaryBadge = '<div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">' + primaryBadge
@@ -8070,7 +8070,7 @@ function _analiticaCellBadge(di) {
                 } else if (ja.estado === 'HORAS_EXTRAS') {
                     class_der = 'badge-state-warning';
                     label_der = esMasDos ? '+2 HE' : 'HE';
-                    title_der = 'Jornada Especial (+2): Cobertura Aprobada como Horas Extras al 50%';
+                    title_der = 'Jornada Especial (+2): Cobertura Aprobada como Horas Extras';
                 } else if (ja.estado === 'EXTRA') {
                     class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
                     label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';

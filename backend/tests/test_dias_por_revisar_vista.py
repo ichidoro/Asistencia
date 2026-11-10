@@ -143,3 +143,13 @@ def test_hojas_del_titulo_llevan_a_lo_pendiente():
     assert "data-lugares=" in GRILLA_JS and "n.lugares[k].push(emp.id + '|' + d)" in GRILLA_JS
     assert "insertAdjacentHTML('afterbegin', window.mxAvisoBloqueHtml(n))" in GRILLA_JS
     assert ".gh-hoja.gh-val { background: var(--vn-navy-soft" in GRILLA_CSS
+
+
+def test_horas_extra_sin_50_por_ciento():
+    # Orden del dueño (10-11-2026): horas extra son horas extra; ningún texto dice «al 50 %»
+    import re
+    raiz = os.path.join(os.path.dirname(__file__), '..', '..')
+    for rel in ("frontend/js/marcaciones_manuales.js", "frontend/js/marcaciones_ui.js", "frontend/js/tarjeta_dia.js", "backend/routers/asistencia.py",
+                "backend/services/asistencia_service.py", "backend/services/cierre_service.py"):
+        txt = open(os.path.join(raiz, rel), encoding='utf-8').read()
+        assert not re.search(r'(?i)extras?\W{0,12}(al\s*)?50\s*%|recargo\s*(al\s*)?50\s*%', txt), f"queda «50 %» en {rel}"

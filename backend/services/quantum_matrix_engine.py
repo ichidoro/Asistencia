@@ -1675,7 +1675,7 @@ class HumanDecisionMerger:
         res['_he_estado'] = None
         res['_he_minutos_autorizados'] = 0
 
-        # 1. Cobertura aprobada como Horas Extras (al 50%)
+        # 1. Cobertura aprobada como Horas Extras
         cobertura_he = bool(
             (he_previo and he_previo.get('origen') == 'COBERTURA_TURNO' and he_previo.get('estado') == 'APROBADO')
             or (je_previo and je_previo.get('estado') == 'HORAS_EXTRAS')

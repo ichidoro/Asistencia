@@ -1621,7 +1621,7 @@ class AsistenciaService:
                 'codigo': 'FALTA_SALIDA'
             }
 
-        # REGLA DE NEGOCIO: Transformar a Horas Extras al 50%. Una jornada especial (día libre o feriado) se valida igual
+        # REGLA DE NEGOCIO: Transformar a Horas Extras. Una jornada especial (día libre o feriado) se valida igual
         # que un +2: como EXTRA (monto fijo) o como horas extra (orden del dueño, 27-10-2026). Solo Bolsa Flexible no aplica.
         is_bolsa = False
         if asist and asist.get('_esBolsa'):
@@ -1653,7 +1653,7 @@ class AsistenciaService:
             origen_he = jornada_dict.get('origen') if jornada_dict.get('origen') in ('DIA_LIBRE', 'FERIADO') else 'COBERTURA_TURNO'
             texto_he = {'DIA_LIBRE': 'Jornada especial (día libre)', 'FERIADO': 'Jornada especial (feriado)'}.get(origen_he, 'Cobertura (+2)')
 
-            # 1. Inyectar/actualizar en horas_extras con recargo al 50%
+            # 1. Inyectar/actualizar en horas_extras
             await db.execute(
                 """
                 INSERT INTO horas_extras (
@@ -1670,7 +1670,7 @@ class AsistenciaService:
                 """,
                 (
                     empleado_id, fecha, min_auth, min_auth, origen_he,
-                    f"{texto_he} aprobada como Horas Extras al 50% ({round(min_auth/60.0, 1)}h)"
+                    f"{texto_he} aprobada como Horas Extras ({round(min_auth/60.0, 1)}h)"
                 )
             )
 
@@ -1735,7 +1735,7 @@ class AsistenciaService:
                 estado_ret = 'RECHAZADO'
 
             # REGLA DE NEGOCIO: Las jornadas especiales (coberturas +2 y días libres) validadas como Jornada Especial
-            # NO se guardan en horas_extras porque se pagan como concepto aparte (bono cobertura / turno especial) y no como horas extras al 50%.
+            # NO se guardan en horas_extras porque se pagan como concepto aparte (bono cobertura / turno especial) y no como horas extras.
             # Asegurar limpieza preventiva en horas_extras
             await db.execute(
                 "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
@@ -1770,7 +1770,7 @@ class AsistenciaService:
         self, empleado_id: int, fecha: str, accion: str, jornada: Dict[str, Any], validador_id: Optional[int]
     ) -> Dict[str, Any]:
         """Valida el llamado de emergencia (o la segunda jornada) de un día no laborable, aparte de la jornada especial:
-        APROBAR = una jornada EXTRA más (monto fijo), APROBAR_COMO_HE = sus minutos pasan a horas extra al 50 %,
+        APROBAR = una jornada EXTRA más (monto fijo), APROBAR_COMO_HE = sus minutos pasan a horas extra,
         RECHAZAR = no se paga, REVERTIR = vuelve a quedar por validar (orden del dueño, 05-11-2026)."""
         db = self.repository.db
         minutos = int(jornada.get('llamado_minutos') or 0)
@@ -1823,7 +1823,7 @@ class AsistenciaService:
             partes.append(f"jornada especial {round(min_esp / 60.0, 1)}h")
         if min_llam > 0:
             partes.append(f"{nombre_llam} {round(min_llam / 60.0, 1)}h")
-        comentario = "Aprobado como Horas Extras al 50%: " + " + ".join(partes)
+        comentario = "Aprobado como Horas Extras: " + " + ".join(partes)
         await db.execute(
             """
             INSERT INTO horas_extras (empleado_id, fecha, minutos_bruto, minutos_autorizados, estado, origen, comentario, updated_at)

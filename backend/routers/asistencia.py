@@ -1443,10 +1443,10 @@ async def validar_jornada_endpoint(
         except Exception as audit_err:
             logger.warning(f"[Jornada] Auditoría de la validación no registrada: {audit_err}")
         if parte == "LLAMADO":
-            mensaje = {"APROBAR": "Llamado validado como jornada EXTRA", "APROBAR_COMO_HE": "Llamado validado como horas extra al 50%",
+            mensaje = {"APROBAR": "Llamado validado como jornada EXTRA", "APROBAR_COMO_HE": "Llamado validado como horas extra",
                        "RECHAZAR": "Llamado rechazado", "REVERTIR": "Llamado devuelto a por validar"}[accion]
         elif accion == "APROBAR_COMO_HE":
-            mensaje = "Jornada validada exitosamente como Horas Extras al 50%"
+            mensaje = "Jornada validada exitosamente como Horas Extras"
         elif accion == "APROBAR":
             mensaje = "Jornada validada exitosamente como Jornada Especial"
         elif accion == "REVERTIR":

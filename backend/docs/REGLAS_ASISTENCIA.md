@@ -172,6 +172,19 @@ La pantalla usa lenguaje neutro (pedido del dueño): «Para mejorar» y «En bue
 **«Ver detalle»** (`backend/services/dashboard_detalle.py`) abre un panel con los registros que forman el número, por persona (quién, qué día, horas, quién ingresó la marca, causa del día no trabajado…), con las mismas definiciones del indicador: el detalle suma lo mismo que el tacómetro. Solo lee; la grilla queda como botón dentro del panel para corregir.
 Pruebas: `test_dashboard_pendientes.py`, `test_dashboard_indicadores.py` y `test_dashboard_detalle.py`.
 
+## 9. Horas extra, jornadas especiales (ESP), +2 y llamados de emergencia
+
+**Horas extra son horas extra** (decisión del dueño, 10-11-2026): ningún texto de la app, del Excel ni de los informes habla de «al 50 %» ni de recargo. El sistema cuenta horas; el porcentaje no es asunto de la asistencia.
+
+**Decidido por el dueño el 10-11-2026, todavía por programar** (hoy la app aún pide validar el +2 y el EME con tres opciones):
+
+- **+2 por cobertura** (en un día con turno, se queda o llega antes más que el «límite de horas extra»): pasa directo a horas extra, sin validación.
+- **+2 por segunda jornada** (en un día con turno, sale y vuelve a entrar después del hueco del ajuste `asistencia_emergencia_gap_horas`): igual que la cobertura.
+- **Segunda jornada en un día libre o feriado:** sigue como +2 aparte de la jornada especial.
+- **Llamado de emergencia en un día libre o feriado (EME):** pasa directo a horas extra.
+- **Jornada especial (ESP, día libre o feriado trabajado):** se valida como jornada extra (monto fijo) o pasa a horas extra.
+- Faltan por decidir: si esas horas extra quedan ya aprobadas o por aprobar como las demás; si la ESP mantiene «Rechazar»; qué pasa con lo ya validado en períodos abiertos, y qué hace un +2 o un llamado en Bolsa Flexible.
+
 ## Cómo se prueba
 
 Cada error que se encuentra queda como regla en este documento **y** como prueba en `backend/tests/`:
