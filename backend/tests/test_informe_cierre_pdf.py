@@ -161,7 +161,7 @@ def test_la_app_descarga_el_informe_en_tramos_al_sellar_y_en_la_previsualizacion
     rt = open(os.path.join(raiz, 'backend', 'routers', 'cierre.py'), encoding='utf-8').read()
     assert '"/informe-pdf"' in rt and 'informes_del_area' in rt
     assert "window.descargarInformeCierre = async function" in js and "/api/cierre/informe-pdf?" in js
-    assert "Descargar preinforme (PDF)" in js and "Descargar informe (PDF)" in js
+    assert "Descargar informe (PDF)" in js and "cz-r-pdf" in js
     assert "window.descargarActaCierre(s.fIni" not in js
     assert "descargarInformeCierre(" in cfg and ">Informe</button>" in cfg
 
@@ -302,6 +302,13 @@ def test_sobrante_de_redondeo_de_una_persona_no_rebaja_la_causa_de_otra():
     nt = next(f for f in r['balance'] if f['t'] == 'Horas no trabajadas')
     cub = next(f for g in r['de_donde'] for f in g['filas'] if f['t'] == 'Se cubren con horas extra')
     assert nt['v'] == '− 01:41:30' and cub['v'] == '01:41:30' and cub['q'] == '100,00 %'
+
+
+def test_resumen_un_boton_pdf_por_tipo_al_lado_del_excel():
+    js = open(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
+    assert 'id="cz-resumen-bts"' in js and 'id="cz-resumen-vista-bts"' in js
+    assert "window.descargarInformeTipo(st.fIni, st.fFin, st.area, t.tipo, t.titulo, que)" in js
+    assert "Descargar preinforme (PDF)" not in js and "que: 'preinforme'" in js
 
 
 def test_resumen_de_un_area_cerrada_desde_tramos():

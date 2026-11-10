@@ -41,7 +41,7 @@ def test_el_resumen_y_la_pantalla_llevan_el_avance():
     # Desde el 09-11-2026 (decisión del dueño) el paso 5 del cierre es el «Resumen antes de sellar» (propuesta A):
     # lo dibuja cargarResumenCierre con /api/cierre/resumen, las mismas cifras del informe PDF.
     js = (RAIZ / "frontend/js/marcaciones_ui.js").read_text(encoding="utf-8")
-    assert "window.cargarResumenCierre(window.cierreWizardState)" in js and "/api/cierre/resumen?" in js
+    assert "window.cargarResumenCierre(Object.assign({ que: 'preinforme' }, window.cierreWizardState))" in js and "/api/cierre/resumen?" in js
     srv = (RAIZ / "backend/services/informe_cierre_pdf.py").read_text(encoding="utf-8")
     assert "'Bajo la meta · no usadas'" in srv and "'No usadas · no se descuentan'" in srv, \
         "en la Bolsa lo que falta para la meta dejó de mostrarse como no usado (no es descuento)"

@@ -5411,12 +5411,9 @@ function renderWizardStep(step) {
             <p class="cz-r-sub">Una columna por tipo de horario: la cuenta parte de las horas totales y termina en lo que se descuenta y lo que se paga.</p>
             <div id="cz-resumen" class="cz-r-cols"><div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Calculando el resumen del área…</div></div>
 
-            <div class="d-flex gap-2 my-3">
+            <div class="d-flex flex-wrap gap-2 my-3" id="cz-resumen-bts">
                 <button class="btn btn-outline-success fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.cierreWizardDownloadExcel()">
                     <i class="bi bi-file-earmark-excel-fill me-2"></i> Descargar Excel (detalle día a día)
-                </button>
-                <button class="btn btn-outline-primary fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.descargarInformeCierre(window.cierreWizardState.fIni, window.cierreWizardState.fFin, window.cierreWizardState.area, this)" title="El informe para Recursos Humanos, aún sin cerrar: un PDF por tipo de horario">
-                    <i class="bi bi-file-earmark-pdf-fill me-2"></i> Descargar preinforme (PDF)
                 </button>
             </div>
 
@@ -5424,7 +5421,7 @@ function renderWizardStep(step) {
                 <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Al sellar</strong> el período queda cerrado para el área y el informe en PDF se envía a Recursos Humanos. Las marcas de estas fechas ya no se podrán cambiar.
             </div>
         `;
-        window.cargarResumenCierre(window.cierreWizardState);
+        window.cargarResumenCierre(Object.assign({ que: 'preinforme' }, window.cierreWizardState));
         btnNext.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
         btnNext.className = 'btn btn-warning fw-bold px-4';
         btnNext.disabled = false;
@@ -5677,6 +5674,20 @@ window.cargarResumenCierre = async function (st, idCaja) {
                 + (dd ? '<div class="cz-r-dd">' + dd + '</div>' : '')
                 + '<h6>Jornadas</h6><ul class="cz-r-bal cz-r-jor">' + filas(t.jornadas || []) + '</ul></section>';
         }).join('');
+        // Un botón de descarga por tipo de horario, al lado del Excel (dueño, 09-11-2026): cada PDF por separado
+        const bts = document.getElementById((idCaja || 'cz-resumen') + '-bts');
+        if (bts) {
+            bts.querySelectorAll('.cz-r-pdf').forEach(b => b.remove());
+            const que = st.que || 'informe';
+            tipos.forEach(t => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn btn-outline-primary fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap cz-r-pdf';
+                b.innerHTML = '<i class="bi bi-file-earmark-pdf-fill me-2" aria-hidden="true"></i> Descargar ' + e(que) + ' ' + e(t.titulo) + ' (PDF)';
+                b.addEventListener('click', () => window.descargarInformeTipo(st.fIni, st.fFin, st.area, t.tipo, t.titulo, que));
+                bts.appendChild(b);
+            });
+        }
     } catch (err) {
         console.error(err);
         caja.innerHTML = '<div class="alert alert-danger">' + e(err.message || 'No se pudo preparar el resumen del cierre.') + '</div>';
@@ -5706,12 +5717,9 @@ window.verResumenCierre = function (fIni, fFin, area, cerro) {
                 <h4 class="fw-bold mb-1 mt-3"><i class="bi bi-file-text"></i> Lo que se cargó en remuneraciones</h4>
                 <p class="cz-r-sub">Una columna por tipo de horario: la cuenta parte de las horas totales y termina en lo que se descuenta y lo que se paga.</p>
                 <div id="cz-resumen-vista" class="cz-r-cols"><div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Preparando el resumen del área…</div></div>
-                <div class="d-flex gap-2 mt-3">
+                <div class="d-flex flex-wrap gap-2 mt-3" id="cz-resumen-vista-bts">
                   <button class="btn btn-outline-success fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.descargarExcelCierre(window._resumenCierreVista)">
                     <i class="bi bi-file-earmark-excel-fill me-2"></i> Descargar Excel (detalle día a día)
-                  </button>
-                  <button class="btn btn-outline-primary fw-bold px-3 py-2.5 flex-fill shadow-sm text-nowrap" onclick="window.descargarInformeCierre(window._resumenCierreVista.fIni, window._resumenCierreVista.fFin, window._resumenCierreVista.area, this)">
-                    <i class="bi bi-file-earmark-pdf-fill me-2"></i> Descargar informe (PDF)
                   </button>
                 </div>
               </div>
@@ -5733,7 +5741,7 @@ window.descargarExcelCierre = function (st) {
 
 // Un informe de cierre (un tipo de horario) descargado directo del servidor, igual que el Excel: los botones «42 horas»,
 // «180 horas»… de Tramos de cierre (dueño, 09-11-2026).
-window.descargarInformeTipo = function (fIni, fFin, area, tipo, titulo) {
+window.descargarInformeTipo = function (fIni, fFin, area, tipo, titulo, que) {
     const token = AuthService.getToken();
     const fr = document.createElement('iframe');
     fr.style.display = 'none';
@@ -5742,7 +5750,8 @@ window.descargarInformeTipo = function (fIni, fFin, area, tipo, titulo) {
         + '&tipo=' + encodeURIComponent(tipo) + (token ? '&token=' + encodeURIComponent(token) : '');
     document.body.appendChild(fr);
     setTimeout(function () { fr.remove(); }, 120000);
-    showToast('Informe de cierre de ' + area + ' · ' + titulo + ': revise sus descargas en unos segundos.', 'success');
+    const q = que || 'informe';
+    showToast(q.charAt(0).toUpperCase() + q.slice(1) + ' de cierre de ' + area + ' · ' + titulo + ': revise sus descargas en unos segundos.', 'success');
 };
 
 // ── INFORME DE CIERRE (PDF) ──────────────────────────────────────────────────
