@@ -18,7 +18,8 @@ from backend.schemas.empleado import (
     EmpleadoLookupResponse,
     VencimientoRequest,
     ConfirmarAreaRequest,
-    ReincorporarRequest
+    ReincorporarRequest,
+    PeriodoAnteriorRequest
 )
 from backend.repositories.configuracion import ConfiguracionRepository
 from backend.services.configuracion_service import ConfiguracionService
@@ -158,6 +159,27 @@ async def procesar_vencimiento(
 
 class BajaRequest(VencimientoRequest):
     motivo: str
+
+@router.post(
+    "/{empleado_id}/periodo-anterior/",
+    summary="Registrar un contrato anterior ya terminado",
+    description="Agrega un contrato pasado que no quedó registrado, ya terminado (con su baja el último día). No cambia nada más."
+)
+async def registrar_periodo_anterior(
+    request: PeriodoAnteriorRequest,
+    empleado_id: int = Path(..., gt=0),
+    service: EmpleadoService = Depends(get_empleado_service),
+    current_user: SecurityContext = Depends(RequirePermission("empleados.editar"))
+):
+    emp = await service.get_empleado(empleado_id)
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos para cambiar los contratos de este empleado")
+    try:
+        return await service.registrar_periodo_anterior(empleado_id, request.fecha_inicio, request.fecha_fin, request.tipo_contrato,
+                                                        request.motivo, current_user.user_id, current_user.username)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.post(
     "/{empleado_id}/baja/",

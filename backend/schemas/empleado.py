@@ -175,6 +175,14 @@ class ConfirmarAreaRequest(BaseModel):
     fecha_efectiva: str = Field(..., description="Fecha en que el cambio se hace efectivo (YYYY-MM-DD)")
     turno_id: Optional[int] = Field(None, description="ID del nuevo turno a asignar (opcional)")
 
+class PeriodoAnteriorRequest(BaseModel):
+    """Un contrato ya terminado que no quedó registrado (p. ej. el primero de alguien que se fue y volvió)."""
+    fecha_inicio: str = Field(..., description="Inicio del contrato (AAAA-MM-DD)")
+    fecha_fin: str = Field(..., description="Último día del contrato, el de la baja (AAAA-MM-DD)")
+    tipo_contrato: str = Field(..., description="Temporal o Indefinido")
+    motivo: Optional[str] = Field(None, description="Por qué se registra ahora")
+
+
 class ReincorporarRequest(BaseModel):
     """Payload para el Wizard de Reincorporación"""
     fecha_inicio: str = Field(..., description="Fecha de re-ingreso (YYYY-MM-DD)")

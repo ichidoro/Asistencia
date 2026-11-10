@@ -3,7 +3,7 @@ Service - Empleado
 Lógica de negocio para gestión de empleados
 """
 
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from datetime import date, datetime
 
 from fastapi import HTTPException, status
@@ -924,6 +924,45 @@ class EmpleadoService:
 
         except Exception as e:
             logger.error(f"Error ajustando asignaciones de turno para {empleado_id}: {e}")
+
+    async def registrar_periodo_anterior(self, empleado_id: int, fecha_inicio: str, fecha_fin: str, tipo_contrato: str,
+                                         motivo: Optional[str], usuario_id: Optional[int], usuario: str) -> Dict[str, Any]:
+        """Registra un contrato ya terminado que no quedó en el sistema (dueño, 10-11-2026: el primer contrato de quien se
+        fue y volvió). Solo agrega ese período, cerrado (es_activo = 0): no toca la ficha, el área, los turnos ni el contrato
+        vigente. No puede cruzarse con otro período ni terminar después de que empiece otro posterior."""
+        from datetime import date
+        try:
+            ini, fin = date.fromisoformat(fecha_inicio), date.fromisoformat(fecha_fin)
+        except ValueError:
+            raise ValueError("Las fechas deben venir como AAAA-MM-DD.")
+        if fin < ini:
+            raise ValueError("El último día del contrato no puede ser anterior a su inicio.")
+        if fin >= date.today():
+            raise ValueError("Solo se registran aquí contratos ya terminados.")
+        if tipo_contrato not in ('Temporal', 'Indefinido'):
+            raise ValueError("El tipo de contrato debe ser Temporal o Indefinido.")
+        await self.get_empleado(empleado_id)
+        db = self.repository.db
+        filas = await db.fetch_all("SELECT id, fecha_inicio, fecha_fin FROM periodos_empleo WHERE empleado_id = ?", (empleado_id,))
+        for p in filas:
+            p_ini = date.fromisoformat(str(p['fecha_inicio'])[:10])
+            p_fin = date.fromisoformat(str(p['fecha_fin'])[:10]) if p.get('fecha_fin') else None
+            if ini <= (p_fin or date.max) and p_ini <= fin:
+                raise ValueError(f"Se cruza con el contrato del {p_ini.strftime('%d-%m-%Y')} al "
+                                 f"{p_fin.strftime('%d-%m-%Y') if p_fin else 'sin término'}.")
+        await db.execute(
+            "INSERT INTO periodos_empleo (empleado_id, fecha_inicio, fecha_fin, tipo_contrato, es_activo) VALUES (?, ?, ?, ?, 0)",
+            (empleado_id, fecha_inicio, fecha_fin, tipo_contrato))
+        detalle = {'empleado_id': empleado_id, 'fecha_inicio': fecha_inicio, 'fecha_fin': fecha_fin, 'tipo_contrato': tipo_contrato,
+                   'baja': fecha_fin, 'motivo': motivo}
+        try:
+            from backend.repositories.seguridad import SeguridadRepository
+            import json as _json
+            await SeguridadRepository(db).log_auditoria(usuario_id, usuario, 'REGISTRAR_PERIODO_ANTERIOR', 'EMPLEADOS',
+                                                        _json.dumps(detalle, ensure_ascii=False))
+        except Exception as e:
+            logger.warning(f"[Empleados] Auditoría no registrada (REGISTRAR_PERIODO_ANTERIOR): {e}")
+        return detalle
 
     async def reincorporar_empleado(self, empleado_id: int, data: ReincorporarRequest) -> Empleado:
         """
