@@ -202,6 +202,7 @@ def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]
             p['h_trab_dias'], p['h_otros'] = hd_['trab'], hd_['otros']
             p.update(horas_ausencias(dd, p['dias_aus']))
             p['he_dia'] = he_por_dia(dd, datos['rango_dias'])
+            p['he_mas2'] = he_mas2_persona(dd, datos['rango_dias'], p['he_trab'])
             # Programadas: los días trabajados y los programados que no se trabajaron (vacaciones, licencias, permisos
             # del día, inasistencias…), como las jornadas.
             p['h_prog'] = hd_['prog'] + p['h_prog_aus']
@@ -255,6 +256,18 @@ def he_por_dia(dias_dict: Dict[str, Any], rango_dias: List) -> Dict[str, int]:
             if s:
                 out[k] = s
     return out
+
+
+def he_mas2_persona(dias_dict: Dict[str, Any], rango_dias: List, he_trab: int) -> int:
+    """Segundos de las horas extra trabajadas que vienen de un +2 (cobertura o segunda jornada) o de un llamado de
+    emergencia (dueño, 10-11-2026): van dentro de las horas extra, y el informe las muestra aparte. Nunca pasan de las
+    horas extra de la persona."""
+    tot = 0
+    for d in rango_dias:
+        di = dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}')
+        if isinstance(di, dict):
+            tot += _seg(float(di.get('minutos_extra_mas2') or 0.0) + float(di.get('minutos_extra_llamado') or 0.0))
+    return min(tot, he_trab)
 
 
 def coberturas(ps: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -385,6 +398,7 @@ def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str,
                       + [fila('Trabajadas en el horario', base - ta - nt, base, 'tot'), fila('Horas extra trabajadas', he, base, 'menos', '+ ')]
                       + ([fila('Cubren ausencias de compañeros', tc, base, 'det'), fila('Fuera de lo programado', he - tc, base, 'det')]
                          if tc else [])
+                      + ([fila('Incluye de +2 y llamados', min(T('he_mas2'), he), base, 'det')] if T('he_mas2') else [])
                       + filas_otros + [fila('Total en el reloj', total, base, 'tot')])
     out['cargar'] = [{'t': 'Descontar', 'v': hms(T('descontar')), 'c': 'ds', 'q': pct(T('descontar'), base) + ' de lo programado' if base else '',
                       'n': f"{cuenta('descontar')} de {n} personas"},
@@ -460,6 +474,7 @@ def columnas(inf: Dict[str, Any], justif: List[Dict[str, Any]], bonos: List[str]
         if hay(lambda p: p['comp_inas']): C.append(col('Rebaja', 'Inas. compensadas', lambda p: -p['comp_inas'], 'h', 'cp'))
         g = 'Horas extra'
         C.append(col(g, 'Trabajadas', lambda p: p['he_trab'], 'h'))
+        if hay(lambda p: p.get('he_mas2')): C.append(col(g, 'De +2 y EME', lambda p: p.get('he_mas2', 0), 'h', 'cp'))
         if hay(lambda p: p['he_noap']): C.append(col(g, 'No aprobadas', lambda p: -p['he_noap'], 'h', 'cp'))
         if hay(lambda p: p['he_decidir']): C.append(col(g, 'Por decidir', lambda p: -p['he_decidir'], 'h', 'al'))
         if hay(lambda p: p['he_inas']): C.append(col(g, 'Compensan inas.', lambda p: -p['he_inas'], 'h', 'cp'))
@@ -490,7 +505,9 @@ def leyenda(inf: Dict[str, Any], justif: List[Dict[str, Any]], cols: List[Dict[s
               + ' − horas extra que cubren descuentos. <b>Pagar</b> = horas extra trabajadas'
               + (' − no aprobadas' if 'No aprobadas' in titulos else '') + (' − por decidir' if 'Por decidir' in titulos else '')
               + (' − las que compensan inasistencias' if 'Compensan inas.' in titulos else '') + ' − las que cubren descuentos.'
-              + (' <b>Otros</b>: jornada incompleta que no es atraso, salida, colación ni permiso.' if 'Otros' in titulos else ''))
+              + (' <b>Otros</b>: jornada incompleta que no es atraso, salida, colación ni permiso.' if 'Otros' in titulos else '')
+              + (' <b>De +2 y EME</b>: parte de las horas extra trabajadas que viene de un +2 o de un llamado de emergencia '
+                 '(no se resta, ya está dentro de ellas).' if 'De +2 y EME' in titulos else ''))
     return [l1, l2 + ' El detalle día a día está en el Excel del cierre, que se descarga desde la aplicación.']
 
 

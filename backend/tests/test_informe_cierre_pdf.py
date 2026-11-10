@@ -398,3 +398,27 @@ def test_ausencias_programadas_y_cubiertas_por_companeros():
     assert aus == {'Vacaciones · cubiertas con horas extra': '08:30:00', 'Vacaciones · sin cubrir': '03:30:00'}
     jor = {f['t']: f['v'] for f in r['jornadas']}
     assert jor['Programadas'] == '12' and jor['Vacaciones'] == '− 2'
+
+
+def test_el_mas_dos_se_muestra_aparte_dentro_de_las_horas_extra():
+    from datetime import date
+    dd = {'2026-10-29': {'minutos_extra_mas2': 288.6, 'minutos_extra_llamado': 0},
+          '2026-10-30': {'minutos_extra_mas2': 0, 'minutos_extra_llamado': 77}}
+    dias = [date(2026, 10, 29), date(2026, 10, 30)]
+    assert icp.he_mas2_persona(dd, dias, 10 ** 6) == 17316 + 4620
+    assert icp.he_mas2_persona(dd, dias, 600) == 600  # nunca pasa de las horas extra de la persona
+    p = _persona('CICLO', 'Horario A', 42.0)
+    p.update({'h_prog': 360000, 'he_trab': 21936, 'he_mas2': 21936, 'cubren': 0, 'total': 60, 'descontar': 60, 'sin_desc': 0})
+    inf = icp.separar_informes([p])[0]
+    r = icp.resumen_tipo(inf, JUSTIF)
+    tx = {f['t']: f for f in r['balance']}
+    assert tx['Incluye de +2 y llamados']['v'] == icp.hms(21936)
+    cols = icp.columnas(inf, JUSTIF, [])
+    assert [c['titulo'] for c in cols if c['grupo'] == 'Horas extra'][:2] == ['Trabajadas', 'De +2 y EME']
+    assert any('De +2 y EME' in t for t in icp.leyenda(inf, JUSTIF, cols))
+    # Sin +2 ni llamados no aparece nada de esto
+    q = _persona('CICLO', 'Horario A', 42.0)
+    assert 'De +2 y EME' not in [c['titulo'] for c in icp.columnas(icp.separar_informes([q])[0], JUSTIF, [])]
+    # El PDF con la columna nueva se arma sin errores
+    pdf = icp.render_pdf('AREA DE PRUEBA', '2026-09-26', '2026-10-25', 'usuario', inf, JUSTIF, [])
+    assert pdf.startswith(b'%PDF') and len(pdf) > 2000
