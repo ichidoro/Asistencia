@@ -249,3 +249,10 @@ body:not(.estados-chip) .sem-cel td.col-day .badge-status.st-largo > span { font
 .gh-hoja.gh-val:hover { background: #dce2f8; }
 @media (prefers-reduced-motion: reduce) { .gh-hoja { transition: none; } }
 @media (prefers-reduced-motion: reduce) { #marcaciones-view-container .matrix-table-premium td.col-day.rv-recien { animation: none; } }
+/* +2 en la celda (dueño, 10-11-2026): ya no se valida, va a las horas extra del día; la celda lo sigue mostrando */
+.mx-mas2 { position: absolute; bottom: -5px; left: -4px; z-index: 10; padding: 1px 3px; border-radius: 4px; background: var(--vn-navy, #1b2f8f); color: #fff;
+  font: 700 9px/1 'Barlow', system-ui, sans-serif; white-space: nowrap; }
+/* Desglose de las horas extra al aprobarlas: cuánto es normal y cuánto viene de un +2, un llamado o una jornada especial */
+.he-de { display: inline-flex; align-items: center; gap: 4px; background: var(--vn-navy-soft, #e9edfb); color: var(--vn-navy, #1b2f8f);
+  border: 1px solid #cfd6f3; font: 600 11.5px/1.2 'Barlow', system-ui, sans-serif; white-space: nowrap; }
+.he-de-mas2 { background: var(--vn-navy, #1b2f8f); color: #fff; border-color: var(--vn-navy, #1b2f8f); }

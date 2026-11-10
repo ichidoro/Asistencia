@@ -252,6 +252,11 @@ class TurnoRepository:
             ("minutos_permiso_personal_deuda", "INTEGER DEFAULT 0"),
             # Deuda del día antes de perdonazos, intercambios y compensaciones (libro mayor de minutos, 25-10-2026)
             ("minutos_deuda_bruta", "REAL DEFAULT 0"),
+            # Parte de las horas extra del día que viene de un +2, de un llamado o de una jornada especial pasada a horas extra
+            # (dueño, 10-11-2026): se aprueban con las demás, pero se informan aparte
+            ("minutos_extra_mas2", "REAL DEFAULT 0"),
+            ("minutos_extra_llamado", "REAL DEFAULT 0"),
+            ("minutos_extra_esp", "REAL DEFAULT 0"),
             ("hora_salida_colacion", "TEXT"),
             ("hora_entrada_colacion", "TEXT"),
             ("hora_inicio_permiso", "TEXT"),

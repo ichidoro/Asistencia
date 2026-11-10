@@ -176,14 +176,15 @@ Pruebas: `test_dashboard_pendientes.py`, `test_dashboard_indicadores.py` y `test
 
 **Horas extra son horas extra** (decisión del dueño, 10-11-2026): ningún texto de la app, del Excel ni de los informes habla de «al 50 %» ni de recargo. El sistema cuenta horas; el porcentaje no es asunto de la asistencia.
 
-**Decidido por el dueño el 10-11-2026, todavía por programar** (hoy la app aún pide validar el +2 y el EME con tres opciones):
+**Decidido por el dueño el 10-11-2026** (motor: `_registrar_jornada_adicional`, `_registrar_emergencias`, `_sumar_a_la_bolsa` y `HumanDecisionMerger`; validación: `validar_jornada`):
 
-- **+2 por cobertura** (en un día con turno, se queda o llega antes más que el «límite de horas extra»): pasa directo a horas extra, sin validación.
-- **+2 por segunda jornada** (en un día con turno, sale y vuelve a entrar después del hueco del ajuste `asistencia_emergencia_gap_horas`): igual que la cobertura.
-- **Segunda jornada en un día libre o feriado:** sigue como +2 aparte de la jornada especial.
-- **Llamado de emergencia en un día libre o feriado (EME):** pasa directo a horas extra.
-- **Jornada especial (ESP, día libre o feriado trabajado):** se valida como jornada extra (monto fijo) o pasa a horas extra.
-- Faltan por decidir: si esas horas extra quedan ya aprobadas o por aprobar como las demás; si la ESP mantiene «Rechazar»; qué pasa con lo ya validado en períodos abiertos, y qué hace un +2 o un llamado en Bolsa Flexible.
+- **Día con turno:** todo lo trabajado de más va a las horas extra del día, **por aprobar** como cualquier hora extra. Eso incluye el +2 por cobertura (pasar el «límite de horas extra» seguido), el +2 por segunda jornada (salir y volver a entrar después del hueco de `asistencia_emergencia_gap_horas`) y el llamado de emergencia. Nada de esto pide validación aparte.
+- **Horas extra normales y +2 se distinguen:** el límite y el hueco ya no deciden cómo se paga, solo cómo se llama. La grilla sigue mostrando el +2, y las horas extra del día dicen cuánto es normal y cuánto viene de un +2 o de un llamado.
+- **Día libre o feriado:** la jornada principal es jornada especial (ESP) y se valida como **jornada extra** (monto fijo) o pasa a **horas extra por aprobar**. Una ESP **no se puede rechazar**. La segunda jornada del día sigue como +2 aparte y, junto con el llamado de emergencia (EME), va directo a horas extra por aprobar.
+- **Bolsa Flexible:** las horas extra de la bolsa son solo lo que pasa la meta del tramo (180 h o lo que diga la bolsa). Un +2 de bolsa suma sus horas a la bolsa; con libreta no debería haber +2.
+- **Lo ya validado:** al recalcular, los +2 y llamados ya decididos (jornada extra u horas extra aprobadas) vuelven a horas extra por aprobar, y las ESP rechazadas vuelven a «por validar».
+- **Cómo se guarda:** las horas extra del día (`minutos_extra_bruto`) incluyen todo; `minutos_extra_mas2`, `minutos_extra_llamado` y `minutos_extra_esp` dicen cuánto viene de un +2, de un llamado o de la jornada especial pasada a horas extra. Si el día suma un +2, un llamado o una ESP después de que se decidieron sus horas extra, o la decisión venía de la validación antigua, el día vuelve a quedar por aprobar. El Excel trae la columna «DE +2 Y EME».
+- **Al desplegar el cambio:** hay que recalcular (Reprocesar) los períodos abiertos para que lo guardado con la regla antigua pase a la nueva.
 
 ## Cómo se prueba
 

@@ -63,22 +63,23 @@ def test_al_agregar_la_salida_la_segunda_jornada_es_un_mas_dos_por_aprobar(monke
     r = _dia(monkeypatch, reglas=dict(REGLA_1, **REGLA_26_REVISA, **REGLA_28_REVISA), marcas=CON_SALIDA)
     assert r["estado"] == "ATRASO" and "Jornada Adicional (+2): 14:13 - 18:00" in r["observaciones"]
     assert "Segunda jornada sin SALIDA" not in r["observaciones"] and "Revisar las marcas" not in r["observaciones"]
-    je = r["_jornada_especial"]
+    # Desde el 10-11-2026 el +2 va directo a las horas extra del día, por aprobar, sin jornada especial aparte.
     # 14:13:21 a 18:00:00 = 3 h 47 min, bajo el mínimo de 4 h del horario: no descuenta colación
-    assert je["estado"] == "JORNADA_ESPECIAL" and je["origen"] == "COBERTURA_TURNO" and je["minutos_trabajados"] == 227
-    assert (je["hora_entrada"], je["hora_salida"]) == ("14:13", "18:00") and "(+2): 14:13 - 18:00" in je["observaciones"]
-    assert r["minutos_extra_bruto"] == 0                                   # hasta que alguien decida, no son horas extra
+    assert not r.get("_jornada_especial")
+    assert r["minutos_extra_mas2"] == 227 and r["minutos_extra_bruto"] >= 227
+    assert "(+2): 14:13 - 18:00 (3.8h netas)" in r["observaciones"]
 
 
 def test_la_segunda_jornada_descuenta_su_propia_colacion(monkeypatch):
     # Orden del dueño (27-10-2026): la segunda jornada descuenta colación con la regla del horario.
     marcas = BADILLA + [{"id": 4, "fecha_hora": "2026-10-10 21:00:00", "tipo": S}]
-    je = _dia(monkeypatch, reglas=dict(REGLA_1), marcas=marcas)["_jornada_especial"]
-    assert je["minutos_trabajados"] == 377                                 # 6 h 47 min menos 30 min de colación
+    r = _dia(monkeypatch, reglas=dict(REGLA_1), marcas=marcas)
+    assert r["minutos_extra_mas2"] == 377                                  # 6 h 47 min menos 30 min de colación
 
 
 def test_en_un_dia_libre_la_segunda_jornada_queda_aparte_de_la_jornada_especial(monkeypatch):
-    # Desde el 05-11-2026 la segunda jornada de un día libre se valida aparte, igual que un llamado de emergencia
+    # Desde el 10-11-2026 la segunda jornada de un día libre sigue como +2 aparte de la jornada especial, pero va directo a
+    # las horas extra del día, por aprobar
     monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 10, 27, 12, 0))
     monkeypatch.setattr(qme, "REGLAS_MARCAS_ACTIVAS", {})
     marcas = [{"id": 1, "fecha_hora": "2026-10-11 07:00:00", "tipo": E}, {"id": 2, "fecha_hora": "2026-10-11 11:00:00", "tipo": S},
@@ -90,21 +91,19 @@ def test_en_un_dia_libre_la_segunda_jornada_queda_aparte_de_la_jornada_especial(
     je = r["_jornada_especial"]
     # Cada bloque de 4 h descuenta su colación de 30 min: 210 la jornada y 210 la segunda jornada (antes, 420 juntas)
     assert r["estado"] == "JORNADA_ESPECIAL" and je["origen"] == "DIA_LIBRE" and je["minutos_trabajados"] == 210
-    assert (je["llamado_tipo"], je["llamado_hora_entrada"], je["llamado_hora_salida"], je["llamado_minutos"], je["llamado_estado"]) == \
-        ("ADICIONAL", "16:00", "20:00", 210, "PENDIENTE")
+    assert not je.get("llamado_minutos")
+    assert r["minutos_extra_bruto"] == 210 and r["minutos_extra_mas2"] == 210
     # La nota del +2 sale de la jornada especial: la grilla la sigue mostrando como ESP y el +2 va debajo
     assert "Jornada Adicional (+2)" not in je["observaciones"]
 
 
-def test_el_mas_dos_aprobado_como_horas_extra_se_suma_a_las_de_la_jornada():
-    base = {"minutos_extra_bruto": 20.0, "horas_teoricas": 4.5, "observaciones": "",
-            "_jornada_adicional": {"minutos_netos": 227}, "_jornada_especial": {"estado": "JORNADA_ESPECIAL", "origen": "COBERTURA_TURNO"}}
-    je_previo = {"estado": "HORAS_EXTRAS", "minutos_autorizados": 227, "origen": "COBERTURA_TURNO", "observaciones": "[VALIDADO_COMO_HE]"}
-    r = qme.HumanDecisionMerger.apply(dict(base), "2026-10-10", None, je_previo)
-    assert r["minutos_extra_bruto"] == 247 and r["_he_minutos_autorizados"] == 227 and r["_he_estado"] == "APROBADO"
-    # Una cobertura (sin segunda jornada) sigue como antes: sus minutos son las horas extra del día
-    cobertura = {k: v for k, v in base.items() if k != "_jornada_adicional"}
-    assert qme.HumanDecisionMerger.apply(cobertura, "2026-10-10", None, je_previo)["minutos_extra_bruto"] == 227
+def test_el_mas_dos_aprobado_aparte_vuelve_a_horas_extra_por_aprobar():
+    # Dueño (10-11-2026): un +2 aprobado con la validación antigua vuelve a quedar por aprobar con las demás horas extra
+    base = {"minutos_extra_bruto": 247.0, "minutos_extra_mas2": 227.0, "horas_teoricas": 4.5, "observaciones": "",
+            "_jornada_especial": None}
+    he_previo = {"estado": "APROBADO", "minutos_autorizados": 227, "minutos_bruto": 0, "origen": "COBERTURA_TURNO"}
+    r = qme.HumanDecisionMerger.apply(dict(base), "2026-10-10", he_previo, None)
+    assert r["minutos_extra_bruto"] == 247 and r["_he_reabrir"] and r["_he_estado"] is None
 
 
 def test_la_salida_de_la_segunda_jornada_se_escribe_desde_el_ingreso_manual():

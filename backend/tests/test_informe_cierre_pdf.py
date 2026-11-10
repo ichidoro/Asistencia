@@ -322,7 +322,9 @@ def test_ficha_del_dia_llamado_con_icono_de_configuracion_sin_rayo():
 def test_bloque_muestra_lo_que_espera_validacion():
     js = open(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
     assert 'window.mxPorValidarDia = function' in js and 'window.mxAvisoValidarHtml(nVal)' in js
-    assert "(est['LLAMADO_EMERGENCIA'] || {}).short_label" in js and "(est['JORNADA_ESPECIAL'] || {}).short_label" in js
+    # Desde el 10-11-2026 solo la jornada especial espera validación: el +2 y el llamado van a horas extra por aprobar
+    assert "(est['JORNADA_ESPECIAL'] || {}).short_label" in js
+    assert "if (ja && ja.origen !== 'COBERTURA_TURNO' && !MX_DECIDIDO.has(ja.estado)) out.push('esp');" in js
 
 
 def test_reproceso_masivo_vuelve_a_repartir_el_cuadre():

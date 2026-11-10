@@ -92,12 +92,12 @@ def test_turno_noche_toma_la_ultima_salida_del_dia_siguiente(monkeypatch):
 
 
 def test_salida_de_mas_muy_tarde_no_paga_extra_automatica(monkeypatch):
-    # Con un límite de horas extra configurado (asistencia_max_extras_ordinarias_dia_habil = 240 min), pasado ese límite todo
-    # el bloque queda como Jornada Especial pendiente y el turno base se mantiene en sus horas. (Con 0 no hay límite.)
+    # Con un límite de horas extra configurado (asistencia_max_extras_ordinarias_dia_habil = 240 min), pasado ese límite el
+    # exceso es un +2 por cobertura: va a las horas extra del día, por aprobar, y se informa aparte (dueño, 10-11-2026).
     monkeypatch.setitem(AJUSTES_CONFIGURADOS, "asistencia_max_extras_ordinarias_dia_habil", "240")
     r = _dia(monkeypatch, _d([("06:58:00", E), ("15:02:00", S), ("19:30:00", S)]))
-    assert r["estado"] == "OK" and r["minutos_extra_bruto"] == 0 and r["horas_trabajadas"] == 7.5
-    assert r["_jornada_especial"] is not None and "Jornada Especial" in r["observaciones"]
+    assert r["estado"] == "OK" and r["minutos_extra_bruto"] > 240 and r["minutos_extra_mas2"] == r["minutos_extra_bruto"]
+    assert not r.get("_jornada_especial") and "Cobertura de Turno (+2)" in r["observaciones"]
 
 
 # ── Lo que NO cambia ─────────────────────────────────────────────────────────────────────────────────────────────────────────────

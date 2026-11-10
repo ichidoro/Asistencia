@@ -1553,6 +1553,8 @@ class AttendanceAdjustmentResolver:
                 # la jornada principal no cambia y solo la segunda jornada queda gastada (COMPENSATORIA en jornadas_especiales).
                 res['estado'] = 'JORNADA_COMPENSATORIA'
                 res['minutos_extra_bruto'] = 0.0
+                res['minutos_extra_mas2'] = 0.0
+                res['minutos_extra_llamado'] = 0.0
                 res['_jornada_especial'] = None
                 res['observaciones'] = (res.get('observaciones') or '') + ' [Jornada Trabajada por Compensación]'
 
@@ -1616,11 +1618,13 @@ class AttendanceAdjustmentResolver:
         return res
 
 
-# Orígenes de una jornada especial de un día que la persona no tenía que trabajar (SpecialWorkdayClassifier). En esos
-# días un llamado de emergencia o un +2 se guarda aparte, con su propia decisión (orden del dueño, 05-11-2026).
+# Orígenes de una jornada especial de un día que la persona no tenía que trabajar (SpecialWorkdayClassifier)
 ORIGENES_DIA_NO_LABORABLE = ('DIA_LIBRE', 'FERIADO')
-# Origen de la fila de horas extra de un día no laborable cuando solo el llamado se aprobó como horas extra
+# Origen de la fila de horas extra de un día no laborable cuando solo el llamado se aprobó como horas extra (hasta el 10-11-2026)
 ORIGEN_HE_LLAMADO = 'LLAMADO_EMERGENCIA'
+# Filas de horas extra que dejó la validación antigua del +2, del llamado o de la jornada especial: desde el 10-11-2026 esas
+# horas se aprueban como cualquier hora extra, así que una fila con estos orígenes vuelve a quedar por aprobar al recalcular.
+ORIGENES_HE_VALIDACION_ANTIGUA = ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL', ORIGEN_HE_LLAMADO)
 
 
 class HumanDecisionMerger:
@@ -1629,22 +1633,15 @@ class HumanDecisionMerger:
     (validaciones de Jornada Especial y aprobaciones/rechazos de Horas Extras).
     """
 
-    VALIDATION_TAGS = ('[VALIDADO]', '[VALIDADO_COMO_HE]', '[RECHAZADO]')
-    # COMPENSATORIA: una jornada EXTRA que se gastó compensando una inasistencia (ya no se paga con el monto fijo)
-    JE_HUMAN_STATES = ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA')
-    # Decisiones sobre el llamado de un día no laborable (se valida aparte de la jornada especial)
-    LLAMADO_HUMAN_STATES = ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')
-
-    @classmethod
-    def llamado_he_minutos(cls, je: Optional[Dict[str, Any]]) -> float:
-        """Minutos del llamado aprobados como horas extra (0 si no hay llamado o se decidió otra cosa)."""
-        if not je or je.get('llamado_estado') != 'HORAS_EXTRAS' or not je.get('llamado_minutos'):
-            return 0.0
-        return float(je.get('llamado_minutos_autorizados') or 0.0)
+    VALIDATION_TAGS = ('[VALIDADO]', '[VALIDADO_COMO_HE]')
+    # COMPENSATORIA: una jornada EXTRA que se gastó compensando una inasistencia (ya no se paga con el monto fijo).
+    # Una jornada especial ya no se rechaza (dueño, 10-11-2026): una RECHAZADA vuelve a quedar por validar.
+    JE_HUMAN_STATES = ('EXTRA', 'HORAS_EXTRAS', 'COMPENSATORIA')
 
     @classmethod
     def je_is_validated(cls, je_prev: Optional[Dict[str, Any]]) -> bool:
-        if not je_prev:
+        # El +2 ya no es jornada especial (dueño, 10-11-2026): su fila antigua no guarda ninguna decisión que respetar
+        if not je_prev or je_prev.get('origen') == 'COBERTURA_TURNO' or je_prev.get('estado') == 'RECHAZADA':
             return False
         obs = je_prev.get('observaciones') or ''
         return je_prev.get('estado') in cls.JE_HUMAN_STATES or any(t in obs for t in cls.VALIDATION_TAGS)
@@ -1656,12 +1653,6 @@ class HumanDecisionMerger:
             je_data['observaciones'] = je_prev.get('observaciones') or ''
             if je_prev.get('minutos_autorizados') is not None:
                 je_data['minutos_autorizados'] = je_prev.get('minutos_autorizados')
-        # El llamado se decide aparte: su decisión se respeta mientras el llamado siga en el día
-        if je_data.get('llamado_minutos') and (je_prev or {}).get('llamado_estado') in cls.LLAMADO_HUMAN_STATES:
-            je_data['llamado_estado'] = je_prev['llamado_estado']
-            je_data['llamado_minutos_autorizados'] = float(je_prev.get('llamado_minutos_autorizados') or 0.0)
-            je_data['llamado_validador_id'] = je_prev.get('llamado_validador_id')
-            je_data['llamado_fecha_validacion'] = je_prev.get('llamado_fecha_validacion')
         return je_data
 
     @classmethod
@@ -1674,31 +1665,34 @@ class HumanDecisionMerger:
     ) -> Dict[str, Any]:
         res['_he_estado'] = None
         res['_he_minutos_autorizados'] = 0
+        res['_he_reabrir'] = False
 
-        # 1. Cobertura aprobada como Horas Extras
-        cobertura_he = bool(
-            (he_previo and he_previo.get('origen') == 'COBERTURA_TURNO' and he_previo.get('estado') == 'APROBADO')
-            or (je_previo and je_previo.get('estado') == 'HORAS_EXTRAS')
-        )
-        if cobertura_he:
-            min_cob = float((he_previo or {}).get('minutos_autorizados') or (je_previo or {}).get('minutos_autorizados') or 0)
-            if cls.llamado_he_minutos(je_previo) > 0:
-                # La fila de horas extra del día lleva también el llamado aprobado como horas extra: la parte de la
-                # jornada especial es la que se validó en ella (el llamado se suma más abajo).
-                min_cob = float((je_previo or {}).get('minutos_autorizados') or 0)
-            if min_cob > 0:
-                # Una segunda jornada del día (+2) aprobada como horas extra se SUMA a las de la jornada principal; en una
-                # cobertura la jornada principal no tiene horas extra propias (todas pasaron a la cobertura).
-                propias = float(res.get('minutos_extra_bruto') or 0.0) if res.get('_jornada_adicional') else 0.0
-                res['minutos_extra_bruto'] = round(propias + min_cob, 2)
-                res['_he_minutos_autorizados'] = min_cob
-                res['_he_estado'] = 'APROBADO'
+        # 1. Jornada especial: respetar su validación. Validada como jornada EXTRA se paga con el monto fijo; pasada a horas
+        #    extra, sus minutos se suman a las horas extra del día, por aprobar como cualquier hora extra (dueño, 10-11-2026).
+        if res.get('_jornada_especial'):
+            res['_jornada_especial'] = cls.merge_je_record(res['_jornada_especial'], je_previo)
+            je = res['_jornada_especial']
+            es_dia_no_habil = float(res.get('horas_teoricas') or 0.0) == 0.0
+            if es_dia_no_habil and je.get('estado') == 'EXTRA':
+                res['estado'] = 'EXTRA'
+            if je.get('estado') == 'HORAS_EXTRAS':
+                min_esp = float(je.get('minutos_trabajados') or 0.0)
+                res['minutos_extra_bruto'] = round(float(res.get('minutos_extra_bruto') or 0.0) + min_esp, 2)
+                res['minutos_extra_esp'] = round(min_esp, 2)
 
-        # 2. Decisión previa sobre HE ordinarias (no JE)
-        elif he_previo and he_previo.get('estado') in ('APROBADO', 'RECHAZADO') and \
-                he_previo.get('origen') not in ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL', ORIGEN_HE_LLAMADO):
-            bruto = float(res.get('minutos_extra_bruto') or 0.0)
-            if bruto > 0:
+        # 2. Decisión previa sobre las horas extra del día
+        bruto = float(res.get('minutos_extra_bruto') or 0.0)
+        aparte = float(res.get('minutos_extra_mas2') or 0.0) + float(res.get('minutos_extra_llamado') or 0.0)             + float(res.get('minutos_extra_esp') or 0.0)
+        if he_previo and he_previo.get('estado') in ('APROBADO', 'RECHAZADO'):
+            prev_bruto = he_previo.get('minutos_bruto')
+            # Una decisión de la validación antigua (+2, llamado o jornada especial aprobados aparte) o una tomada antes de que
+            # el día sumara un +2, un llamado o una jornada especial no cubre esas horas: el día vuelve a quedar por aprobar.
+            reabrir = bruto > 0 and (he_previo.get('origen') in ORIGENES_HE_VALIDACION_ANTIGUA or (
+                aparte > 0 and prev_bruto is not None and round(bruto) > round(float(prev_bruto or 0.0))))
+            if reabrir:
+                res['_he_reabrir'] = True
+                res['observaciones'] = (res.get('observaciones') or '') + 'Horas extra por aprobar de nuevo: el día suma un +2, un llamado o una jornada especial. '
+            elif bruto > 0:
                 estado_prev = he_previo['estado']
                 res['_he_estado'] = estado_prev
                 res['_he_minutos_autorizados'] = min(float(he_previo.get('minutos_autorizados') or 0), bruto) if estado_prev == 'APROBADO' else 0
@@ -1713,23 +1707,6 @@ class HumanDecisionMerger:
                 res['_he_conservar'] = True
                 res['observaciones'] = (res.get('observaciones') or '') + (
                     f"Horas extra ya decididas ({he_previo['estado']}): se conservan hasta corregir el día. ")
-
-        # 3. Jornada Especial: respetar validación humana
-        if res.get('_jornada_especial'):
-            res['_jornada_especial'] = cls.merge_je_record(res['_jornada_especial'], je_previo)
-            je_estado = res['_jornada_especial'].get('estado')
-            es_dia_no_habil = float(res.get('horas_teoricas') or 0.0) == 0.0
-            if es_dia_no_habil and je_estado in ('EXTRA', 'RECHAZADA') and \
-                    res['_jornada_especial'].get('origen') != 'COBERTURA_TURNO':
-                res['estado'] = je_estado
-
-            # 4. El llamado de un día no laborable aprobado como horas extra suma a las horas extra del día (la fila de
-            #    horas extra guarda el total; la jornada especial dice cuánto es de cada parte).
-            min_llamado = cls.llamado_he_minutos(res['_jornada_especial'])
-            if min_llamado > 0:
-                res['minutos_extra_bruto'] = round(float(res.get('minutos_extra_bruto') or 0.0) + min_llamado, 2)
-                res['_he_minutos_autorizados'] = round(float(res.get('_he_minutos_autorizados') or 0.0) + min_llamado, 2)
-                res['_he_estado'] = 'APROBADO'
         return res
 
 
@@ -1809,6 +1786,8 @@ class QuantumMatrixEngine:
             if not is_bolsa:
                 cls._registrar_emergencias(res)
                 cls._registrar_jornada_adicional(res, empleado_id, fecha)
+            else:
+                cls._sumar_a_la_bolsa(res)
 
         # ── Capa 2: Justificación de día completo ──
         if j_full:
@@ -1838,84 +1817,57 @@ class QuantumMatrixEngine:
     @staticmethod
     def _registrar_emergencias(res: Optional[Dict[str, Any]]) -> None:
         """Un llamado de emergencia (otra jornada del día, más corta que «Horas límite para calificar bloque como jornada
-        especial en vez de horas extras directas», 3 h) se suma a las horas extra del día, como dice ese ajuste. Antes solo
-        quedaba anotado y sus minutos no contaban en ningún lado (01-11-2026; caso Wladimir Becerra 24-10-2026, 137 min). En
-        un día libre, feriado o con cobertura se suma a la jornada especial que el día ya tiene. Se llama antes de registrar
-        la jornada adicional (+2), que crea su propia jornada especial por aprobar."""
+        especial en vez de horas extras directas», 3 h) se suma a las horas extra del día, por aprobar como cualquier hora
+        extra, también en un día libre o feriado (dueño, 10-11-2026: el EME ya no se valida aparte). Sus minutos quedan
+        anotados aparte (minutos_extra_llamado) para que las horas extra digan cuánto vino del llamado."""
         ems = [e for e in ((res or {}).get('_emergencias') or []) if e.get('minutos_netos')]
         if not ems:
             return
         minutos = sum(e['minutos_netos'] for e in ems)
-        je = res.get('_jornada_especial')
-        if je and je.get('origen') in ORIGENES_DIA_NO_LABORABLE:
-            # Día libre o feriado: el llamado no se suma a la jornada especial; queda aparte, con su propia decisión
-            # (EXTRA, horas extra o rechazo) y su estado en la grilla (orden del dueño, 05-11-2026; caso Wladimir Becerra
-            # 24-10-2026). La nota del día ya lo cuenta: no se repite en la jornada.
-            QuantumMatrixEngine._agregar_llamado(je, 'EMERGENCIA', ems[0]['hora_entrada'], ems[-1]['hora_salida'], minutos)
-            return
-        if je:
-            je['minutos_trabajados'] = int(je.get('minutos_trabajados') or 0) + minutos
-            notas = ' '.join(f"[Llamado de Emergencia: {e['hora_entrada']} - {e['hora_salida']} ({e['minutos_netos']} min)]" for e in ems)
-            je['observaciones'] = f"{(je.get('observaciones') or '').strip()} {notas}".strip()
-            return
         res['minutos_extra_bruto'] = round(float(res.get('minutos_extra_bruto') or 0.0) + minutos, 2)
+        res['minutos_extra_llamado'] = round(float(res.get('minutos_extra_llamado') or 0.0) + minutos, 2)
         res['observaciones'] = (res.get('observaciones') or '') + f"Llamado de emergencia: {minutos} min sumados a las horas extra. "
 
     @staticmethod
+    def _sumar_a_la_bolsa(res: Optional[Dict[str, Any]]) -> None:
+        """Bolsa Flexible: un +2 o un llamado suma sus horas a la bolsa (dueño, 10-11-2026). En bolsa las horas extra son
+        solo lo que pasa la meta del tramo, así que no van a horas extra del día. Con libreta no debería haber ninguno."""
+        if not res:
+            return
+        minutos = sum(int(e.get('minutos_netos') or 0) for e in (res.get('_emergencias') or []))
+        ja = res.get('_jornada_adicional') or {}
+        minutos += int(ja.get('minutos_netos') or 0)
+        if minutos <= 0:
+            return
+        res['horas_trabajadas'] = round(float(res.get('horas_trabajadas') or 0.0) + minutos / 60.0, DECIMALES_HORAS)
+        res['observaciones'] = (res.get('observaciones') or '') + f"Jornada aparte del día: {minutos} min sumados a la bolsa. "
+
+    @staticmethod
     def _registrar_jornada_adicional(res: Optional[Dict[str, Any]], empleado_id: int, fecha: str) -> None:
-        """Una jornada aparte de 3 horas o más (+2) queda como jornada especial por aprobar, igual que una cobertura: en la
-        ventana «Validar Cobertura (+2)» se aprueba como jornada especial o como horas extra, o se rechaza. Sin esto sus horas
-        no contaban en ningún lado (se perdió el 24-09-2026; antes se sumaban a las horas extra). En un día libre, feriado o con
-        cobertura, sus horas se suman a la jornada especial que el día ya tiene."""
+        """Una jornada aparte de 3 horas o más (+2) se suma a las horas extra del día, por aprobar como cualquier hora extra
+        (dueño, 10-11-2026: el +2 ya no se valida aparte). En un día libre o feriado la jornada principal sigue siendo la
+        jornada especial y el +2 va aparte, a horas extra. Sus minutos quedan anotados (minutos_extra_mas2) para que las
+        horas extra digan cuánto vino del +2 y la grilla lo siga mostrando."""
         ja = (res or {}).get('_jornada_adicional')
         if not ja or not ja.get('bloques') or not ja.get('minutos_netos'):
             return
         primero, ultimo = ja['bloques'][0], ja['bloques'][-1]
+        minutos = int(ja['minutos_netos'])
         texto = (f"[Jornada Adicional (+2): {primero['hora_entrada']} - {ultimo['hora_salida']} "
-                 f"({round(ja['minutos_netos'] / 60.0, 1)}h netas)]")
+                 f"({round(minutos / 60.0, 1)}h netas)]")
         je = res.get('_jornada_especial')
-        if je and je.get('origen') in ORIGENES_DIA_NO_LABORABLE:
-            # Día libre o feriado: la segunda jornada queda aparte de la jornada especial, con su propia decisión, igual que
-            # un llamado de emergencia (05-11-2026). La nota del +2 se quita de la jornada especial para que la grilla la
-            # siga mostrando como ESP y el +2 vaya debajo.
-            obs_je = je.get('observaciones') or ''
-            for b in ja['bloques']:
-                obs_je = obs_je.replace(f"[Jornada Adicional (+2): {b['hora_entrada']} - {b['hora_salida']}]", '')
-            je['observaciones'] = ' '.join(obs_je.split())
-            QuantumMatrixEngine._agregar_llamado(je, 'ADICIONAL', primero['hora_entrada'], ultimo['hora_salida'], ja['minutos_netos'])
-            return
         if je:
-            je['minutos_trabajados'] = int(je.get('minutos_trabajados') or 0) + ja['minutos_netos']
-            je['hora_salida'] = ultimo['hora_salida']
+            # La nota del +2 sale de la jornada especial: el +2 no es parte de ella
             obs_je = je.get('observaciones') or ''
-            for b in ja['bloques']:      # la nota sin horas netas que el día ya copió se reemplaza por la que las trae
-                obs_je = obs_je.replace(f"[Jornada Adicional (+2): {b['hora_entrada']} - {b['hora_salida']}]", '')
-            je['observaciones'] = f"{' '.join(obs_je.split())} {texto}".strip()
-            return
-        res['_jornada_especial'] = {
-            'empleado_id': empleado_id,
-            'fecha': fecha,
-            'hora_entrada': primero['hora_entrada'],
-            'hora_salida': ultimo['hora_salida'],
-            'minutos_trabajados': ja['minutos_netos'],
-            'estado': 'JORNADA_ESPECIAL',
-            'origen': 'COBERTURA_TURNO',
-            'observaciones': texto,
-        }
-
-    @staticmethod
-    def _agregar_llamado(je: Dict[str, Any], tipo: str, hora_entrada: Optional[str], hora_salida: Optional[str], minutos: int) -> None:
-        """Anota en la jornada especial de un día no laborable la otra jornada del día (llamado de emergencia o +2), que
-        se valida aparte. Si el día trae las dos, se juntan en una sola parte (con sus minutos sumados) y se llama +2."""
-        prev = int(je.get('llamado_minutos') or 0)
-        entradas = [h for h in (je.get('llamado_hora_entrada'), hora_entrada) if h]
-        salidas = [h for h in (je.get('llamado_hora_salida'), hora_salida) if h]
-        je['llamado_tipo'] = 'ADICIONAL' if (tipo == 'ADICIONAL' or je.get('llamado_tipo') == 'ADICIONAL') else 'EMERGENCIA'
-        je['llamado_hora_entrada'] = min(entradas) if entradas else None
-        je['llamado_hora_salida'] = max(salidas) if salidas else None
-        je['llamado_minutos'] = prev + int(minutos or 0)
-        je['llamado_estado'] = 'PENDIENTE'
-        je['llamado_minutos_autorizados'] = 0
+            for blq in ja['bloques']:
+                obs_je = obs_je.replace(f"[Jornada Adicional (+2): {blq['hora_entrada']} - {blq['hora_salida']}]", '')
+            je['observaciones'] = ' '.join(obs_je.split())
+        obs = res.get('observaciones') or ''
+        for blq in ja['bloques']:      # la nota sin horas netas que el día ya trae se reemplaza por la que las trae
+            obs = obs.replace(f"[Jornada Adicional (+2): {blq['hora_entrada']} - {blq['hora_salida']}]", '')
+        res['observaciones'] = f"{' '.join(obs.split())} {texto} ".lstrip()
+        res['minutos_extra_bruto'] = round(float(res.get('minutos_extra_bruto') or 0.0) + minutos, 2)
+        res['minutos_extra_mas2'] = round(float(res.get('minutos_extra_mas2') or 0.0) + minutos, 2)
 
     @staticmethod
     def resolve_control_modality(turno_config: Optional[Dict[str, Any]], fecha: str) -> bool:
@@ -2779,51 +2731,15 @@ class QuantumMatrixEngine:
             diff_extra = min_trab - min_teo
             # Hora extra: al menos un segundo (resolución del reloj) y lo que pida el «Mínimo para contar hora extra»
             if round(diff_extra * 60.0) > 0 and diff_extra >= minimo_he_min:
+                # Todo lo trabajado de más va a las horas extra del día, por aprobar (dueño, 10-11-2026). El «límite de horas
+                # extra» ya no decide cómo se paga, solo cómo se llama: si se pasa seguido, ese exceso es un +2 por cobertura y
+                # las horas extra del día lo dicen aparte (minutos_extra_mas2).
+                res['minutos_extra_bruto'] = round(diff_extra, 2)
+                res['minutos_deuda'] = 0.0
                 if max_he_ordinarias_min > 0 and diff_extra > max_he_ordinarias_min and horas_teoricas > 0:
-                    # [REGLA DE NEGOCIO CONFIGURADA EN INTERFAZ]:
-                    # "Si las extras superan este límite, la totalidad del bloque pasa a ser Jornada Especial Pendiente"
-                    # El turno base cubre min_teo (horas_teoricas)
-                    res['horas_trabajadas'] = round(horas_teoricas, DECIMALES_HORAS)
-                    res['minutos_extra_bruto'] = 0.0
-                    res['minutos_deuda'] = 0.0
-                    if res.get('estado') not in ('ATRASO', 'SALIDA_ADELANTADA'):
-                        res['estado'] = 'OK'
-                    res['tiene_salida_adelantada'] = 0
-                    res['minutos_salida_adelantada'] = 0.0
-
-                    # Una jornada lleva una sola colación (orden del dueño, 27-10-2026): la del día ya se descontó de las
-                    # horas trabajadas, así que la cobertura no descuenta otra.
-                    min_trab_je = max(0, int(round(diff_extra)))
-
-                    min_anticipo = 0
-                    if r_ent_dt and dt_ent_teo:
-                        diff_sec = (dt_ent_teo - r_ent_dt).total_seconds()
-                        if diff_sec > 0:
-                            min_anticipo = int(diff_sec / 60.0)
-
-                    if min_anticipo >= max_he_ordinarias_min:
-                        # Cobertura previa: llegó horas antes de la entrada programada para cubrir el turno previo
-                        h_ent_je = res['hora_entrada_real']
-                        h_sal_je = dt_ent_teo.strftime("%H:%M") if dt_ent_teo else None
-                    else:
-                        # Cobertura posterior: se quedó horas después de la salida programada para cubrir el turno siguiente
-                        h_ent_je = dt_sal_teo.strftime("%H:%M") if dt_sal_teo else None
-                        h_sal_je = res['hora_salida_real']
-
-                    res['_jornada_especial'] = {
-                        'empleado_id': empleado_id,
-                        'fecha': fecha,
-                        'hora_entrada': h_ent_je,
-                        'hora_salida': h_sal_je,
-                        'minutos_trabajados': min_trab_je,
-                        'estado': 'JORNADA_ESPECIAL',
-                        'origen': 'COBERTURA_TURNO',
-                        'observaciones': f"[Jornada Especial (+2): Cobertura de Turno ({round(min_trab_je/60.0, 1)}h netas)]"
-                    }
-                    res['observaciones'] += f"[Jornada Especial (+2): Cobertura de Turno] "
-                else:
-                    res['minutos_extra_bruto'] = round(diff_extra, 2)
-                    res['minutos_deuda'] = 0.0
+                    res['minutos_extra_mas2'] = round(float(res.get('minutos_extra_mas2') or 0.0) + diff_extra, 2)
+                    res['observaciones'] += (f"[Cobertura de Turno (+2): {round(diff_extra / 60.0, 1)}h netas, "
+                                             f"a las horas extra por aprobar] ")
             else:
                 deuda_calculada = max(0.0, min_teo - min_trab - min_permiso_comp)
                 res['minutos_deuda'] = round(deuda_calculada, 2)

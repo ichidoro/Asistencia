@@ -131,6 +131,7 @@ class AsistenciaRepository:
         "fuente_marcacion", "hash_marcacion",
         "minutos_colacion_auto", "tolerancia_aplicada_tipo",
         "minutos_espera", "minutos_deuda_bruta",
+        "minutos_extra_mas2", "minutos_extra_llamado", "minutos_extra_esp",
     })
 
     async def update_asistencia(self, empleado_id: int, fecha: str, update_data: Dict[str, Any]) -> None:
@@ -203,8 +204,9 @@ class AsistenciaRepository:
                 hora_termino_permiso, minutos_permisos_detectados,
                 tiene_atraso, tiene_salida_adelantada, tiene_permiso,
                 num_semana_ganadora, marcas_consumidas_ids, deuda_condonada,
-                minutos_espera, justificacion_id, nomenclatura, minutos_deuda_bruta
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                minutos_espera, justificacion_id, nomenclatura, minutos_deuda_bruta,
+                minutos_extra_mas2, minutos_extra_llamado, minutos_extra_esp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 turno_asignado_id=excluded.turno_asignado_id,
                 hora_entrada_teorica=excluded.hora_entrada_teorica,
@@ -240,6 +242,9 @@ class AsistenciaRepository:
                 justificacion_id=excluded.justificacion_id,
                 nomenclatura=excluded.nomenclatura,
                 minutos_deuda_bruta=excluded.minutos_deuda_bruta,
+                minutos_extra_mas2=excluded.minutos_extra_mas2,
+                minutos_extra_llamado=excluded.minutos_extra_llamado,
+                minutos_extra_esp=excluded.minutos_extra_esp,
                 updated_at=datetime('now')
         """
 
@@ -273,6 +278,9 @@ class AsistenciaRepository:
                 d.get('nomenclatura'),
                 # Deuda antes del perdón (la fija el motor); si no viene, la deuda final (nada que informar como perdonado)
                 d.get('minutos_deuda_bruta', d.get('minutos_deuda', 0)) or 0,
+                d.get('minutos_extra_mas2', 0) or 0,
+                d.get('minutos_extra_llamado', 0) or 0,
+                d.get('minutos_extra_esp', 0) or 0,
             )
             params_list.append(params)
 
@@ -326,16 +334,16 @@ class AsistenciaRepository:
                 hora_salida=excluded.hora_salida,
                 minutos_trabajados=excluded.minutos_trabajados,
                 estado=CASE 
-                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.estado
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'COMPENSATORIA') THEN jornadas_especiales.estado
                     ELSE excluded.estado
                 END,
                 observaciones=CASE
-                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.observaciones
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'COMPENSATORIA') THEN jornadas_especiales.observaciones
                     ELSE excluded.observaciones
                 END,
                 origen=excluded.origen,
                 minutos_autorizados=CASE
-                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.minutos_autorizados
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'COMPENSATORIA') THEN jornadas_especiales.minutos_autorizados
                     ELSE excluded.minutos_autorizados
                 END,
                 updated_at=datetime('now')
@@ -593,6 +601,7 @@ class AsistenciaRepository:
                 a.id as asistencia_id, a.fecha, e.id as empleado_id, a.estado, a.observaciones,
                 a.hora_entrada_real, a.hora_salida_real, a.minutos_atraso, a.minutos_colacion, a.minutos_colacion_real, a.horas_trabajadas, 
                 a.minutos_deuda, a.minutos_extra_bruto, a.minutos_espera,
+                a.minutos_extra_mas2, a.minutos_extra_llamado, a.minutos_extra_esp,
                 he.minutos_autorizados as minutos_extra_autorizados,
                 he.estado as estado_he,
                 a.minutos_salida_adelantada, a.minutos_exceso_colacion, a.minutos_colacion_auto, a.minutos_permiso_personal_deuda, a.updated_at,

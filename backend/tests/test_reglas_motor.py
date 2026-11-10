@@ -279,8 +279,9 @@ def test_una_sola_colacion_aunque_la_jornada_pase_el_tope_de_horas_extra(monkeyp
     largo = [L(1, "2026-10-15 05:54:00", E), L(2, "2026-10-15 19:45:00", S)]
     monkeypatch.setitem(AJUSTES_CONFIGURADOS, "asistencia_max_extras_ordinarias_dia_habil", "240")
     r = _dia(monkeypatch, largo, dia=BODEGA)
-    assert r["_jornada_especial"]["origen"] == "COBERTURA_TURNO"
-    assert r["_jornada_especial"]["minutos_trabajados"] == 321
+    # Desde el 10-11-2026 la cobertura (+2) va a las horas extra del día, por aprobar
+    assert not r.get("_jornada_especial")
+    assert r["minutos_extra_bruto"] == 321 and r["minutos_extra_mas2"] == 321
 
 
 def test_las_marcas_repetidas_se_juntan_segun_el_ajuste():

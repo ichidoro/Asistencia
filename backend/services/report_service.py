@@ -213,6 +213,7 @@ class ReportService:
                 hay_bolsa = True
                 
             he_bruto = 0
+            he_mas2 = 0.0
             he_apr = 0
             he_rec = 0
             he_pend = 0
@@ -418,25 +419,21 @@ class ReportService:
                     di["_acumuladoBolsaSnapPrev"] = acum_bolsa
                     di["_acumuladoBolsaSnap"] = acum_bolsa
                     di["_metaMinBolsa"] = meta_min
-                    
-                if not is_esp:
+                else:
+                    # Día especial: sus horas extra (+2, llamado o la jornada especial pasada a horas extra) se aprueban
+                    # como las de cualquier día desde el 10-11-2026
+                    he_bruto += max(di.get("minutos_extra_bruto") or 0, di.get("minutos_extra_autorizados") or 0)
+
+                if not is_esp or not es_bolsa:
                     if di.get("estado_he") == 'APROBADO':
                         he_apr += (di.get("minutos_extra_autorizados") or 0)
                     elif di.get("estado_he") == 'RECHAZADO':
                         he_rec += (di.get("minutos_extra_bruto") or 0)
                     elif (di.get("minutos_extra_bruto") or 0) > 0:
                         he_pend += (di.get("minutos_extra_bruto") or 0)
-                elif es_ja_he:
-                    # Jornada adicional aprobada como HE
-                    min_ja_he = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
-                    he_apr += min_ja_he
-                # Llamado de un día no laborable aprobado como horas extra (se valida aparte, 05-11-2026)
-                llam_d = (ja or {}).get("llamado") or {}
-                if is_esp and llam_d.get("estado") == 'HORAS_EXTRAS':
-                    he_apr += float(llam_d.get("minutos_autorizados") or llam_d.get("minutos") or 0.0)
-                # Llamado aprobado como jornada EXTRA: cuenta como una jornada especial más
-                if llam_d.get("estado") == 'EXTRA':
-                    cnt_esp += 1
+                if not es_bolsa:
+                    # Parte de las horas extra que viene de un +2 o de un llamado de emergencia: se informa aparte
+                    he_mas2 += float(di.get("minutos_extra_mas2") or 0) + float(di.get("minutos_extra_llamado") or 0)
                     
                 # FIX: he_compensado se acumula para TODOS los días (incluidos JORNADA_ESPECIAL),
                 # igual que en el frontend (marcaciones_ui.js línea 4266)
@@ -479,6 +476,7 @@ class ReportService:
                 "he_apr": he_apr,
                 "he_rec": he_rec,
                 "he_pend": he_pend,
+                "he_mas2": round(he_mas2, 4),
                 "d_tot": d_tot,
                 "min_col": round(min_col),
                 "min_per": round(min_per),
@@ -589,6 +587,7 @@ class ReportService:
             # no pagada o por decidir; cada minuto de deuda termina perdonado, cubierto o pendiente.
             columns_def.extend([
                 ("Horas Extra", "TRAB.", "l_he_trabajadas"),
+                ("Horas Extra", "DE +2 Y EME", "he_mas2"),
                 ("Horas Extra", "USADAS", "l_he_usadas"),
                 ("Horas Extra", "A PAGAR", "l_he_a_pagar"),
                 ("Horas Extra", "NO PAG.", "l_he_no_pagadas"),
@@ -788,6 +787,9 @@ class ReportService:
                             val = tot_i if tot_i > 0 else ""
                             if tot_i > 0:
                                 cell.font = Font(name="Segoe UI", size=9, bold=True)
+                        # De las horas extra trabajadas, cuánto viene de un +2 o de un llamado (dueño, 10-11-2026)
+                        elif key == "he_mas2":
+                            val = self._format_hhmmss(r["he_mas2"]) if r["he_mas2"] > 0.0083 else ""
                         # Libro mayor (horas extra y deuda); una persona de Bolsa Flexible solo tiene lo trabajado y lo aprobado
                         elif key.startswith("l_"):
                             v_l = self._libro_valor(r, key)
@@ -1000,6 +1002,9 @@ class ReportService:
                     elif key == "cnt_esp":
                         s_val = sum(r["cnt_esp"] for r in rows_calc)
                         val = s_val if s_val > 0 else ""
+                    elif key == "he_mas2":
+                        s_val = sum(r["he_mas2"] for r in rows_calc)
+                        val = self._format_hhmmss(s_val) if s_val > 0.0083 else ""
                     elif key == "tot_incidencias":
                         s_val = sum(r["cnt_per"] + r["cnt_atr"] + r["cnt_sad"] + r["cnt_inas"] + r["cnt_esp"] for r in rows_calc)
                         val = s_val if s_val > 0 else ""

@@ -52,39 +52,46 @@ def test_dos_llamados_el_mismo_dia_se_suman(monkeypatch):
 
 
 def test_en_un_dia_libre_queda_aparte_de_la_jornada_especial(monkeypatch):
-    # Orden del dueño (05-11-2026): en un día que no tenía que trabajar el llamado no se suma a la jornada especial; queda
-    # aparte, por validar, con su propio estado en la grilla.
+    # Dueño (10-11-2026): en un día que no tenía que trabajar el llamado no se suma a la jornada especial ni se valida
+    # aparte: va directo a las horas extra del día, por aprobar, y se informa como llamado.
     r = _dia(monkeypatch, MARCAS, {"es_libre": 1, "horas_teoricas": 0})
     je = r["_jornada_especial"]
-    # 08:00–16:30 = 510 min menos 30 de colación = 480; el llamado (77) va aparte
+    # 08:00–16:30 = 510 min menos 30 de colación = 480; el llamado (77) va a horas extra
     assert r["estado"] == "JORNADA_ESPECIAL" and je["minutos_trabajados"] == 480
-    assert (je["llamado_tipo"], je["llamado_hora_entrada"], je["llamado_hora_salida"], je["llamado_minutos"], je["llamado_estado"]) == \
-        ("EMERGENCIA", "21:00", "22:17", 77, "PENDIENTE")
-    # La nota del día aparece una sola vez (antes se repetía con otro formato)
-    assert je["observaciones"].count("Llamado de Emergencia") == 1
-    assert r["minutos_extra_bruto"] == 0
+    assert not je.get("llamado_minutos")
+    assert r["minutos_extra_bruto"] == 77 and r["minutos_extra_llamado"] == 77
 
 
-def test_el_llamado_aprobado_como_horas_extra_suma_a_las_del_dia():
-    base = {"minutos_extra_bruto": 0.0, "horas_teoricas": 0.0, "observaciones": "", "estado": "JORNADA_ESPECIAL",
-            "_jornada_especial": {"estado": "JORNADA_ESPECIAL", "origen": "DIA_LIBRE", "minutos_trabajados": 420,
-                                  "llamado_minutos": 137, "llamado_estado": "PENDIENTE", "llamado_minutos_autorizados": 0}}
-    previa = {"estado": "EXTRA", "minutos_autorizados": 420, "origen": "DIA_LIBRE", "observaciones": "[VALIDADO]",
-              "llamado_minutos": 137, "llamado_estado": "HORAS_EXTRAS", "llamado_minutos_autorizados": 137}
-    he = {"estado": "APROBADO", "origen": "LLAMADO_EMERGENCIA", "minutos_autorizados": 137}
+def test_el_llamado_aprobado_aparte_vuelve_a_horas_extra_por_aprobar():
+    # Dueño (10-11-2026): lo que se aprobó con la validación antigua del llamado vuelve a quedar por aprobar
+    base = {"minutos_extra_bruto": 137.0, "minutos_extra_llamado": 137.0, "horas_teoricas": 0.0, "observaciones": "",
+            "estado": "JORNADA_ESPECIAL",
+            "_jornada_especial": {"estado": "JORNADA_ESPECIAL", "origen": "DIA_LIBRE", "minutos_trabajados": 420}}
+    previa = {"estado": "EXTRA", "minutos_autorizados": 420, "origen": "DIA_LIBRE", "observaciones": "[VALIDADO]"}
+    he = {"estado": "APROBADO", "origen": "LLAMADO_EMERGENCIA", "minutos_autorizados": 137, "minutos_bruto": 137}
     import copy
     r = qme.HumanDecisionMerger.apply(copy.deepcopy(base), "2026-10-24", he, previa)
-    assert r["estado"] == "EXTRA" and r["_jornada_especial"]["llamado_estado"] == "HORAS_EXTRAS"
-    assert r["minutos_extra_bruto"] == 137 and r["_he_minutos_autorizados"] == 137 and r["_he_estado"] == "APROBADO"
-    # Las dos partes como horas extra: la fila guarda 557; la jornada aporta 420 y el llamado 137 (no se cuenta dos veces)
+    assert r["estado"] == "EXTRA" and r["_he_reabrir"] and r["_he_estado"] is None
+    assert r["minutos_extra_bruto"] == 137
+    # Jornada especial pasada a horas extra: sus 420 min se suman a las del día, por aprobar
     previa2 = dict(previa, estado="HORAS_EXTRAS", observaciones="[VALIDADO_COMO_HE]")
-    he2 = {"estado": "APROBADO", "origen": "DIA_LIBRE", "minutos_autorizados": 557}
-    r2 = qme.HumanDecisionMerger.apply(copy.deepcopy(base), "2026-10-24", he2, previa2)
-    assert r2["minutos_extra_bruto"] == 557 and r2["_he_minutos_autorizados"] == 557
-    # Llamado rechazado: no suma nada
-    previa3 = dict(previa, llamado_estado="RECHAZADA", llamado_minutos_autorizados=0)
-    r3 = qme.HumanDecisionMerger.apply(copy.deepcopy(base), "2026-10-24", None, previa3)
-    assert r3["minutos_extra_bruto"] == 0 and r3["_he_estado"] is None
+    r2 = qme.HumanDecisionMerger.apply(copy.deepcopy(base), "2026-10-24", None, previa2)
+    assert r2["minutos_extra_bruto"] == 557 and r2["minutos_extra_esp"] == 420 and r2["_he_estado"] is None
+    # Una decisión de horas extra normal, tomada con las mismas horas, se respeta
+    he3 = {"estado": "APROBADO", "origen": "SISTEMA", "minutos_autorizados": 137, "minutos_bruto": 137}
+    r3 = qme.HumanDecisionMerger.apply(copy.deepcopy(base), "2026-10-24", he3, previa)
+    assert r3["_he_estado"] == "APROBADO" and r3["_he_minutos_autorizados"] == 137 and not r3["_he_reabrir"]
+    # …pero si el día sumó un +2 o un llamado después de decidir, vuelve a quedar por aprobar
+    he4 = dict(he3, minutos_bruto=60, minutos_autorizados=60)
+    r4 = qme.HumanDecisionMerger.apply(copy.deepcopy(base), "2026-10-24", he4, previa)
+    assert r4["_he_reabrir"] and r4["_he_estado"] is None
+
+
+def test_una_jornada_especial_rechazada_vuelve_a_quedar_por_validar():
+    previa = {"estado": "RECHAZADA", "origen": "DIA_LIBRE", "observaciones": "[RECHAZADO]", "minutos_autorizados": 0}
+    assert not qme.HumanDecisionMerger.je_is_validated(previa)
+    assert not qme.HumanDecisionMerger.je_is_validated({"estado": "EXTRA", "origen": "COBERTURA_TURNO"})
+    assert qme.HumanDecisionMerger.je_is_validated({"estado": "EXTRA", "origen": "DIA_LIBRE"})
 
 
 def test_una_marca_repetida_de_cero_minutos_no_suma():

@@ -14,6 +14,23 @@ from loguru import logger
 from backend.core.database import Database
 
 
+
+# Fila de horas extra que vuelve a quedar por aprobar: se escribe tal cual la deja el motor (por aprobar, sin minutos
+# autorizados y con origen SISTEMA), sin conservar la decisión anterior
+QUERY_REABRIR = """
+    INSERT INTO horas_extras
+        (empleado_id, fecha, minutos_bruto, minutos_autorizados, estado, origen, comentario, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+        minutos_bruto = excluded.minutos_bruto,
+        minutos_autorizados = excluded.minutos_autorizados,
+        estado = excluded.estado,
+        origen = excluded.origen,
+        comentario = NULL,
+        updated_at = datetime('now')
+"""
+
+
 class HoraExtraRepository:
     def __init__(self, db: Database):
         self.db = db
@@ -24,7 +41,7 @@ class HoraExtraRepository:
 
     async def upsert(self, empleado_id: int, fecha: str, minutos_bruto: float,
                      minutos_autorizados: float = 0, estado: str = 'PENDIENTE',
-                     origen: str = 'SISTEMA', comentario: str = None) -> None:
+                     origen: str = 'SISTEMA', comentario: str = None, reabrir: bool = False) -> None:
         """
         Inserta o actualiza un registro HE.
         
@@ -51,7 +68,7 @@ class HoraExtraRepository:
                 END,
                 updated_at = datetime('now')
         """
-        await self.db.execute(query, (
+        await self.db.execute(QUERY_REABRIR if reabrir else query, (
             empleado_id, fecha, minutos_bruto, minutos_autorizados,
             estado, origen, comentario
         ))
@@ -83,22 +100,26 @@ class HoraExtraRepository:
                 END,
                 updated_at = datetime('now')
         """
-        params_list = []
-        for d in data_list:
-            params_list.append((
-                d['empleado_id'], d['fecha'], d['minutos_bruto'], d.get('minutos_autorizados', 0),
-                d.get('estado', 'PENDIENTE'), d.get('origen', 'SISTEMA'), d.get('comentario')
-            ))
-        chunk_size = 50
-        for i in range(0, len(params_list), chunk_size):
-            chunk = params_list[i:i + chunk_size]
-            await self.db.executemany(query, chunk)
+        # «reabrir»: el día sumó un +2, un llamado o una jornada especial después de decidirse, o la decisión venía de la
+        # validación antigua de esas horas (hasta el 10-11-2026): la fila vuelve a quedar por aprobar (dueño, 10-11-2026)
+        for q, filas in ((query, [d for d in data_list if not d.get('reabrir')]),
+                         (QUERY_REABRIR, [d for d in data_list if d.get('reabrir')])):
+            params_list = []
+            for d in filas:
+                params_list.append((
+                    d['empleado_id'], d['fecha'], d['minutos_bruto'], d.get('minutos_autorizados', 0),
+                    d.get('estado', 'PENDIENTE'), d.get('origen', 'SISTEMA'), d.get('comentario')
+                ))
+            chunk_size = 50
+            for i in range(0, len(params_list), chunk_size):
+                chunk = params_list[i:i + chunk_size]
+                await self.db.executemany(q, chunk)
 
     async def batch_delete_by_empleado_fecha(self, pairs: List[Tuple[int, str]]) -> None:
         """Elimina registros HE en batch."""
         if not pairs:
             return
-        query = "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND (origen IS NULL OR origen NOT IN ('COBERTURA_TURNO'))"
+        query = "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ?"
         chunk_size = 50
         for i in range(0, len(pairs), chunk_size):
             chunk = pairs[i:i + chunk_size]
@@ -143,7 +164,7 @@ class HoraExtraRepository:
     async def delete_by_empleado_fecha(self, empleado_id: int, fecha: str) -> None:
         """Elimina un registro HE (usado para JE interceptadas o días sin sobretiempo ordinario)."""
         await self.db.execute(
-            "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND (origen IS NULL OR origen NOT IN ('COBERTURA_TURNO'))",
+            "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ?",
             (empleado_id, fecha)
         )
 
@@ -157,7 +178,7 @@ class HoraExtraRepository:
         Usado por el motor de recálculo para no sobreescribir aprobaciones.
         """
         row = await self.db.fetch_one(
-            "SELECT estado, minutos_autorizados FROM horas_extras WHERE empleado_id = ? AND fecha = ?",
+            "SELECT estado, minutos_autorizados, minutos_bruto, origen FROM horas_extras WHERE empleado_id = ? AND fecha = ?",
             (empleado_id, fecha)
         )
         return dict(row) if row else None

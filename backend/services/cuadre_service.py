@@ -157,61 +157,48 @@ def plegar_libro(dias: List[Dict[str, Any]], es_bolsa: bool = False, tolerancia_
         # Horas extra usadas para cubrir una inasistencia (se cuentan en todos los días, como la grilla)
         he_compensado += _f(di.get('minutos_compensados_he'))
 
-        if esp:
-            ja = di.get('jornada_adicional') or {}
-            if ja.get('estado') == 'HORAS_EXTRAS':
-                # Jornada adicional aprobada como horas extra: trabajada y aprobada por igual
-                m = _f(ja.get('minutos_autorizados')) or _f(ja.get('minutos_trabajados'))
-                he_trabajadas += m
-                he_aprobadas += m
-                he_jornadas_especiales += m
-            # Llamado de un día no laborable aprobado como horas extra (se valida aparte de la jornada, 05-11-2026)
-            llam = ja.get('llamado') or {}
-            if llam.get('estado') == 'HORAS_EXTRAS':
-                m = _f(llam.get('minutos_autorizados')) or _f(llam.get('minutos'))
-                he_trabajadas += m
-                he_aprobadas += m
-                he_jornadas_especiales += m
-            continue
-
-        cond = int(_f(di.get('deuda_condonada')))
-        neta_d = 0.0 if cond == 5 else _f(di.get('minutos_deuda'))
-        bruta_d = di.get('minutos_deuda_bruta')
-        bruta_d = _f(bruta_d) if bruta_d is not None else neta_d
-        if bruta_d < neta_d:          # días calculados antes de guardar la deuda bruta
-            bruta_d = neta_d
-        quitado_d = bruta_d - neta_d
-        comp_d = min(_f(di.get('minutos_compensados_he')), quitado_d)
-        perdonado_d = quitado_d - comp_d
-        causas_d = causas_dia(di)
-        g = guiados.get(fecha)
-        if g and int(_f(g.get('tipo'))) > 0:
-            if cond != int(_f(g.get('tipo'))):
-                dias_guiados_cambiados.append(fecha)
-            else:
-                exceso = perdonado_d - _f(g.get('minutos_marca'))
-                if exceso > TOLERANCIA_MIN:
-                    # La marca borra hoy más de lo aprobado (cambió una marca): el exceso vuelve a deuda pendiente
-                    dias_guiados_reabiertos.append(fecha)
-                    perdonado_d -= exceso
-                    neta_d += exceso
-                    causas_d = dict(causas_d)
-                    causas_d['atraso' if int(_f(g.get('tipo'))) in (2, 3) else 'salida'] += exceso
-                    causas_d['deuda'] += exceso
-        if tolerancia_min > 0 and 0.0 < neta_d <= tolerancia_min:
-            tolerado += neta_d
-            neta_d = 0.0
-            causas_d = dict(CAUSAS_VACIAS)
-        elif 0.0 < neta_d < 1.0:
-            dias_segundos.append(fecha)
-        for k in ORDEN_PAGO:
-            causas[k] += causas_d[k]
-        deuda_bruta += bruta_d
-        deuda_neta += neta_d
-        comp_inasistencia += comp_d
-        perdonado += perdonado_d
-        if perdonado_d >= 1.0:
-            dias_perdonados.append(fecha)
+        # Un día especial (jornada especial, día libre o feriado trabajado) no tiene deuda. Sus horas extra (+2, llamado o la
+        # jornada especial pasada a horas extra) se aprueban como las de cualquier día desde el 10-11-2026, así que se
+        # cuentan igual que las demás, más abajo.
+        if not esp:
+            cond = int(_f(di.get('deuda_condonada')))
+            neta_d = 0.0 if cond == 5 else _f(di.get('minutos_deuda'))
+            bruta_d = di.get('minutos_deuda_bruta')
+            bruta_d = _f(bruta_d) if bruta_d is not None else neta_d
+            if bruta_d < neta_d:          # días calculados antes de guardar la deuda bruta
+                bruta_d = neta_d
+            quitado_d = bruta_d - neta_d
+            comp_d = min(_f(di.get('minutos_compensados_he')), quitado_d)
+            perdonado_d = quitado_d - comp_d
+            causas_d = causas_dia(di)
+            g = guiados.get(fecha)
+            if g and int(_f(g.get('tipo'))) > 0:
+                if cond != int(_f(g.get('tipo'))):
+                    dias_guiados_cambiados.append(fecha)
+                else:
+                    exceso = perdonado_d - _f(g.get('minutos_marca'))
+                    if exceso > TOLERANCIA_MIN:
+                        # La marca borra hoy más de lo aprobado (cambió una marca): el exceso vuelve a deuda pendiente
+                        dias_guiados_reabiertos.append(fecha)
+                        perdonado_d -= exceso
+                        neta_d += exceso
+                        causas_d = dict(causas_d)
+                        causas_d['atraso' if int(_f(g.get('tipo'))) in (2, 3) else 'salida'] += exceso
+                        causas_d['deuda'] += exceso
+            if tolerancia_min > 0 and 0.0 < neta_d <= tolerancia_min:
+                tolerado += neta_d
+                neta_d = 0.0
+                causas_d = dict(CAUSAS_VACIAS)
+            elif 0.0 < neta_d < 1.0:
+                dias_segundos.append(fecha)
+            for k in ORDEN_PAGO:
+                causas[k] += causas_d[k]
+            deuda_bruta += bruta_d
+            deuda_neta += neta_d
+            comp_inasistencia += comp_d
+            perdonado += perdonado_d
+            if perdonado_d >= 1.0:
+                dias_perdonados.append(fecha)
 
         bruto_d = _f(di.get('minutos_extra_bruto'))
         estado_he = di.get('estado_he')

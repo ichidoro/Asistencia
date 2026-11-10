@@ -110,7 +110,7 @@
             case 'JORNADA_ESPECIAL':
                 return (ja && ja.origen === 'FERIADO' ? 'Feriado trabajado' : 'Día libre trabajado') + ', por validar';
             case 'EXTRA': return 'Jornada EXTRA aprobada';
-            case 'HORAS_EXTRAS': return 'Aprobada como horas extra';
+            case 'HORAS_EXTRAS': return 'Pasada a horas extra';
             case 'PERMISO': return 'Permiso' + (di.hora_inicio_permiso ? ' de ' + hhmm(di.hora_inicio_permiso) + ' a ' + hhmm(di.hora_termino_permiso) : '');
             default: return nombreEstado(e);
         }
@@ -135,7 +135,7 @@
     function estadoJornada(ja) {
         const m = /\[COMPENSA_INASISTENCIA (\d{4}-\d{2}-\d{2})\]/.exec(ja.observaciones || '');
         switch (ja.estado) {
-            case 'HORAS_EXTRAS': return 'Aprobada como horas extra.';
+            case 'HORAS_EXTRAS': return 'Pasada a horas extra, por aprobar con las demás del día.';
             case 'EXTRA': return 'Aprobada como jornada EXTRA.';
             case 'COMPENSATORIA': return m ? 'Usada para compensar la inasistencia del <span class="nw">' + DIAS[fechaObj(m[1]).getDay()].toLowerCase() + ' ' + ddmm(m[1]) + '</span>.' : 'Usada para compensar una inasistencia.';
             case 'RECHAZADA': return 'Rechazada.';

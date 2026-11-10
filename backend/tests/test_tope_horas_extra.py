@@ -37,11 +37,12 @@ def test_sin_el_ajuste_tampoco_hay_limite(monkeypatch):
 
 
 def test_con_cuatro_horas_lo_de_mas_va_a_cobertura(monkeypatch):
+    # Desde el 10-11-2026 la cobertura (+2) va a las horas extra del día, por aprobar; el tope solo la nombra +2
     r = _dia(monkeypatch, {"asistencia_max_extras_ordinarias_dia_habil": "240"})
-    assert r["minutos_extra_bruto"] == 0 and r["_jornada_especial"]["minutos_trabajados"] == 321
+    assert r["minutos_extra_bruto"] == 321 and r["minutos_extra_mas2"] == 321 and not r.get("_jornada_especial")
 
 
 def test_el_valor_se_lee_siempre_en_minutos(monkeypatch):
     # Antes, un valor de 24 o menos se leía como horas (18 minutos = 18 horas) y nunca había cobertura.
     r = _dia(monkeypatch, {"asistencia_max_extras_ordinarias_dia_habil": "18"})
-    assert r["_jornada_especial"]["minutos_trabajados"] == 321
+    assert r["minutos_extra_mas2"] == 321

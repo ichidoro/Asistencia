@@ -85,7 +85,8 @@ def test_una_jornada_gastada_es_una_decision_humana_que_el_recalculo_conserva():
 
 def test_una_jornada_especial_tambien_puede_pasar_a_horas_extra():
     servicio = (RAIZ / "backend" / "services" / "asistencia_service.py").read_text(encoding="utf-8")
-    assert "DIA_LIBRE_NO_HE" not in servicio and "origen_he = jornada_dict.get('origen')" in servicio
+    # Desde el 10-11-2026 pasa a horas extra por aprobar (no se aprueban al validar) y no se puede rechazar
+    assert "DIA_LIBRE_NO_HE" not in servicio and "'estado_he': 'PENDIENTE_HE'" in servicio and "'ESP_NO_SE_RECHAZA'" in servicio
     router = (RAIZ / "backend" / "routers" / "asistencia.py").read_text(encoding="utf-8")
     # El aviso del servidor llega a la pantalla (antes se convertía en «Error interno del servidor»)
     assert "    except HTTPException:\n        # El aviso (400) y el conflicto de concurrencia (409)" in router

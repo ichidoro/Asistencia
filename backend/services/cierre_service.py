@@ -160,8 +160,6 @@ class CierreService:
                 di_estado = di.get("estado") or ""
 
                 trab = round((di.get("horas_trabajadas") or 0.0) * 60)
-                ja = di.get("jornada_adicional") or {}
-                es_ja_he = (ja.get("estado") == 'HORAS_EXTRAS')
                 is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)
 
                 if es_bolsa:
@@ -173,23 +171,12 @@ class CierreService:
                     # Compensaciones (HE usadas para cubrir una inasistencia): la grilla
                     # y el Excel las restan del saldo; el resumen del cierre hace lo mismo.
                     total_compensado_min += float(di.get("minutos_compensados_he") or 0.0)
-                    if not is_esp:
-                        if di.get("estado_he") == 'APROBADO':
-                            m_aut = float(di.get("minutos_extra_autorizados") or 0.0)
-                            if m_aut > 0:
-                                total_he_fijos_min += m_aut
-                                total_he_fijos_count += 1
-                    elif es_ja_he:
-                        min_ja_he = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
-                        if min_ja_he > 0:
-                            total_he_fijos_min += min_ja_he
-                            total_he_fijos_count += 1
-                    # Llamado de un día no laborable aprobado como horas extra (se valida aparte de la jornada, 05-11-2026)
-                    llam = ja.get("llamado") or {}
-                    if is_esp and llam.get("estado") == 'HORAS_EXTRAS':
-                        min_llam = float(llam.get("minutos_autorizados") or llam.get("minutos") or 0.0)
-                        if min_llam > 0:
-                            total_he_fijos_min += min_llam
+                    # Horas extra aprobadas del día. Desde el 10-11-2026 las de un día especial (+2, llamado o la jornada
+                    # especial pasada a horas extra) se aprueban como las de cualquier día y se cuentan igual.
+                    if di.get("estado_he") == 'APROBADO':
+                        m_aut = float(di.get("minutos_extra_autorizados") or 0.0)
+                        if m_aut > 0:
+                            total_he_fijos_min += m_aut
                             total_he_fijos_count += 1
 
                     if not is_esp:
@@ -509,45 +496,7 @@ class CierreService:
         )
         resumen = dict(resumen_row) if resumen_row else {}
 
-        # Consolidar coberturas de turno (+2) que operan en paralelo al turno base
-        q_coberturas = f"""
-            SELECT COUNT(je.id) as count_coberturas
-            FROM jornadas_especiales je
-            JOIN empleados e ON je.empleado_id = e.id
-            JOIN asistencias a ON je.empleado_id = a.empleado_id AND je.fecha = a.fecha
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE je.fecha BETWEEN ? AND ?
-              AND je.origen = 'COBERTURA_TURNO'
-              AND je.estado NOT IN ('RECHAZADA', 'COMPENSATORIA')
-              AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA')
-            {filtro_area}
-        """
-        row_cob = await self.db.fetch_one(q_coberturas, tuple([fecha_inicio, fecha_fin] + params_area))
-        if row_cob and row_cob['count_coberturas']:
-            resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_cob['count_coberturas']
-
-        # Llamados de un día no laborable (se validan aparte de su jornada especial, 05-11-2026): cada uno no rechazado
-        # es una jornada más del resumen
-        q_llamados = f"""
-            SELECT COUNT(je.id) as count_llamados
-            FROM jornadas_especiales je
-            JOIN empleados e ON je.empleado_id = e.id
-            JOIN asistencias a ON je.empleado_id = a.empleado_id AND je.fecha = a.fecha
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE je.fecha BETWEEN ? AND ?
-              AND COALESCE(je.llamado_minutos, 0) > 0
-              AND COALESCE(je.llamado_estado, 'PENDIENTE') != 'RECHAZADA'
-            {filtro_area}
-        """
-        row_llam = await self.db.fetch_one(q_llamados, tuple([fecha_inicio, fecha_fin] + params_area))
-        if row_llam and row_llam['count_llamados']:
-            resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_llam['count_llamados']
+        # El +2 y el llamado de emergencia ya no son jornadas especiales: van a las horas extra del día (dueño, 10-11-2026)
 
         # ── CÁLCULO OFICIAL DE HABERES, DÉBITOS Y BALANCES ──
         # (una sola lógica, compartida con el acta: calcular_haberes_debitos)

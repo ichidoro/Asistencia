@@ -2556,7 +2556,9 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         // Excluir días especiales para que no se sumen a la bolsa de HE normales
         const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
         // Campo correcto: minutos_extra_bruto (usado en renderVistaAnalitica línea 2331)
-        const brutoPotencial = isEsp ? 0 : (di.minutos_extra_bruto || 0);
+        // Desde el 10-11-2026 las horas extra de un día especial (+2, llamado o la jornada especial pasada a horas extra)
+        // se aprueban aquí como las demás
+        const brutoPotencial = di._esBolsa ? 0 : (di.minutos_extra_bruto || 0);
         
         // El mínimo para contar hora extra lo aplica el motor con el ajuste de Configuración: toda la que existe se lista
         if (brutoPotencial > 0) {
@@ -2587,8 +2589,16 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                 }
             }
             
-            // 4. Día Libre / Feriado
-            if (isEsp) { // Si es Extra por día libre
+            // 4. Desglose: cuánto viene de un +2, de un llamado o de la jornada especial pasada a horas extra (dueño, 10-11-2026)
+            const deMas2 = Number(di.minutos_extra_mas2 || 0), deLlam = Number(di.minutos_extra_llamado || 0), deEsp = Number(di.minutos_extra_esp || 0);
+            const emeCfgHE = (window._estadosAsistencia || {})['LLAMADO_EMERGENCIA'] || {};
+            const espCfgHE = (window._estadosAsistencia || {})['JORNADA_ESPECIAL'] || {};
+            if (deMas2 > 0) contextoTags.push(`<span class="badge he-de he-de-mas2 mb-1"><i class="bi bi-plus-lg" aria-hidden="true"></i> ${formatExactMinutesToTime(deMas2)} de +2</span>`);
+            if (deLlam > 0) contextoTags.push(`<span class="badge he-de mb-1"><i class="bi ${window._rvEsc(emeCfgHE.icono_bi || 'bi-telephone-inbound-fill')}" aria-hidden="true"></i> ${formatExactMinutesToTime(deLlam)} de ${window._rvEsc(emeCfgHE.short_label || 'EME')}</span>`);
+            if (deEsp > 0) contextoTags.push(`<span class="badge he-de mb-1"><i class="bi ${window._rvEsc(espCfgHE.icono_bi || 'bi-star-fill')}" aria-hidden="true"></i> ${formatExactMinutesToTime(deEsp)} de ${window._rvEsc(espCfgHE.short_label || 'ESP')}</span>`);
+            const normales = Math.max(0, brutoPotencial - deMas2 - deLlam - deEsp);
+            if ((deMas2 || deLlam || deEsp) && normales >= 1) contextoTags.push(`<span class="badge he-de mb-1">${formatExactMinutesToTime(normales)} normales</span>`);
+            else if (isEsp && !(deMas2 || deLlam || deEsp)) {
                 contextoTags.push(`<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle mb-1"><i class="bi bi-star-fill"></i> Jornada en Día Libre</span>`);
             }
             
@@ -6108,26 +6118,19 @@ window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
 // ── Por validar en el título del bloque (dueño, 10-11-2026): cuántos +2, jornadas especiales y llamados de emergencia del bloque
 // esperan una decisión. Mismo criterio que la celda de la grilla: una jornada en un día no laborable es ESP; en un día hábil, +2;
 // la segunda jornada de un día no laborable es +2 y un llamado es EME. Siglas e íconos de Configuración → Estados.
-const MX_DECIDIDO = new Set(['EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA']);
+// Desde el 10-11-2026 el +2 y el llamado de emergencia van directo a horas extra por aprobar y una jornada especial no se
+// rechaza: lo único que espera validación es la jornada especial (jornada extra u horas extra).
+const MX_DECIDIDO = new Set(['EXTRA', 'HORAS_EXTRAS', 'COMPENSATORIA']);
 window.mxPorValidarDia = function (di) {
     const out = [];
     if (!di || typeof di !== 'object') return out;
     const ja = di.jornada_adicional;
-    const est = di.estado || '';
-    if (ja && !MX_DECIDIDO.has(ja.estado)) {
-        const noLaborable = (di.horas_teoricas || 0) === 0 || est === 'LIBRE' || est === 'JORNADA_ESPECIAL' || est === 'FERIADO';
-        out.push(noLaborable ? 'esp' : 'mas2');
-    }
-    const llam = ja && ja.llamado;
-    if (llam && Number(llam.minutos) > 0 && !MX_DECIDIDO.has(llam.estado)) out.push(llam.tipo === 'ADICIONAL' ? 'mas2' : 'eme');
-    // Llamado de emergencia en un día hábil: sus minutos van a las horas extra del día y se deciden con ellas
-    const emeHabil = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:') && !llam;
-    if (emeHabil && di.estado_he === 'PENDIENTE' && Number(di.minutos_extra_bruto) > 0) out.push('eme');
+    if (ja && ja.origen !== 'COBERTURA_TURNO' && !MX_DECIDIDO.has(ja.estado)) out.push('esp');
     return out;
 };
 window.mxPorValidarBloque = function (filas) {
     // Además de contar, guarda dónde está cada uno (persona|fecha, en el orden de la grilla) para que la hoja lleve a su celda
-    const n = { mas2: 0, esp: 0, eme: 0, lugares: { mas2: [], esp: [], eme: [] } };
+    const n = { esp: 0, lugares: { esp: [] } };
     (filas || []).forEach(r => {
         const emp = (r && r.emp) || {};
         const dias = emp.dias || {};
@@ -6142,11 +6145,8 @@ window.mxAvisoValidarHtml = function (n) {
     const est = window._estadosAsistencia || {};
     const e = window._rvEsc;
     const tipos = [
-        { k: 'mas2', sigla: '+2', ico: 'bi-plus-lg', que: n.mas2 === 1 ? 'cobertura o segunda jornada' : 'coberturas o segundas jornadas' },
         { k: 'esp', sigla: (est['JORNADA_ESPECIAL'] || {}).short_label || 'ESP', ico: (est['JORNADA_ESPECIAL'] || {}).icono_bi || 'bi-star-fill',
           que: n.esp === 1 ? 'jornada especial' : 'jornadas especiales' },
-        { k: 'eme', sigla: (est['LLAMADO_EMERGENCIA'] || {}).short_label || 'EME', ico: (est['LLAMADO_EMERGENCIA'] || {}).icono_bi || 'bi-telephone-inbound-fill',
-          que: n.eme === 1 ? 'llamado de emergencia' : 'llamados de emergencia' },
     ];
     const lug = n.lugares || {};
     return tipos.filter(t => n[t.k]).map(t => '<button type="button" class="gh-hoja gh-val gh-val-' + t.k + '" onclick="window.mxIrAPendiente(this)"'
@@ -8171,10 +8171,12 @@ function _analiticaCellBadge(di) {
 
     // En un día no laborable el llamado ya tiene su propio estado en la celda (EME): el rayo queda solo para los días hábiles
     const tieneEmergencia = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:') && !(di.jornada_adicional && di.jornada_adicional.llamado);
+    // Un +2 (cobertura o segunda jornada) ya no se valida: va a las horas extra del día. La celda lo sigue mostrando (dueño, 10-11-2026)
+    const tieneMas2 = !di._esBolsa && Number(di.minutos_extra_mas2 || 0) > 0;
     const tieneAlertaSistema = di.observaciones && di.observaciones.includes('[ALERTA SISTEMA');
     const tieneHE_Pendientes = !di._esBolsa && di.minutos_extra_bruto > 0 && di.estado_he === 'PENDIENTE';
 
-    if (tieneEmergencia || tieneAlertaSistema || tieneHE_Pendientes) {
+    if (tieneEmergencia || tieneAlertaSistema || tieneHE_Pendientes || tieneMas2) {
         let wrapperHtml = `<div style="position:relative; display:inline-block; width:100%;">
             ${resultHtml}`;
         if (tieneEmergencia) {
@@ -8182,6 +8184,9 @@ function _analiticaCellBadge(di) {
             const emeCfg = (window._estadosAsistencia || {})['LLAMADO_EMERGENCIA'] || {};
             const emeNom = emeCfg.nombre_display || 'Llamado de emergencia';
             wrapperHtml += `<div title="${emeNom.charAt(0) + emeNom.slice(1).toLowerCase()}: sus minutos suman a las horas extra del día" style="position:absolute; top:-6px; left:-6px; font-size:0.75rem; color:#8b5cf6; z-index:10; filter:drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi ${emeCfg.icono_bi || 'bi-telephone-inbound-fill'}" aria-hidden="true"></i></div>`;
+        }
+        if (tieneMas2) {
+            wrapperHtml += `<span class="mx-mas2" title="+2: ${_fmtMin(di.minutos_extra_mas2)} sumadas a las horas extra del día, por aprobar">+2</span>`;
         }
         if (tieneAlertaSistema) {
             wrapperHtml += `<div title="Alerta de Sistema (Ver Tooltip)" style="position:absolute; top:-4px; right:-2px; width:12px; height:12px; background-color:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; border:2px solid white; z-index:10;"></div>`;

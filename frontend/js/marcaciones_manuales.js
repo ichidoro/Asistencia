@@ -1973,7 +1973,7 @@ function openValidationModal(empId, dateStr, empNombre) {
     }
 
     // Partes del día que se validan aquí. Una jornada ya usada para compensar una inasistencia no se vuelve a validar.
-    const decisionDe = (estado) => ({ EXTRA: 'APROBAR', HORAS_EXTRAS: 'APROBAR_COMO_HE', RECHAZADA: 'RECHAZAR' }[estado] || null);
+    const decisionDe = (estado) => ({ EXTRA: 'APROBAR', HORAS_EXTRAS: 'APROBAR_COMO_HE' }[estado] || null);
     const partes = [];
     if (!(ja && ja.estado === 'COMPENSATORIA')) {
         const esCobertura = Boolean(ja && (ja.observaciones || '').includes('Cobertura de Turno'));
@@ -1998,9 +1998,10 @@ function openValidationModal(empId, dateStr, empNombre) {
             nombre: esLlamAdic ? 'la segunda jornada' : 'el llamado',
         });
     }
+    // Una jornada especial se valida como jornada EXTRA o pasa a horas extra, que quedan por aprobar con las demás del día.
+    // No se rechaza (dueño, 10-11-2026).
     const columnas = [{ accion: 'APROBAR', th: 'Jornada EXTRA<small>monto fijo</small>', aria: 'jornada EXTRA' }];
-    if (permiteHE) columnas.push({ accion: 'APROBAR_COMO_HE', th: 'Horas extra', aria: 'horas extra' });
-    columnas.push({ accion: 'RECHAZAR', th: 'Rechazar', aria: 'rechazar', rech: true });
+    if (permiteHE) columnas.push({ accion: 'APROBAR_COMO_HE', th: 'Horas extra<small>por aprobar</small>', aria: 'horas extra por aprobar' });
 
     const caja = document.getElementById('val-ops');
     const footer = marcacionesManualesState.validationModal.querySelector('.modal-footer');
@@ -2040,7 +2041,7 @@ function openValidationModal(empId, dateStr, empNombre) {
             const minHE = partes.filter(p => elegidas[p.parte] === 'APROBAR_COMO_HE').reduce((s, p) => s + p.minutos, 0);
             const pagos = [];
             if (nExtra) pagos.push('<b>' + nExtra + (nExtra === 1 ? ' jornada EXTRA' : ' jornadas EXTRA') + ' (monto fijo)</b>');
-            if (minHE > 0) pagos.push('<b>' + hm(minHE) + ' de horas extra</b>');
+            if (minHE > 0) pagos.push('<b>' + hm(minHE) + ' de horas extra, por aprobar con las demás del día</b>');
             const lblExt = sigla('EXTRA', 'EXT');
             const celda = (p) => {
                 const a = elegidas[p.parte];
@@ -2138,7 +2139,7 @@ async function validarPartesDelDia(cambios) {
         const msg = cambios.length > 1 ? 'Listo. Las dos partes del día quedaron validadas.'
             : (cambios[0].accion === 'RECHAZAR' ? 'Listo. ' + (cambios[0].parte === 'LLAMADO' ? 'Llamado rechazado.' : 'Jornada rechazada.')
                 : 'Listo. ' + (cambios[0].parte === 'LLAMADO' ? 'Llamado validado' : 'Jornada validada')
-                    + (cambios[0].accion === 'APROBAR_COMO_HE' ? ' como horas extra.' : ' como jornada EXTRA.'));
+                    + (cambios[0].accion === 'APROBAR_COMO_HE' ? ': pasa a horas extra, por aprobar.' : ' como jornada EXTRA.'));
         if (typeof showToast === 'function') showToast(msg, cambios.every(c => c.accion === 'RECHAZAR') ? 'info' : 'success');
         else Avisos.listo(msg);
         closeValidationModal();
@@ -2175,9 +2176,9 @@ async function validateJornada(accion = 'APROBAR') {
         if (resp.ok) {
             let msg = "Listo. Jornada validada.";
             if (accion === 'APROBAR_COMO_HE') {
-                msg = "Listo. Jornada aprobada como horas extra.";
+                msg = "Listo. La jornada pasa a horas extra, por aprobar.";
             } else if (accion === 'APROBAR') {
-                msg = "Listo. Jornada aprobada como jornada especial.";
+                msg = "Listo. Jornada validada como jornada EXTRA.";
             } else if (accion === 'RECHAZAR') {
                 msg = "Listo. Jornada rechazada.";
             }

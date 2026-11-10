@@ -1446,9 +1446,9 @@ async def validar_jornada_endpoint(
             mensaje = {"APROBAR": "Llamado validado como jornada EXTRA", "APROBAR_COMO_HE": "Llamado validado como horas extra",
                        "RECHAZAR": "Llamado rechazado", "REVERTIR": "Llamado devuelto a por validar"}[accion]
         elif accion == "APROBAR_COMO_HE":
-            mensaje = "Jornada validada exitosamente como Horas Extras"
+            mensaje = "Jornada especial pasada a horas extra: quedan por aprobar con las demás horas extra del día"
         elif accion == "APROBAR":
-            mensaje = "Jornada validada exitosamente como Jornada Especial"
+            mensaje = "Jornada especial validada como jornada extra"
         elif accion == "REVERTIR":
             mensaje = "Jornada revertida exitosamente"
         else:
