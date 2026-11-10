@@ -311,6 +311,14 @@ def test_resumen_un_boton_pdf_por_tipo_al_lado_del_excel():
     assert "Descargar preinforme (PDF)" not in js and "que: 'preinforme'" in js
 
 
+def test_ficha_del_dia_llamado_con_icono_de_configuracion_sin_rayo():
+    js = open(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
+    assert 'bi-lightning-charge-fill me-1"></i> LLAMADO DE EMERGENCIA' not in js
+    assert 'bi-lightning-charge-fill me-1"></i> JORNADA ADICIONAL (+2)' not in js
+    assert "['LLAMADO_EMERGENCIA'] || {};" in js and '+7.0 HRS HE PENDIENTES' not in js and '"07:02:00"' not in js
+    assert 'drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi bi-lightning-charge-fill"></i>' not in js
+
+
 def test_resumen_de_un_area_cerrada_desde_tramos():
     raiz = os.path.join(os.path.dirname(__file__), '..', '..')
     js = open(os.path.join(raiz, 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()

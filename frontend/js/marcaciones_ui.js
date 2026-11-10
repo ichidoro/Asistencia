@@ -8096,7 +8096,10 @@ function _analiticaCellBadge(di) {
         let wrapperHtml = `<div style="position:relative; display:inline-block; width:100%;">
             ${resultHtml}`;
         if (tieneEmergencia) {
-            wrapperHtml += `<div title="Llamado de emergencia: sus minutos suman a las horas extra del día" style="position:absolute; top:-6px; left:-6px; font-size:0.75rem; color:#8b5cf6; z-index:10; filter:drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi bi-lightning-charge-fill"></i></div>`;
+            // Nombre e ícono de Configuración → Estados (LLAMADO_EMERGENCIA): el mismo teléfono de la celda (dueño, 09-11-2026)
+            const emeCfg = (window._estadosAsistencia || {})['LLAMADO_EMERGENCIA'] || {};
+            const emeNom = emeCfg.nombre_display || 'Llamado de emergencia';
+            wrapperHtml += `<div title="${emeNom.charAt(0) + emeNom.slice(1).toLowerCase()}: sus minutos suman a las horas extra del día" style="position:absolute; top:-6px; left:-6px; font-size:0.75rem; color:#8b5cf6; z-index:10; filter:drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi ${emeCfg.icono_bi || 'bi-telephone-inbound-fill'}" aria-hidden="true"></i></div>`;
         }
         if (tieneAlertaSistema) {
             wrapperHtml += `<div title="Alerta de Sistema (Ver Tooltip)" style="position:absolute; top:-4px; right:-2px; width:12px; height:12px; background-color:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; border:2px solid white; z-index:10;"></div>`;
@@ -9214,16 +9217,20 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         </div>`;
     }
 
-    // 2. Mostrar Llamado de Emergencia Corto si existe en observaciones
+    // 2. Mostrar Llamado de Emergencia Corto si existe en observaciones. Nombre e ícono salen de Configuración → Estados
+    // (LLAMADO_EMERGENCIA), los mismos de la celda de la grilla (dueño, 09-11-2026: un solo ícono, el teléfono).
     if (e.observaciones && e.observaciones.includes('[Llamado de Emergencia:')) {
         const regex = /\[Llamado de Emergencia:\s*([^\]]+)\]/g;
+        const emeCfg = (window._estadosAsistencia || {})['LLAMADO_EMERGENCIA'] || {};
+        const emeIco = emeCfg.icono_bi || 'bi-telephone-inbound-fill';
+        const emeNom = emeCfg.nombre_display || 'Llamado de emergencia';
         let match;
         while ((match = regex.exec(e.observaciones)) !== null) {
             const contenido = match[1]; // ej: "38 min de 03:38 a 04:16"
             bloquesAdicionalesHtml += `
             <div style="border: 1px solid rgba(139, 92, 246, 0.3); background-color: rgba(139, 92, 246, 0.06); border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
                 <div style="color: #7c3aed; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
-                    <i class="bi bi-lightning-charge-fill me-1"></i> LLAMADO DE EMERGENCIA
+                    <i class="bi ${emeIco} me-1" aria-hidden="true"></i> ${emeNom}
                 </div>
                 <div style="font-size: 0.75rem; color: var(--text-primary, #1e293b); font-weight: 600; line-height: 1.3;">
                     ${contenido}
@@ -9247,8 +9254,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const hSalTarde = partesRango[1] ? partesRango[1].trim() : '--:--';
             const colTxt = colacionInfoStr ? colacionInfoStr.replace('Colación:', '').trim() : '-';
             
-            let durHrsBadge = "+7.0 HRS HE PENDIENTES";
-            let permFormatted = "07:02:00";
+            let durHrsBadge = '';
+            let permFormatted = '--:--';
             if (hEntTarde && hSalTarde && hEntTarde !== '--:--' && hSalTarde !== '--:--') {
                 const t1 = typeof _parseHora === 'function' ? _parseHora(hEntTarde) : null;
                 const t2 = typeof _parseHora === 'function' ? _parseHora(hSalTarde) : null;
@@ -9265,8 +9272,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             bloquesAdicionalesHtml += `
             <div style="border: 1px solid rgba(2, 132, 199, 0.4); background-color: rgba(2, 132, 199, 0.06); border-radius: 6px; padding: 10px; margin-bottom: 12px; text-align: left;">
                 <div style="color: #0284c7; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                    <span><i class="bi bi-lightning-charge-fill me-1"></i> JORNADA ADICIONAL (+2)</span>
-                    <span class="badge bg-primary text-white" style="font-size: 0.75rem; padding: 2px 6px;">${durHrsBadge}</span>
+                    <span><i class="bi bi-plus-lg me-1" aria-hidden="true"></i> SEGUNDA JORNADA (+2)</span>
+                    ${durHrsBadge ? `<span class="badge bg-primary text-white" style="font-size: 0.75rem; padding: 2px 6px;">${durHrsBadge}</span>` : ''}
                 </div>
                 <div style="font-size: 0.75rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 4px;">
                     <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
@@ -9284,7 +9291,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                     </div>` : ''}
                     <div style="display:flex; justify-content:space-between; padding-top:2px;">
                         <span style="color:#64748b;">Permanencia / HE:</span>
-                        <strong style="font-family:monospace; color:#1e293b;">${permFormatted} (${durHrsBadge})</strong>
+                        <strong style="font-family:monospace; color:#1e293b;">${permFormatted}${durHrsBadge ? ` (${durHrsBadge})` : ''}</strong>
                     </div>
                 </div>
             </div>`;
