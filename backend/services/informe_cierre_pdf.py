@@ -13,6 +13,7 @@ izquierda a derecha y cuadra al segundo:
 Las cifras salen del mismo cálculo del Excel de cierre (ReportService._calcular_filas) y, en el Ciclo, del libro mayor
 de minutos (cuadre_service.plegar_libro). Los perdonazos no se muestran: las causas van netas de lo perdonado.
 """
+import math
 import os
 import re
 import unicodedata
@@ -77,29 +78,55 @@ def dias_persona(dias_dict: Dict[str, Any], rango_dias: List, es_bolsa: bool, et
         if cod:
             por_clave[_norm(cod)] = cod
             por_clave[_norm(t.get('nombre'))] = cod
-    out = {'trab': 0, 'aus': {}, 'per': 0, 'comp': 0, 'ina': 0, 'ano': 0}
+    out = {'trab': 0, 'aus': {}, 'per': 0, 'comp': 0, 'ina': 0, 'ano': 0, 'dias_aus': {}}
     for d in rango_dias:
-        di = dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}')
+        k = f'{d.year}-{d.month:02d}-{d.day:02d}'
+        di = dias_dict.get(k)
         if not isinstance(di, dict):
             continue
         sigla = (etiqueta(di, es_bolsa)[0] or '').split('\n')[0].strip()
         estado = str(di.get('estado') or '')
+        clave = None
         if sigla in SIGLAS_TRABAJADAS:
             out['trab'] += 1
         elif sigla == 'INA':
-            out['ina'] += 1
+            clave = 'ina'
         elif sigla == 'ANO' or estado.startswith('ANOMALIA'):
-            out['ano'] += 1
+            clave = 'ano'
         elif sigla == 'PER':
-            out['per'] += 1
+            clave = 'per'
         elif sigla in ('COMP', 'C.HE') and estado == 'INASISTENCIA_COMPENSADA':
-            out['comp'] += 1
+            clave = 'comp'
         elif sigla != 'DEOP' and (di.get('nomenclatura') or estado.upper() in ESTADOS_JUSTIFICADOS
                                   or _norm(estado) in por_clave or _norm(sigla) in por_clave):
             cod = por_clave.get(_norm(di.get('nomenclatura'))) or por_clave.get(_norm(estado)) or por_clave.get(_norm(sigla)) or sigla
             out['aus'][cod] = out['aus'].get(cod, 0) + 1
+            clave = AUS + cod
+        if clave:
+            if clave in CLASES_DIA:
+                out[clave] += 1
+            out['dias_aus'][k] = clave  # día programado que la persona no trabajó, con la misma clase que su jornada
         # LIB, FER, DEOP y las jornadas en días no programados (ESP, EXT, HE, +2) no son días del balance
     return out
+
+
+# Clase de un día programado no trabajado: las propias y las ausencias justificadas ('aus:' + su código)
+CLASES_DIA = ('per', 'comp', 'ina', 'ano')
+AUS = 'aus:'
+
+
+def nombre_clase(clave: str, nombres: Dict[str, str]) -> str:
+    """El nombre de una clase de día no trabajado, el mismo en jornadas y en horas. nombres: {código: nombre} de
+    justificacion_tipos."""
+    if clave.startswith(AUS):
+        cod = clave[len(AUS):]
+        return nombres.get(cod, cod)
+    return {'per': 'Permisos del día', 'comp': 'Inasistencias compensadas', 'ina': 'Inasistencias',
+            'ano': 'Sin resolver'}[clave]
+
+
+def nombres_justif(justif: List[Dict[str, Any]]) -> Dict[str, str]:
+    return {(t.get('nomenclatura') or t.get('nombre') or '').strip().upper(): (t.get('nombre') or '').strip() for t in justif}
 
 
 def horas_ciclo(libro: Dict[str, Any]) -> Dict[str, int]:
@@ -172,15 +199,84 @@ def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]
         p.update(horas_bolsa(r) if es_bolsa else horas_ciclo(r.get('libro') or {}))
         if not es_bolsa:
             hd_ = horas_dias(dd, datos['rango_dias'])
-            p['h_prog'], p['h_trab_dias'], p['h_otros'] = hd_['prog'], hd_['trab'], hd_['otros']
+            p['h_trab_dias'], p['h_otros'] = hd_['trab'], hd_['otros']
+            p.update(horas_ausencias(dd, p['dias_aus']))
+            p['he_dia'] = he_por_dia(dd, datos['rango_dias'])
+            # Programadas: los días trabajados y los programados que no se trabajaron (vacaciones, licencias, permisos
+            # del día, inasistencias…), como las jornadas.
+            p['h_prog'] = hd_['prog'] + p['h_prog_aus']
             # Lo no trabajado que no se descuenta (perdonado en el día o en el cuadre, días condonados sin minutos
-            # anotados): lo que falta para que programadas − no trabajadas dé lo trabajado en el horario.
+            # anotados): lo que falta para que programadas − ausencias − no trabajadas dé lo trabajado en el horario.
             causas = p['atr'] + p['sad'] + p['col'] + p['h_per'] + p['otros']
-            # Nunca negativo: si los días (horas guardadas con 4 decimales, ±0,36 s) suman más que programadas + horas
-            # extra (minutos exactos), ese sobrante no es tiempo no trabajado de nadie; no se pasa a otra persona.
-            p['sin_desc'] = max(p['h_prog'] - causas - (p['h_trab_dias'] - p['he_trab']), 0)
+            p['sin_desc'] = sin_descuento(p['h_prog'] - sum(p['h_aus'].values()), causas, p['h_trab_dias'], p['he_trab'],
+                                          hd_['margen'])
         out.append(p)
     return out
+
+
+def sin_descuento(prog: int, causas: int, trab: int, he: int, margen: int) -> int:
+    """Lo no trabajado de una persona que no se descuenta: lo que falta para que programadas − no trabajadas dé lo
+    trabajado en el horario (trabajado − horas extra). Las horas del día se guardan redondeadas (DECIMALES_HORAS) y las
+    causas y horas extra salen de minutos exactos: un resto dentro de ese redondeo no es tiempo de nadie y es 0. Tampoco
+    es negativo (un sobrante no es tiempo no trabajado). Se calcula persona a persona: nunca pasa a otra."""
+    resto = prog - causas - (trab - he)
+    return 0 if resto <= margen else resto
+
+
+def horas_ausencias(dias_dict: Dict[str, Any], dias_aus: Dict[str, str]) -> Dict[str, Any]:
+    """Segundos de los días programados que la persona no trabajó, por clase (la de sus jornadas).
+    'h_prog_aus': lo programado esos días. 'h_aus': {clase: segundos} sin lo que el libro ya cuenta como no trabajado
+    ese día (una inasistencia con deuda queda en sus causas, no dos veces). 'aus_dias': [(fecha, clase, segundos)]."""
+    from backend.services.cuadre_service import plegar_libro
+    prog, h_aus, aus_dias = 0, {}, []
+    for k, clave in dias_aus.items():
+        di = dias_dict.get(k) or {}
+        teo = int(round(float(di.get('horas_teoricas') or 0.0) * 3600))
+        if teo <= 0:
+            continue
+        en_causas = _seg(sum((plegar_libro([dict(di, fecha=k)]).get('causas') or {}).values()))
+        s = max(teo - en_causas, 0)
+        prog += teo
+        if s:
+            h_aus[clave] = h_aus.get(clave, 0) + s
+            aus_dias.append((k, clave, s))
+    return {'h_prog_aus': prog, 'h_aus': h_aus, 'aus_dias': aus_dias}
+
+
+def he_por_dia(dias_dict: Dict[str, Any], rango_dias: List) -> Dict[str, int]:
+    """Segundos de horas extra trabajadas de cada día, con la misma cuenta del libro mayor (plegar_libro)."""
+    from backend.services.cuadre_service import plegar_libro
+    out = {}
+    for d in rango_dias:
+        k = f'{d.year}-{d.month:02d}-{d.day:02d}'
+        di = dias_dict.get(k)
+        if isinstance(di, dict):
+            s = _seg(plegar_libro([dict(di, fecha=k)]).get('he_trabajadas'))
+            if s:
+                out[k] = s
+    return out
+
+
+def coberturas(ps: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Cuánto de cada clase de ausencia cubrieron los compañeros con horas extra (dueño, 09-11-2026): el día en que
+    alguien del informe (misma área y tipo de horario) no trabajó un turno programado, las horas extra de los demás
+    ese mismo día lo cubren, hasta lo programado del ausente; lo que sobra queda fuera de lo programado.
+    Devuelve {clase: segundos cubiertos}."""
+    por_fecha: Dict[str, List] = {}
+    for i, p in enumerate(ps):
+        for f, clave, s in p.get('aus_dias') or []:
+            por_fecha.setdefault(f, []).append((p.get('nombre') or '', i, clave, s))
+    cub: Dict[str, int] = {}
+    for f in sorted(por_fecha):
+        ausentes = por_fecha[f]
+        idx = {i for _, i, _, _ in ausentes}
+        disponible = sum((p.get('he_dia') or {}).get(f, 0) for i, p in enumerate(ps) if i not in idx)
+        for _, _, clave, s in sorted(ausentes):
+            c = min(s, disponible)
+            disponible -= c
+            if c:
+                cub[clave] = cub.get(clave, 0) + c
+    return cub
 
 
 # Horas trabajadas en días que no son de horario: entran al balance después de las horas extra
@@ -192,23 +288,27 @@ OTROS_DIAS = {'JORNADA_COMPENSATORIA': 'Jornadas compensatorias', 'INASISTENCIA_
 def horas_dias(dias_dict: Dict[str, Any], rango_dias: List) -> Dict[str, Any]:
     """Segundos del período, desde la misma matriz: programados y trabajados en los días con horario trabajados, y lo
     trabajado en los demás días (jornadas compensatorias, especiales, días con permiso u otros).
-    Cada día se lleva a segundos enteros antes de sumar: las horas se guardan con decimales (5,8083 h = 05:48:29,88)
-    y sin esto el balance pierde un segundo frente a las causas, que salen de minutos exactos."""
-    prog = trab = 0
-    otros: Dict[str, int] = {}
+    'margen': los segundos que puede desviarse la suma por el redondeo con que se guardan las horas de cada día."""
+    from backend.services.quantum_matrix_engine import DECIMALES_HORAS
+    prog = trab = 0.0
+    n = 0
+    otros: Dict[str, float] = {}
     for d in rango_dias:
         di = dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}')
         if not isinstance(di, dict):
             continue
         est = di.get('estado') or ''
-        h = int(round(float(di.get('horas_trabajadas') or 0.0) * 3600))
+        h = float(di.get('horas_trabajadas') or 0.0)
         if est in ESTADOS_TRABAJADOS:
-            prog += int(round(float(di.get('horas_teoricas') or 0.0) * 3600))
+            prog += float(di.get('horas_teoricas') or 0.0)
             trab += h
+            n += 1
         elif h > 0:
             k = OTROS_DIAS.get(est, 'Otros días trabajados')
-            otros[k] = otros.get(k, 0) + h
-    return {'prog': prog, 'trab': trab, 'otros': otros}
+            otros[k] = otros.get(k, 0.0) + h
+    margen = math.ceil(n * 0.5 * 10 ** -DECIMALES_HORAS * 3600)
+    return {'prog': int(round(prog * 3600)), 'trab': int(round(trab * 3600)),
+            'otros': {k: int(round(v * 3600)) for k, v in otros.items()}, 'margen': margen}
 
 
 def pct(parte: float, total: float) -> str:
@@ -218,8 +318,9 @@ def pct(parte: float, total: float) -> str:
 def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Resumen ejecutivo de un tipo de horario (paso 5 del cierre y correo): un balance que parte de las horas
     totales y termina en lo que se carga, cada parte con su porcentaje. Filas: {t, v, q, c} (texto, HH:MM:SS, %, clase).
-    Ciclo: programadas (días trabajados) − no trabajadas (por causa y «sin descuento») = trabajadas en el horario;
-    + horas extra = total trabajado. Bolsa: meta − no usadas + sobre la meta = trabajadas."""
+    Ciclo: programadas (días trabajados y programados no trabajados) − ausencias − no trabajadas (por causa y «sin descuento»)
+    = trabajadas en el horario; + horas extra (las que cubren ausencias de compañeros y las de fuera de lo programado)
+    = total en el reloj. Bolsa: meta − no usadas + sobre la meta = trabajadas."""
     ps = inf['personas']
     T = lambda k: sum(p.get(k, 0) for p in ps)
     n = len(ps)
@@ -231,15 +332,12 @@ def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str,
     for p in ps:
         for cod, k in p['aus'].items():
             aus[cod] = aus.get(cod, 0) + k
-    nombres = {(t.get('nomenclatura') or t.get('nombre') or '').strip().upper(): t.get('nombre') for t in justif}
-    prog_d = sum(p['trab'] + sum(p['aus'].values()) + p['per'] + p['comp'] + p['ina'] + p['ano'] for p in ps)
+    nombres = nombres_justif(justif)
+    prog_d = sum(p['trab'] + sum(p['aus'].values()) + sum(p[c] for c in CLASES_DIA) for p in ps)
     qd = lambda k: pct(k, prog_d)
     jornadas = ([{'t': 'Programadas', 'v': str(prog_d), 'q': '100 %', 'c': 'base'}]
-                + [{'t': nombres.get(cod, cod), 'v': f'− {k}', 'q': qd(k), 'c': ''} for cod, k in aus.items()]
-                + ([{'t': 'Permisos del día', 'v': f"− {T('per')}", 'q': qd(T('per')), 'c': ''}] if T('per') else [])
-                + ([{'t': 'Inasistencias compensadas', 'v': f"− {T('comp')}", 'q': qd(T('comp')), 'c': ''}] if T('comp') else [])
-                + ([{'t': 'Inasistencias', 'v': f"− {T('ina')}", 'q': qd(T('ina')), 'c': ''}] if T('ina') else [])
-                + ([{'t': 'Sin resolver', 'v': f"− {T('ano')}", 'q': qd(T('ano')), 'c': ''}] if T('ano') else [])
+                + [{'t': nombre_clase(AUS + cod, nombres), 'v': f'− {k}', 'q': qd(k), 'c': ''} for cod, k in aus.items()]
+                + [{'t': nombre_clase(c, nombres), 'v': f'− {T(c)}', 'q': qd(T(c)), 'c': ''} for c in CLASES_DIA if T(c)]
                 + [{'t': 'Trabajadas', 'v': str(T('trab')), 'q': qd(T('trab')), 'c': 'tot'}])
     out = {'tipo': inf['tipo'], 'titulo': inf['titulo_horas'], 'personas': n, 'jornadas': jornadas}
     if inf['tipo'] == 'BOLSA':
@@ -258,23 +356,36 @@ def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str,
     base = T('h_prog')
     sin = T('sin_desc')
     causas = [['Atrasos', T('atr')], ['Salidas anticipadas', T('sad')], ['Colación', T('col')], ['Permisos', T('h_per')], ['Otros', T('otros')]]
-    if abs(sin) < 60:  # menos de un minuto es redondeo de segundos: va a la causa mayor, para que la fila no aparezca
-        max(causas, key=lambda c: c[1])[1] += sin
-        sin = 0
     causas = [(t, v) for t, v in causas] + [('Sin descuento', sin)]
     nt = sum(v for _, v in causas)
     he = T('he_trab')
+    # Ausencias (días programados no trabajados) por clase, en el orden de las jornadas, y lo que cubrieron los
+    # compañeros con horas extra
+    h_aus: Dict[str, int] = {}
+    for p in ps:
+        for c, v in (p.get('h_aus') or {}).items():
+            h_aus[c] = h_aus.get(c, 0) + v
+    orden_aus = [AUS + cod for cod in aus] + list(CLASES_DIA)
+    clases_aus = [c for c in orden_aus if h_aus.get(c)] + [c for c in h_aus if c not in orden_aus and h_aus[c]]
+    ta = sum(h_aus.values())
+    cub = coberturas(ps)
+    tc = min(sum(cub.values()), he)
     otros = {}
     for p in ps:
         for k, v in (p.get('h_otros') or {}).items():
             otros[k] = otros.get(k, 0) + v
     orden = ['Jornadas compensatorias', 'Jornadas especiales', 'Días con permiso', 'Otros días trabajados']
     filas_otros = [fila(f'Horas en {k[0].lower() + k[1:]}', otros[k], base, 'menos', '+ ') for k in orden if otros.get(k)]
-    total = base - nt + he + sum(otros.values())
-    out['balance'] = ([fila('Programadas en días trabajados', base, base, 'base'), fila('Horas no trabajadas', nt, base, 'menos', '− ')]
+    total = base - ta - nt + he + sum(otros.values())
+    out['balance'] = ([fila('Programadas', base, base, 'base')]
+                      + ([fila('Ausencias', ta, base, 'menos', '− ')] + [fila(nombre_clase(c, nombres), h_aus[c], base, 'det')
+                                                                           for c in clases_aus] if ta else [])
+                      + [fila('Horas no trabajadas', nt, base, 'menos', '− ')]
                       + [fila(t, v, base, 'det') for t, v in causas if v]
-                      + [fila('Trabajadas en el horario', base - nt, base, 'tot'), fila('Horas extra trabajadas', he, base, 'menos', '+ ')]
-                      + filas_otros + [fila('Total trabajado', total, base, 'tot')])
+                      + [fila('Trabajadas en el horario', base - ta - nt, base, 'tot'), fila('Horas extra trabajadas', he, base, 'menos', '+ ')]
+                      + ([fila('Cubren ausencias de compañeros', tc, base, 'det'), fila('Fuera de lo programado', he - tc, base, 'det')]
+                         if tc else [])
+                      + filas_otros + [fila('Total en el reloj', total, base, 'tot')])
     out['cargar'] = [{'t': 'Descontar', 'v': hms(T('descontar')), 'c': 'ds', 'q': pct(T('descontar'), base) + ' de lo programado' if base else '',
                       'n': f"{cuenta('descontar')} de {n} personas"},
                      {'t': 'Pagar horas extra', 'v': hms(T('pagar')), 'c': 'he', 'q': pct(T('pagar'), base) + ' de lo programado' if base else '',
@@ -286,7 +397,14 @@ def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str,
         + ([fila('Por decidir', T('he_decidir'), he)] if T('he_decidir') else []) \
         + ([fila('Compensan inasistencias', T('he_inas'), he)] if T('he_inas') else []) \
         + [fila('Cubren descuentos', T('cubren'), he), fila('Se pagan', T('pagar'), he, 'tot')]
-    out['de_donde'] = [{'t': f'De las {hms(nt)} no trabajadas', 'filas': nt_rows}, {'t': f'De las {hms(he)} horas extra', 'filas': he_rows}]
+    aus_rows = []
+    for c in clases_aus:
+        nom, v, k = nombre_clase(c, nombres), h_aus[c], min(cub.get(c, 0), h_aus[c])
+        aus_rows += [f for f in (fila(f'{nom} · cubiertas con horas extra', k, ta), fila(f'{nom} · sin cubrir', v - k, ta))
+                     if f['v'] != '—']
+    out['de_donde'] = ([{'t': f'De las {hms(ta)} de ausencias', 'filas': aus_rows}] if ta else []) \
+        + ([{'t': f'De las {hms(nt)} no trabajadas', 'filas': nt_rows}] if nt else []) \
+        + ([{'t': f'De las {hms(he)} horas extra', 'filas': he_rows}] if he else [])
     out['quienes'] = [{'t': 'A quién se descuenta', 'c': 'ds', 'filas': _quienes(ps, 'descontar')},
                       {'t': 'A quién se pagan horas extra', 'c': 'he', 'filas': _quienes(ps, 'pagar')}]
     return out

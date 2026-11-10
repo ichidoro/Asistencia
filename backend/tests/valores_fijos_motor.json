@@ -10,6 +10,15 @@
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "DECIMALES_HORAS = 4",
+  "numeros": [
+   "4"
+  ],
+  "tipo": "precision",
+  "motivo": "Decimales con que se guardan las horas trabajadas del día (antes estaba escrito en los dos round(..., 4)); el informe de cierre deriva de aquí su margen de redondeo."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
   "linea": "return 180.0",
   "numeros": [
    "180.0"

@@ -225,10 +225,10 @@ def test_resumen_parte_de_las_horas_totales_y_cuadra_con_sin_descuento():
     p.update({'h_prog': 360000, 'sin_desc': 300, 'total': 60, 'cubren': 60, 'descontar': 0})
     r = icp.resumen_tipo(icp.separar_informes([p])[0], JUSTIF)
     tx = {f['t']: f for f in r['balance']}
-    assert tx['Programadas en días trabajados']['q'] == '100 %'
+    assert tx['Programadas']['q'] == '100 %'
     assert tx['Horas no trabajadas']['v'] == '− 00:06:00' and tx['Sin descuento']['v'] == '00:05:00'
     assert tx['Trabajadas en el horario']['v'] == icp.hms(360000 - 360)
-    assert tx['Total trabajado']['v'] == icp.hms(360000 - 360 + 60)
+    assert tx['Total en el reloj']['v'] == icp.hms(360000 - 360 + 60)
     nt = r['de_donde'][0]
     assert nt['t'] == 'De las 00:06:00 no trabajadas' and [f['t'] for f in nt['filas']][0] == 'Sin descuento'
     assert not any('erdon' in f['t'] for f in r['balance'] + nt['filas'])
@@ -262,12 +262,14 @@ def test_aviso_de_sincronizacion_sin_emojis():
     assert '⚠️' not in src and '✅' not in src and 'correo_plantilla' in src
 
 
-def test_menos_de_un_minuto_sin_descuento_es_redondeo():
-    p = _persona('CICLO', 'Horario A', 42.0)
-    p.update({'h_prog': 36000, 'sin_desc': -1, 'total': 60, 'cubren': 60, 'descontar': 0})
-    r = icp.resumen_tipo(icp.separar_informes([p])[0], JUSTIF)
-    assert 'Sin descuento' not in {f['t'] for f in r['balance']}
-    assert {f['t']: f['v'] for f in r['balance']}['Atrasos'] == '00:00:59'
+def test_sin_descuento_redondeo_de_decimales_es_cero():
+    # 24 días: margen = 24 × 0,18 s → 5 s. Un resto de 1 s (o un sobrante) es redondeo; 23:20 de perdonazo no lo es.
+    m = icp.horas_dias({f'2026-06-{d:02d}': {'estado': 'OK', 'horas_teoricas': 7.5, 'horas_trabajadas': 7.5}
+                        for d in range(1, 25)}, [date(2026, 6, d) for d in range(1, 25)])['margen']
+    assert m == 5
+    assert icp.sin_descuento(36000, 0, 36000 - 1, 0, m) == 0
+    assert icp.sin_descuento(36000, 0, 36000 + 1, 0, m) == 0
+    assert icp.sin_descuento(36000, 0, 36000 - 1400, 0, m) == 1400
 
 
 def test_horas_de_otros_dias_entran_al_balance():
@@ -276,7 +278,7 @@ def test_horas_de_otros_dias_entran_al_balance():
           '2026-05-02': {'estado': 'JORNADA_COMPENSATORIA', 'horas_teoricas': 0, 'horas_trabajadas': 4},
           '2026-05-03': {'estado': 'PERMISO', 'horas_teoricas': 8, 'horas_trabajadas': 2}}
     h = icp.horas_dias(dd, [date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3)])
-    assert h == {'prog': 8 * 3600, 'trab': 8 * 3600, 'otros': {'Jornadas compensatorias': 4 * 3600, 'Días con permiso': 2 * 3600}}
+    assert h == {'prog': 8 * 3600, 'trab': 8 * 3600, 'otros': {'Jornadas compensatorias': 4 * 3600, 'Días con permiso': 2 * 3600}, 'margen': 1}
 
 
 def test_horas_dias_redondea_cada_dia_a_segundos():
@@ -326,3 +328,44 @@ def test_tramos_un_boton_por_tipo_de_horario():
     js = open(os.path.join(raiz, 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
     assert 'c.informes.map(' in cfg and 'descargarInformeTipo(' in cfg
     assert 'window.descargarInformeTipo = function' in js and '/api/cierre/informe-pdf/archivo?' in js
+
+
+def test_ausencias_programadas_y_cubiertas_por_companeros():
+    # A: 2 días trabajados de 7:30 y 2 de vacaciones (7:30 y 4:30). B y C trabajan todos los días; el primer día de
+    # vacaciones B hace 4:00 extra; el segundo, B 4:00 y C 4:30 (8:30, más que las 4:30 del turno de A).
+    dias = [date(2026, 6, d) for d in (1, 2, 3, 4)]
+    k = [f'2026-06-{d.day:02d}' for d in dias]
+    ok = lambda h=7.5, he=0.0: {'estado': 'OK', 'horas_teoricas': 7.5, 'horas_trabajadas': h, 'minutos_extra_bruto': he}
+    vac = lambda t: {'estado': 'VACACIONES', 'horas_teoricas': t, 'horas_trabajadas': 0.0}
+    dd_a = {k[0]: ok(), k[1]: ok(), k[2]: vac(7.5), k[3]: vac(4.5)}
+    dd_b = {k[0]: ok(), k[1]: ok(), k[2]: ok(11.5, 240.0), k[3]: ok(11.5, 240.0)}
+    dd_c = {k[0]: ok(), k[1]: ok(), k[2]: ok(), k[3]: ok(12.0, 270.0)}
+    ps = []
+    for nom, dd in (('A', dd_a), ('B', dd_b), ('C', dd_c)):
+        p = _persona('CICLO', 'Horario A', 42.0)
+        p.update({'nombre': nom, 'atr': 0, 'cubren': 0, 'total': 0})
+        p['aus'] = {'VAC': 2} if nom == 'A' else {}
+        p['trab'] = 2 if nom == 'A' else 4
+        p['dias_aus'] = {k[2]: icp.AUS + 'VAC', k[3]: icp.AUS + 'VAC'} if nom == 'A' else {}
+        hd = icp.horas_dias(dd, dias)
+        p.update(icp.horas_ausencias(dd, p['dias_aus']))
+        p['he_dia'] = icp.he_por_dia(dd, dias)
+        p['he_trab'] = sum(p['he_dia'].values())
+        p['h_trab_dias'], p['h_otros'] = hd['trab'], hd['otros']
+        p['h_prog'] = hd['prog'] + p['h_prog_aus']
+        p['sin_desc'] = icp.sin_descuento(p['h_prog'] - sum(p['h_aus'].values()), 0, hd['trab'], p['he_trab'], hd['margen'])
+        ps.append(p)
+    assert icp.coberturas(ps) == {icp.AUS + 'VAC': 4 * 3600 + 4 * 3600 + 30 * 60}
+    r = icp.resumen_tipo(icp.separar_informes(ps)[0], [{'nombre': 'Vacaciones', 'nomenclatura': 'VAC'}])
+    tx = {f['t']: f['v'] for f in r['balance']}
+    assert tx['Programadas'] == '87:00:00'                    # 10 días × 7:30 + 7:30 + 4:30
+    assert tx['Ausencias'] == '− 12:00:00' and tx['Vacaciones'] == '12:00:00'
+    assert tx['Trabajadas en el horario'] == '75:00:00'
+    assert tx['Horas extra trabajadas'] == '+ 12:30:00'
+    assert tx['Cubren ausencias de compañeros'] == '08:30:00'  # 4:00 el primer día; el segundo, tope 4:30
+    assert tx['Fuera de lo programado'] == '04:00:00'
+    assert tx['Total en el reloj'] == '87:30:00'
+    aus = {f['t']: f['v'] for f in r['de_donde'][0]['filas']}
+    assert aus == {'Vacaciones · cubiertas con horas extra': '08:30:00', 'Vacaciones · sin cubrir': '03:30:00'}
+    jor = {f['t']: f['v'] for f in r['jornadas']}
+    assert jor['Programadas'] == '12' and jor['Vacaciones'] == '− 2'

@@ -91,6 +91,8 @@ def _bordes_ciclos(fecha: str, ciclos: Optional[List[Dict[str, Any]]]) -> Tuple[
 
 # Texto con que el día anota una segunda jornada sin SALIDA (la grilla lo lee para mostrar la anomalía debajo del estado)
 TEXTO_JORNADA_SIN_SALIDA = "Segunda jornada sin SALIDA"
+# Decimales con que se guardan las horas trabajadas del día (los informes derivan de aquí su margen de redondeo)
+DECIMALES_HORAS = 4
 
 
 def _minutos_netos_jornada_aparte(logs: List[Dict[str, Any]], t_cfg: Dict[str, Any], tipo_prog: str) -> int:
@@ -2647,7 +2649,7 @@ class QuantumMatrixEngine:
             umbral_con_pausa=(tipo_prog == 'CICLO_INTELIGENTE'),
         )
 
-        res['horas_trabajadas'] = round(horas_netas, 4)
+        res['horas_trabajadas'] = round(horas_netas, DECIMALES_HORAS)
         res['minutos_colacion'] = min_col_ap
         res['minutos_colacion_auto'] = t_col_pactado if (descuento_col_auto or t_col_pactado > 0) else 0
         res['minutos_exceso_colacion'] = min_exc_col
@@ -2781,7 +2783,7 @@ class QuantumMatrixEngine:
                     # [REGLA DE NEGOCIO CONFIGURADA EN INTERFAZ]:
                     # "Si las extras superan este límite, la totalidad del bloque pasa a ser Jornada Especial Pendiente"
                     # El turno base cubre min_teo (horas_teoricas)
-                    res['horas_trabajadas'] = round(horas_teoricas, 4)
+                    res['horas_trabajadas'] = round(horas_teoricas, DECIMALES_HORAS)
                     res['minutos_extra_bruto'] = 0.0
                     res['minutos_deuda'] = 0.0
                     if res.get('estado') not in ('ATRASO', 'SALIDA_ADELANTADA'):
