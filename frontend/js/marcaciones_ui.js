@@ -6093,14 +6093,58 @@ window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     const n = g.filas.length, plegado = !fijo && !window.mxHorariosDesplegados().has(g.nombre);
     // Los bloques parten plegados: su título avisa cuántos días por revisar hay dentro y lleva a ellos
     const nRev = g.filas.reduce((a, r) => a + window.mxDiasEnRevision(r.emp, null).length, 0);
+    const nVal = window.mxPorValidarBloque(g.filas);
     return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + (fijo ? ' gh-fijo' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
         + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit">'
         + (fijo ? '' : '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>')
         + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span>'
-        + (nRev ? window.mxAvisoBloqueHtml(nRev) : '') + '</div></td></tr>'
+        + (nRev ? window.mxAvisoBloqueHtml(nRev) : '') + window.mxAvisoValidarHtml(nVal) + '</div></td></tr>'
         // El encabezado repetido va bajo el encabezado fijo de arriba (capa 55 < 90) y con su mismo aspecto (clase gh-cab)
         + (i > 0 ? cabecera.split('<tr class="').join('<tr class="gh-cab ').replace(/z-index:\s*1\d\d/g, 'z-index:55') : '')
         + g.filas.map(htmlDe).join('') + '</tbody>';
+};
+
+// ── Por validar en el título del bloque (dueño, 10-11-2026): cuántos +2, jornadas especiales y llamados de emergencia del bloque
+// esperan una decisión. Mismo criterio que la celda de la grilla: una jornada en un día no laborable es ESP; en un día hábil, +2;
+// la segunda jornada de un día no laborable es +2 y un llamado es EME. Siglas e íconos de Configuración → Estados.
+const MX_DECIDIDO = new Set(['EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA']);
+window.mxPorValidarDia = function (di) {
+    const out = [];
+    if (!di || typeof di !== 'object') return out;
+    const ja = di.jornada_adicional;
+    const est = di.estado || '';
+    if (ja && !MX_DECIDIDO.has(ja.estado)) {
+        const noLaborable = (di.horas_teoricas || 0) === 0 || est === 'LIBRE' || est === 'JORNADA_ESPECIAL' || est === 'FERIADO';
+        out.push(noLaborable ? 'esp' : 'mas2');
+    }
+    const llam = ja && ja.llamado;
+    if (llam && Number(llam.minutos) > 0 && !MX_DECIDIDO.has(llam.estado)) out.push(llam.tipo === 'ADICIONAL' ? 'mas2' : 'eme');
+    // Llamado de emergencia en un día hábil: sus minutos van a las horas extra del día y se deciden con ellas
+    const emeHabil = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:') && !llam;
+    if (emeHabil && di.estado_he === 'PENDIENTE' && Number(di.minutos_extra_bruto) > 0) out.push('eme');
+    return out;
+};
+window.mxPorValidarBloque = function (filas) {
+    const n = { mas2: 0, esp: 0, eme: 0 };
+    (filas || []).forEach(r => {
+        const dias = (r && r.emp && r.emp.dias) || {};
+        Object.keys(dias).forEach(d => { if (d !== 'info') window.mxPorValidarDia(dias[d]).forEach(k => { n[k] += 1; }); });
+    });
+    return n;
+};
+window.mxAvisoValidarHtml = function (n) {
+    if (!n) return '';
+    const est = window._estadosAsistencia || {};
+    const e = window._rvEsc;
+    const tipos = [
+        { k: 'mas2', sigla: '+2', ico: 'bi-plus-lg', que: n.mas2 === 1 ? 'cobertura o segunda jornada' : 'coberturas o segundas jornadas' },
+        { k: 'esp', sigla: (est['JORNADA_ESPECIAL'] || {}).short_label || 'ESP', ico: (est['JORNADA_ESPECIAL'] || {}).icono_bi || 'bi-star-fill',
+          que: n.esp === 1 ? 'jornada especial' : 'jornadas especiales' },
+        { k: 'eme', sigla: (est['LLAMADO_EMERGENCIA'] || {}).short_label || 'EME', ico: (est['LLAMADO_EMERGENCIA'] || {}).icono_bi || 'bi-telephone-inbound-fill',
+          que: n.eme === 1 ? 'llamado de emergencia' : 'llamados de emergencia' },
+    ];
+    return tipos.filter(t => n[t.k]).map(t => '<span class="gh-val gh-val-' + t.k + '" title="' + e(n[t.k] + ' ' + t.que + ' por validar') + '">'
+        + '<i class="bi ' + e(t.ico) + '" aria-hidden="true"></i>' + n[t.k] + ' ' + e(t.sigla) + ' por validar</span>').join('');
 };
 
 // ── Días por revisar (Reglas de marcaciones): lista bajo la fila de la persona (versión C mejorada, elegida por el dueño 06-11-2026) ──

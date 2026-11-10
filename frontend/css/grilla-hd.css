@@ -235,4 +235,9 @@ body:not(.estados-chip) .sem-cel td.col-day .badge-status.st-largo > span { font
   background: #fdecea; color: #b0352c; font: 700 12px/1 'Barlow', system-ui, sans-serif; cursor: pointer; }
 .rv-grupo:hover { background: #fbdcd8; }
 .rv-grupo:focus-visible { outline: 2px solid #b0352c; outline-offset: 2px; }
+/* Por validar en el título del bloque: +2, jornadas especiales y llamados de emergencia que esperan una decisión */
+.gh-tit .gh-val { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  font: 700 12px/1 'Barlow', system-ui, sans-serif; border: 1px solid #cfe0f7; background: #eaf2fd; color: #1b4f9c; }
+.gh-tit .gh-val-eme { border-color: #ddd0fb; background: #f3eefe; color: #6d3fd1; }
+.gh-tit .gh-val-esp { border-color: #c9e7f5; background: #e8f6fc; color: #0b6b94; }
 @media (prefers-reduced-motion: reduce) { #marcaciones-view-container .matrix-table-premium td.col-day.rv-recien { animation: none; } }

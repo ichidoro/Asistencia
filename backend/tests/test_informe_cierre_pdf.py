@@ -319,6 +319,18 @@ def test_ficha_del_dia_llamado_con_icono_de_configuracion_sin_rayo():
     assert 'drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi bi-lightning-charge-fill"></i>' not in js
 
 
+def test_bloque_muestra_lo_que_espera_validacion():
+    js = open(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()
+    assert 'window.mxPorValidarDia = function' in js and 'window.mxAvisoValidarHtml(nVal)' in js
+    assert "(est['LLAMADO_EMERGENCIA'] || {}).short_label" in js and "(est['JORNADA_ESPECIAL'] || {}).short_label" in js
+
+
+def test_reproceso_masivo_vuelve_a_repartir_el_cuadre():
+    src = open(os.path.join(os.path.dirname(__file__), '..', 'services', 'asistencia_service.py'), encoding='utf-8').read()
+    assert "'_fechas_abiertas': fechas_abiertas(start, end, fechas_cerradas)" in src
+    assert "await self._reaplicar_cuadre_en_fechas(eid, abiertas)" in src
+
+
 def test_resumen_de_un_area_cerrada_desde_tramos():
     raiz = os.path.join(os.path.dirname(__file__), '..', '..')
     js = open(os.path.join(raiz, 'frontend', 'js', 'marcaciones_ui.js'), encoding='utf-8').read()

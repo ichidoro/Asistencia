@@ -1314,6 +1314,7 @@ class AsistenciaService:
                 '_he_delete': he_to_delete,
                 '_je_collect': je_to_save,
                 '_je_delete': je_to_delete,
+                '_fechas_abiertas': fechas_abiertas(start, end, fechas_cerradas),
                 **stats
             }
 
@@ -1432,6 +1433,7 @@ class AsistenciaService:
             all_he_to_delete = []
             all_je_to_save = []
             all_je_to_delete = []
+            abiertas_por_emp: Dict[int, List[str]] = {}
             t0_masivo = _time_mod.time()
 
             for eid in emp_ids:
@@ -1451,6 +1453,7 @@ class AsistenciaService:
                     all_he_to_delete.extend(r.get('_he_delete', []))
                     all_je_to_save.extend(r.get('_je_collect', []))
                     all_je_to_delete.extend(r.get('_je_delete', []))
+                    abiertas_por_emp[eid] = r.get('_fechas_abiertas') or []
                     _reproceso_status['procesados'] += r.get('procesados', 0)
                     _reproceso_status['errores'] += r.get('errores', 0)
                 except Exception as e:
@@ -1525,6 +1528,11 @@ class AsistenciaService:
                         "AND COALESCE(observaciones, '') NOT LIKE '%[RECHAZADO]%'",
                         chunk
                     )
+
+            # ── FASE 3: el cuadre de cada persona se vuelve a repartir con los hechos nuevos, una vez por tramo y solo en
+            #    días abiertos, igual que al recalcular una sola persona (dueño, 10-11-2026: el masivo lo dejaba desfasado).
+            for eid, abiertas in abiertas_por_emp.items():
+                await self._reaplicar_cuadre_en_fechas(eid, abiertas)
 
             _reproceso_status['estado'] = 'completado'
 
