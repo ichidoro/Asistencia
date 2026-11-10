@@ -8133,6 +8133,14 @@ function _analiticaCellBadge(di) {
         primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}><span>${label}</span></div>`;
     }
 
+    // +2 (cobertura o segunda jornada): ya no se valida y va a las horas extra del día, pero se ve como un estado más, del
+    // mismo tamaño, debajo del estado de la jornada (dueño, 10-11-2026). Color de Configuración → Estados (jornada especial).
+    if (!di.jornada_adicional && !di._esBolsa && Number(di.minutos_extra_mas2 || 0) > 0) {
+        const claseM2 = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
+        primaryBadge = `<div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">${primaryBadge}`
+            + `<div class="badge-status ${claseM2}" style="${stdBadgeStyle}" title="+2: ${_fmtMin(di.minutos_extra_mas2)} sumadas a las horas extra del día, por aprobar"><span>+2</span></div></div>`;
+    }
+
     // ── Badges secundarios según flags independientes ─────────────────────────
     // Solo se muestran si el flag es verdadero Y el estado primario no lo representa ya
     const extraBadges = [];
@@ -8171,12 +8179,10 @@ function _analiticaCellBadge(di) {
 
     // En un día no laborable el llamado ya tiene su propio estado en la celda (EME): el rayo queda solo para los días hábiles
     const tieneEmergencia = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:') && !(di.jornada_adicional && di.jornada_adicional.llamado);
-    // Un +2 (cobertura o segunda jornada) ya no se valida: va a las horas extra del día. La celda lo sigue mostrando (dueño, 10-11-2026)
-    const tieneMas2 = !di._esBolsa && Number(di.minutos_extra_mas2 || 0) > 0;
     const tieneAlertaSistema = di.observaciones && di.observaciones.includes('[ALERTA SISTEMA');
     const tieneHE_Pendientes = !di._esBolsa && di.minutos_extra_bruto > 0 && di.estado_he === 'PENDIENTE';
 
-    if (tieneEmergencia || tieneAlertaSistema || tieneHE_Pendientes || tieneMas2) {
+    if (tieneEmergencia || tieneAlertaSistema || tieneHE_Pendientes) {
         let wrapperHtml = `<div style="position:relative; display:inline-block; width:100%;">
             ${resultHtml}`;
         if (tieneEmergencia) {
@@ -8184,9 +8190,6 @@ function _analiticaCellBadge(di) {
             const emeCfg = (window._estadosAsistencia || {})['LLAMADO_EMERGENCIA'] || {};
             const emeNom = emeCfg.nombre_display || 'Llamado de emergencia';
             wrapperHtml += `<div title="${emeNom.charAt(0) + emeNom.slice(1).toLowerCase()}: sus minutos suman a las horas extra del día" style="position:absolute; top:-6px; left:-6px; font-size:0.75rem; color:#8b5cf6; z-index:10; filter:drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi ${emeCfg.icono_bi || 'bi-telephone-inbound-fill'}" aria-hidden="true"></i></div>`;
-        }
-        if (tieneMas2) {
-            wrapperHtml += `<span class="mx-mas2" title="+2: ${_fmtMin(di.minutos_extra_mas2)} sumadas a las horas extra del día, por aprobar">+2</span>`;
         }
         if (tieneAlertaSistema) {
             wrapperHtml += `<div title="Alerta de Sistema (Ver Tooltip)" style="position:absolute; top:-4px; right:-2px; width:12px; height:12px; background-color:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; border:2px solid white; z-index:10;"></div>`;
