@@ -135,3 +135,11 @@ def test_los_textos_de_la_ventana_sobreviven_al_minificador():
         " y <strong>sin horas</strong> hasta corregir sus marcas.", "Bloqueado hasta elegir arriba qué pasó este día.",
     ):
         assert frase in m, f"el minificador rompe el texto: {frase!r}"
+
+
+def test_hojas_del_titulo_llevan_a_lo_pendiente():
+    # Propuesta A (dueño, 10-11-2026): lo pendiente asoma sobre el título y cada hoja lleva a su celda
+    assert '<div class="gh-hojas">' in GRILLA_JS and "window.mxIrAPendiente = function" in GRILLA_JS
+    assert "data-lugares=" in GRILLA_JS and "n.lugares[k].push(emp.id + '|' + d)" in GRILLA_JS
+    assert "insertAdjacentHTML('afterbegin', window.mxAvisoBloqueHtml(n))" in GRILLA_JS
+    assert ".gh-hoja.gh-val { background: var(--vn-navy-soft" in GRILLA_CSS

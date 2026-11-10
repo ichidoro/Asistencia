@@ -6095,10 +6095,11 @@ window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     const nRev = g.filas.reduce((a, r) => a + window.mxDiasEnRevision(r.emp, null).length, 0);
     const nVal = window.mxPorValidarBloque(g.filas);
     return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + (fijo ? ' gh-fijo' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
-        + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit">'
+        // Lo pendiente asoma por arriba del título como hojas de un archivador (propuesta A, dueño 10-11-2026); cada hoja lleva a su día
+        + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit"><div class="gh-hojas">'
+        + (nRev ? window.mxAvisoBloqueHtml(nRev) : '') + window.mxAvisoValidarHtml(nVal) + '</div><div class="gh-linea">'
         + (fijo ? '' : '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>')
-        + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span>'
-        + (nRev ? window.mxAvisoBloqueHtml(nRev) : '') + window.mxAvisoValidarHtml(nVal) + '</div></td></tr>'
+        + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span></div></div></td></tr>'
         // El encabezado repetido va bajo el encabezado fijo de arriba (capa 55 < 90) y con su mismo aspecto (clase gh-cab)
         + (i > 0 ? cabecera.split('<tr class="').join('<tr class="gh-cab ').replace(/z-index:\s*1\d\d/g, 'z-index:55') : '')
         + g.filas.map(htmlDe).join('') + '</tbody>';
@@ -6125,10 +6126,14 @@ window.mxPorValidarDia = function (di) {
     return out;
 };
 window.mxPorValidarBloque = function (filas) {
-    const n = { mas2: 0, esp: 0, eme: 0 };
+    // Además de contar, guarda dónde está cada uno (persona|fecha, en el orden de la grilla) para que la hoja lleve a su celda
+    const n = { mas2: 0, esp: 0, eme: 0, lugares: { mas2: [], esp: [], eme: [] } };
     (filas || []).forEach(r => {
-        const dias = (r && r.emp && r.emp.dias) || {};
-        Object.keys(dias).forEach(d => { if (d !== 'info') window.mxPorValidarDia(dias[d]).forEach(k => { n[k] += 1; }); });
+        const emp = (r && r.emp) || {};
+        const dias = emp.dias || {};
+        Object.keys(dias).sort().forEach(d => {
+            if (d !== 'info') window.mxPorValidarDia(dias[d]).forEach(k => { n[k] += 1; n.lugares[k].push(emp.id + '|' + d); });
+        });
     });
     return n;
 };
@@ -6143,8 +6148,45 @@ window.mxAvisoValidarHtml = function (n) {
         { k: 'eme', sigla: (est['LLAMADO_EMERGENCIA'] || {}).short_label || 'EME', ico: (est['LLAMADO_EMERGENCIA'] || {}).icono_bi || 'bi-telephone-inbound-fill',
           que: n.eme === 1 ? 'llamado de emergencia' : 'llamados de emergencia' },
     ];
-    return tipos.filter(t => n[t.k]).map(t => '<span class="gh-val gh-val-' + t.k + '" title="' + e(n[t.k] + ' ' + t.que + ' por validar') + '">'
-        + '<i class="bi ' + e(t.ico) + '" aria-hidden="true"></i>' + n[t.k] + ' ' + e(t.sigla) + ' por validar</span>').join('');
+    const lug = n.lugares || {};
+    return tipos.filter(t => n[t.k]).map(t => '<button type="button" class="gh-hoja gh-val gh-val-' + t.k + '" onclick="window.mxIrAPendiente(this)"'
+        + ' data-lugares="' + e((lug[t.k] || []).join(',')) + '"'
+        + ' title="' + e(n[t.k] + ' ' + t.que + ' por validar. Cada clic lleva al siguiente día en la grilla; Enter abre el día para decidir') + '">'
+        + '<i class="bi ' + e(t.ico) + '" aria-hidden="true"></i>' + n[t.k] + ' ' + e(t.sigla) + ' por validar</button>').join('');
+};
+// Abre el bloque si está plegado y después hace «ir»
+window.mxAbrirBloqueY = function (tb, ir) {
+    if (tb.classList.contains('gh-plegado')) {
+        const pl = tb.querySelector('.gh-plegar');
+        if (pl) window.mxPlegarHorario(pl);
+        setTimeout(ir, 60);
+    } else ir();
+};
+// Hoja «por validar»: lleva a la celda del siguiente día pendiente de ese tipo, la marca con el anillo azul marino y la deja
+// lista para abrirla con Enter (ahí se aprueba, rechaza o compensa). Cada clic avanza al siguiente y vuelve al primero.
+window.mxIrAPendiente = function (btn) {
+    const tb = btn && btn.closest('tbody.gh-grupo');
+    const lugares = String((btn && btn.dataset.lugares) || '').split(',').filter(Boolean);
+    if (!tb || !lugares.length) return;
+    const quieto = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.mxAbrirBloqueY(tb, () => {
+        const desde = Number(btn.dataset.i || 0);
+        for (let k = 0; k < lugares.length; k++) {
+            const i = (desde + k) % lugares.length;
+            const [emp, fecha] = lugares[i].split('|');
+            const fila = document.getElementById('row-empleado-' + emp);
+            const td = fila && fila.querySelector('td.col-day[data-fecha="' + fecha + '"]');
+            if (!td) continue;
+            btn.dataset.i = i + 1;
+            td.scrollIntoView({ block: 'center', inline: 'center', behavior: quieto ? 'auto' : 'smooth' });
+            td.classList.remove('rv-recien');
+            void td.offsetWidth;
+            td.classList.add('rv-recien');
+            setTimeout(() => td.classList.remove('rv-recien'), 1700);
+            setTimeout(() => td.focus({ preventScroll: true }), quieto ? 0 : 400);
+            return;
+        }
+    });
 };
 
 // ── Días por revisar (Reglas de marcaciones): lista bajo la fila de la persona (versión C mejorada, elegida por el dueño 06-11-2026) ──
@@ -6169,7 +6211,7 @@ window._rvEsc = function (x) {
     return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 };
 window.mxAvisoBloqueHtml = function (n) {
-    return '<button type="button" class="rv-grupo" onclick="window.mxIrARevisar(this)" title="' + window.MX_TXT_CIERRE_BLOQUEADO + '">'
+    return '<button type="button" class="gh-hoja rv-grupo" onclick="window.mxIrARevisar(this)" title="' + window.MX_TXT_CIERRE_BLOQUEADO + '">'
         + '<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>' + n + (n === 1 ? ' día por revisar' : ' días por revisar') + '</button>';
 };
 window.mxBandaRevisionHtml = function (emp, dates) {
@@ -6276,21 +6318,17 @@ window.mxIrARevisar = function (btn) {
         const b = band.querySelector('.rv-btn');
         if (b) setTimeout(() => b.focus({ preventScroll: true }), quieto ? 0 : 400);
     };
-    if (tb.classList.contains('gh-plegado')) {
-        const pl = tb.querySelector('.gh-plegar');
-        if (pl) window.mxPlegarHorario(pl);
-        setTimeout(ir, 60);
-    } else ir();
+    window.mxAbrirBloqueY(tb, ir);
 };
 // Cuenta de nuevo los días del bloque (tras corregir uno) y actualiza o quita su aviso
 window.mxActualizarAvisoBloque = function (tb) {
     if (!tb) return;
-    const tit = tb.querySelector('tr.gh-titulo .gh-tit');
+    const tit = tb.querySelector('tr.gh-titulo .gh-hojas');
     if (!tit) return;
     const n = tb.querySelectorAll('tr.rv-banda .rv-item').length;
     const chip = tit.querySelector('.rv-grupo');
     if (chip) chip.remove();
-    if (n) tit.insertAdjacentHTML('beforeend', window.mxAvisoBloqueHtml(n));
+    if (n) tit.insertAdjacentHTML('afterbegin', window.mxAvisoBloqueHtml(n));
 };
 // Tras «Sí, corregir» en la ventana: la celda marca el cambio y la fila confirma, en el mismo lugar, que el día quedó corregido
 window.mxAvisarCorreccion = function (empId) {

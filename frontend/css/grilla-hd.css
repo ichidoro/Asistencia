@@ -164,9 +164,14 @@ body:not(.estados-chip) .sem-cel td.col-day .st-multi::after {
 .mx-av-tx { font-size: 11.5px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Grilla por horario (diseño B elegido por el dueño, 03-11-2026; marcaciones_ui.js → mxBloqueHorario) */
-.matrix-table-premium tbody.gh-grupo + tbody.gh-grupo > tr.gh-titulo > td { border-top: 20px solid #f4f6fb !important; }
-.matrix-table-premium tr.gh-titulo > td { background: #fff !important; padding: 10px 12px 8px !important; text-align: left; border-bottom: 1px solid #e3e8f4; }
-.gh-tit { position: sticky; left: 8px; display: inline-flex; align-items: center; gap: 10px; }
+.matrix-table-premium tbody.gh-grupo + tbody.gh-grupo > tr.gh-titulo > td { border-top: 0 !important; }
+/* Arriba de cada título, una franja del fondo de la página donde asoman las hojas de lo pendiente (propuesta A, 10-11-2026) */
+.matrix-table-premium tr.gh-titulo > td { --gh-franja: 30px; background: linear-gradient(#f4f6fb 0 var(--gh-franja), #fff var(--gh-franja)) !important;
+  padding: 0 12px 8px !important; text-align: left; border-bottom: 1px solid #e3e8f4; }
+.gh-tit { position: sticky; left: 8px; display: flex; flex-direction: column; width: max-content; }
+.gh-linea { display: flex; align-items: center; gap: 10px; padding-top: 10px; }
+.gh-hojas { display: flex; align-items: flex-end; gap: 3px; height: 30px; padding-left: 38px; }
+.gh-grupo.gh-fijo .gh-hojas { padding-left: 0; }
 .gh-tit b { font: 600 15px/1.2 'Barlow', system-ui, sans-serif; color: #101a3d; }
 .gh-tit span { font: 500 12.5px/1.2 'Barlow', system-ui, sans-serif; color: #5b6678; }
 .gh-plegar { width: 28px; height: 28px; display: inline-grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #1b2f8f; cursor: pointer; }
@@ -230,14 +235,17 @@ body:not(.estados-chip) .sem-cel td.col-day .badge-status.st-largo > span { font
 .rv-btn:hover { background: #17205f; }
 .rv-btn:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; }
 .rv-hecho { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: #e6f5ec; color: #167a46; font: 600 12.5px/1.2 'Barlow', system-ui, sans-serif; }
-/* Aviso en el título del bloque (los bloques parten plegados): cuántos días hay por revisar y lleva a ellos */
-.rv-grupo { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: 1px solid #f3c6c1; border-radius: 999px;
-  background: #fdecea; color: #b0352c; font: 700 12px/1 'Barlow', system-ui, sans-serif; cursor: pointer; }
-.rv-grupo:hover { background: #fbdcd8; }
-.rv-grupo:focus-visible { outline: 2px solid #b0352c; outline-offset: 2px; }
-/* Por validar en el título del bloque: +2, jornadas especiales y llamados de emergencia que esperan una decisión */
-.gh-tit .gh-val { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
-  font: 700 12px/1 'Barlow', system-ui, sans-serif; border: 1px solid #cfe0f7; background: #eaf2fd; color: #1b4f9c; }
-.gh-tit .gh-val-eme { border-color: #ddd0fb; background: #f3eefe; color: #6d3fd1; }
-.gh-tit .gh-val-esp { border-color: #c9e7f5; background: #e8f6fc; color: #0b6b94; }
+/* Hojas que asoman sobre el título del bloque (marcaciones_ui.js → mxAvisoBloqueHtml, mxAvisoValidarHtml). Colores de la paleta:
+   rojo «peligro» de la grilla para lo que bloquea el cierre; azul marino suave para lo que espera validación. Siglas e íconos, de Estados. */
+.gh-hoja { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 11px; border: 0; border-radius: 7px 7px 0 0; white-space: nowrap;
+  font: 700 12px/1 'Barlow', system-ui, sans-serif; cursor: pointer; box-shadow: inset 0 -3px 3px -2px rgba(16, 26, 61, .14); transition: height .15s ease; }
+.gh-hoja i { font-size: 11px; }
+.gh-hoja:hover { height: 25px; }
+.gh-hoja:focus-visible { outline: 2px solid var(--vn-navy, #1b2f8f); outline-offset: 2px; }
+.gh-hoja.rv-grupo { height: 25px; background: #b0352c; color: #fff; }
+.gh-hoja.rv-grupo:hover { height: 28px; background: #9c2e26; }
+.gh-hoja.rv-grupo:focus-visible { outline-color: #b0352c; }
+.gh-hoja.gh-val { background: var(--vn-navy-soft, #e9edfb); color: var(--vn-navy, #1b2f8f); }
+.gh-hoja.gh-val:hover { background: #dce2f8; }
+@media (prefers-reduced-motion: reduce) { .gh-hoja { transition: none; } }
 @media (prefers-reduced-motion: reduce) { #marcaciones-view-container .matrix-table-premium td.col-day.rv-recien { animation: none; } }
