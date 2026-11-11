@@ -8315,6 +8315,47 @@ if (!window._vaCabeceraBound) {
     window.addEventListener('scroll', _pedir, { passive: true });
     window.addEventListener('resize', _pedir);
 }
+// Mejoras de la grilla (se aplican cada vez que se dibuja):
+// 1) Barra de desplazamiento horizontal siempre visible al pie de la ventana: con la grilla a todo su largo la barra nativa queda al final de la
+//    tabla; esta es una copia sincronizada que se queda pegada abajo mientras la tabla esté en pantalla.
+// 2) Cruz al pasar el cursor: se resalta la fila de la persona y la columna del día (y su encabezado) sin pisar el color del estado de cada celda.
+window._vaMejorasGrilla = function () {
+    const c = document.getElementById('marcaciones-view-container'); if (!c) return;
+    const wrap = c.querySelector('.va-tablewrap'), table = wrap && wrap.querySelector('table'); if (!table) return;
+    let bar = c.querySelector('.va-hscroll');
+    if (!bar) {
+        bar = document.createElement('div'); bar.className = 'va-hscroll'; bar.setAttribute('aria-hidden', 'true'); bar.innerHTML = '<div></div>';
+        wrap.after(bar);
+        bar.addEventListener('scroll', () => { if (wrap.scrollLeft !== bar.scrollLeft) wrap.scrollLeft = bar.scrollLeft; }, { passive: true });
+        wrap.addEventListener('scroll', () => { if (bar.scrollLeft !== wrap.scrollLeft) bar.scrollLeft = wrap.scrollLeft; }, { passive: true });
+    }
+    bar.firstChild.style.width = table.scrollWidth + 'px';
+    bar.style.display = table.scrollWidth > wrap.clientWidth + 1 ? '' : 'none';
+    bar.scrollLeft = wrap.scrollLeft;
+
+    if (wrap._vaCruz || !(window.matchMedia && window.matchMedia('(hover: hover)').matches)) return; // en táctil no hay cursor
+    wrap._vaCruz = true;
+    let fila = null, celdas = [], th = null, actual = null;
+    const limpiar = () => {
+        if (fila) fila.classList.remove('va-hf');
+        celdas.forEach(t => t.classList.remove('va-hc')); if (th) th.classList.remove('va-hc');
+        fila = null; celdas = []; th = null; actual = null;
+    };
+    wrap.addEventListener('mouseover', e => {
+        const td = e.target.closest && e.target.closest('td'); if (!td || td === actual) return;
+        const tr = td.parentElement;
+        if (!tr || !tr.id || !tr.id.startsWith('row-empleado-')) { limpiar(); return; } // solo filas de personas (no títulos de bloque ni bandas)
+        actual = td;
+        if (fila !== tr) { if (fila) fila.classList.remove('va-hf'); fila = tr; tr.classList.add('va-hf'); }
+        celdas.forEach(t => t.classList.remove('va-hc')); if (th) th.classList.remove('va-hc'); celdas = []; th = null;
+        const f = td.classList.contains('col-day') ? td.dataset.fecha : null;
+        if (!f) return;
+        celdas = [...table.querySelectorAll('td.col-day[data-fecha="' + f + '"]')]; celdas.forEach(t => t.classList.add('va-hc'));
+        th = table.querySelectorAll(':scope > thead th.col-day')[[...tr.querySelectorAll('td.col-day')].indexOf(td)] || null;
+        if (th) th.classList.add('va-hc');
+    });
+    wrap.addEventListener('mouseleave', limpiar);
+};
 window._vaAplicarFoco = function () {
     const c = document.getElementById('marcaciones-view-container'); if (!c) return;
     const on = window._vaFocoActivo();
@@ -8327,6 +8368,7 @@ window._vaAplicarFoco = function () {
     const l = c.querySelector('#btn-toggle-leyenda');
     if (l) { const ab = c.classList.contains('va-leyenda-abierta'); l.setAttribute('aria-pressed', String(ab)); l.classList.toggle('btn-primary', ab); l.classList.toggle('btn-outline-secondary', !ab); }
     window._vaCabeceraSigue();
+    window._vaMejorasGrilla();
     if (window.mxBandasAjustar) window.mxBandasAjustar(); // el modo compacto cambia el alto de las filas: las bandas de pendientes se vuelven a medir
 };
 
