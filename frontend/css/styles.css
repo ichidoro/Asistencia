@@ -4618,3 +4618,21 @@ tr:hover .emp-name-cell {
 .m180-ent-n { display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-right: 8px; padding: 0 6px; border-radius: 99px; background: #e8edf5; color: var(--ui-text-body); font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; vertical-align: middle; }
 
 /* Grilla del GPS: copia exacta de la línea de tiempo (mismas columnas y mismo ancho, así cada hora cae en la misma vertical); su desplazamiento se sincroniza por JS */
+
+/* ── Vista Analítica: "Ampliar tabla" (modo compacto) ───────────────────────────
+   Barra de una sola línea con iconos, leyenda oculta (botón "Leyenda" la abre) y cabecera de la tabla más baja.
+   Se activa sola en pantallas bajas o con zoom alto; ver window._vaFocoActivo en marcaciones_ui.js. */
+#btn-toggle-leyenda { display: none; }
+.va-foco #btn-toggle-leyenda { display: inline-flex; align-items: center; }
+.va-foco .va-toolbar-premium { padding: 5px 10px; gap: 8px; }
+.va-foco .va-toolbar-premium .btn { padding-top: 2px; padding-bottom: 2px; }
+.va-foco .va-toolbar-premium .segmented-btn { padding: 3px 9px; font-size: 0.74rem; }
+.va-foco .va-toolbar-premium .d-sm-inline:not(.va-foco-txt),
+.va-foco .va-toolbar-premium .d-md-inline:not(.va-foco-txt) { display: none !important; }
+.va-foco .va-stats-chip { padding-top: 2px; padding-bottom: 2px; }
+.va-foco:not(.va-leyenda-abierta) .va-legend-bar { display: none; }
+.va-foco .va-legend-bar { padding: 4px 12px; }
+.va-foco .matrix-table-premium thead th { padding-top: 2px; padding-bottom: 2px; }
+.va-foco .matrix-table-premium td { padding-top: 2px; padding-bottom: 2px; }
+/* Pantallas bajas: la leyenda larga no debe empujar la tabla aunque la persona no haya tocado el botón */
+@media (max-height: 820px) { .va-tablewrap { min-height: 280px; } }

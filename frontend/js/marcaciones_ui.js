@@ -7502,6 +7502,8 @@ function renderVistaAnalitica(respData, container) {
         <div class="ms-auto d-flex align-items-center gap-2">
             <button id="btn-toggle-estados-circ" class="btn btn-sm ${circBtn.cls} fw-bold" onclick="window.toggleEstadosChip()" title="${circBtn.title}" aria-pressed="${circBtn.on}">${circBtn.html}</button>
             <button id="btn-toggle-grid-tip" class="btn btn-sm ${tipBtn.cls} fw-bold" onclick="window.toggleGridTooltip()" title="${tipBtn.title}" aria-pressed="${tipBtn.on}">${tipBtn.html}</button>
+            <button id="btn-toggle-leyenda" class="btn btn-sm btn-outline-secondary fw-bold" onclick="window.toggleVaLeyenda()" aria-pressed="false" title="Mostrar u ocultar la leyenda de colores y atajos"><i class="bi bi-info-circle me-1"></i><span class="va-foco-txt">Leyenda</span></button>
+            <button id="btn-toggle-foco" class="btn btn-sm btn-outline-secondary fw-bold" onclick="window.toggleVaFoco()" aria-pressed="false" title="Ampliar la tabla: compacta la barra y oculta la leyenda para ver más filas y días"><i class="bi bi-arrows-fullscreen me-1"></i><span class="va-foco-txt">Ampliar tabla</span></button>
             <button id="btn-toggle-sticky-emp" class="btn btn-sm ${pinBtnClass} fw-bold" onclick="window.toggleStickyEmpleado()" title="Fijar o liberar nombres y columnas de resumen para deslizamiento libre en pantallas táctiles">
                 <i class="bi ${pinBtnIcon} me-1"></i> <span class="d-none d-sm-inline">${pinBtnText} Nombres</span>
             </button>
@@ -7637,7 +7639,7 @@ function renderVistaAnalitica(respData, container) {
         })()}
         <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
     </div>`}
-    ${vaciaHtml || `<div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
+    ${vaciaHtml || `<div class="va-tablewrap" style="overflow:auto;max-height:calc(100dvh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
     <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''} ${sh.hayBolsa ? 'gc-bolsa' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
         ${cabeceraFilas}
@@ -7649,6 +7651,7 @@ function renderVistaAnalitica(respData, container) {
 `;
 
     window._gridApplyPinCap();
+    window._vaAplicarFoco();
 
     // Grilla por horario: el título de cada bloque ocupa todo el ancho de la tabla
     const _tablaGh = container.querySelector('.matrix-table-premium');
@@ -8268,8 +8271,51 @@ window._gridApplyPinCap = function() {
 if (!window._gridPinCapBound) {
     window._gridPinCapBound = true;
     let _t;
-    window.addEventListener('resize', () => { clearTimeout(_t); _t = setTimeout(() => { window._gridApplyPinCap(); if (window.mxBandasAjustar) window.mxBandasAjustar(); }, 150); });
+    // El zoom del navegador también dispara 'resize': se recalcula el ancho fijado, las bandas, el modo compacto y el alto de la tabla.
+    window.addEventListener('resize', () => { clearTimeout(_t); _t = setTimeout(() => { window._gridApplyPinCap(); if (window.mxBandasAjustar) window.mxBandasAjustar(); window._vaAplicarFoco(); }, 150); });
 }
+
+// Modo "Ampliar tabla": barra compacta (solo iconos) y leyenda oculta, para que la tabla gane alto. Sin elección de la persona se activa solo en
+// pantallas bajas (laptops o zoom alto, < 820 px de alto útil); lo que la persona marque con el botón manda y se recuerda en este navegador.
+window._vaFocoActivo = function () {
+    if (typeof window._vaFocoMem === 'boolean') return window._vaFocoMem; // respaldo si el navegador bloquea el almacenamiento
+    let v = null; try { v = localStorage.getItem('asistencia_va_foco'); } catch (e) { /* sin almacenamiento */ }
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return window.innerHeight < 820;
+};
+window.toggleVaFoco = function () {
+    const on = !window._vaFocoActivo();
+    window._vaFocoMem = on;
+    try { localStorage.setItem('asistencia_va_foco', on ? '1' : '0'); } catch (e) { /* sin almacenamiento */ }
+    window._vaAplicarFoco();
+};
+window.toggleVaLeyenda = function () {
+    const c = document.getElementById('marcaciones-view-container'); if (!c) return;
+    c.classList.toggle('va-leyenda-abierta');
+    window._vaAplicarFoco();
+};
+// Alto de la tabla = lo que queda de la ventana; lo que hay encima se descuenta hasta un 45 % del alto, así la tabla siempre tiene al menos el 55 %
+// aunque la cabecera sea alta (zoom): lo demás se alcanza deslizando la página.
+window._gridFitHeight = function () {
+    const wrap = document.querySelector('#marcaciones-view-container .va-tablewrap'); if (!wrap) return;
+    const reservado = Math.min(Math.max(wrap.getBoundingClientRect().top, 0), window.innerHeight * 0.45);
+    wrap.style.maxHeight = Math.max(280, Math.round(window.innerHeight - reservado - 12)) + 'px';
+};
+window._vaAplicarFoco = function () {
+    const c = document.getElementById('marcaciones-view-container'); if (!c) return;
+    const on = window._vaFocoActivo();
+    c.classList.toggle('va-foco', on);
+    const b = c.querySelector('#btn-toggle-foco');
+    if (b) {
+        b.setAttribute('aria-pressed', String(on)); b.classList.toggle('btn-primary', on); b.classList.toggle('btn-outline-secondary', !on);
+        const t = b.querySelector('.va-foco-txt'); if (t) t.textContent = on ? 'Tabla ampliada' : 'Ampliar tabla';
+    }
+    const l = c.querySelector('#btn-toggle-leyenda');
+    if (l) { const ab = c.classList.contains('va-leyenda-abierta'); l.setAttribute('aria-pressed', String(ab)); l.classList.toggle('btn-primary', ab); l.classList.toggle('btn-outline-secondary', !ab); }
+    window._gridFitHeight();
+    if (window.mxBandasAjustar) window.mxBandasAjustar(); // el modo compacto cambia el alto de las filas: las bandas de pendientes se vuelven a medir
+};
 
 // Contraer o expandir un grupo de columnas (o cambiar de pestaña) vuelve a dibujar la grilla: los días se deslizan desde
 // donde estaban hasta su nuevo lugar y las columnas de resumen entran con un corrimiento corto (solo transform y opacity).
