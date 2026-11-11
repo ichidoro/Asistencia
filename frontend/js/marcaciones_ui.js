@@ -7639,7 +7639,7 @@ function renderVistaAnalitica(respData, container) {
         })()}
         <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
     </div>`}
-    ${vaciaHtml || `<div class="va-tablewrap" style="overflow:auto;max-height:calc(100dvh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
+    ${vaciaHtml || `<div class="va-tablewrap" style="overflow-x:auto;border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
     <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''} ${sh.hayBolsa ? 'gc-bolsa' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
         ${cabeceraFilas}
@@ -8295,13 +8295,26 @@ window.toggleVaLeyenda = function () {
     c.classList.toggle('va-leyenda-abierta');
     window._vaAplicarFoco();
 };
-// Alto de la tabla = lo que queda de la ventana; lo que hay encima se descuenta hasta un 45 % del alto, así la tabla siempre tiene al menos el 55 %
-// aunque la cabecera sea alta (zoom): lo demás se alcanza deslizando la página.
-window._gridFitHeight = function () {
+// Encabezado de la tabla siempre visible: la grilla ya no tiene su propio scroll vertical (salen todas las filas y baja la página), así que el
+// "sticky" del navegador no alcanza (la caja con scroll horizontal lo ata a sí misma). Se desplaza el encabezado con la página: queda justo debajo
+// de la barra superior de la app y no pasa sobre la fila de totales.
+window._vaCabeceraSigue = function () {
     const wrap = document.querySelector('#marcaciones-view-container .va-tablewrap'); if (!wrap) return;
-    const reservado = Math.min(Math.max(wrap.getBoundingClientRect().top, 0), window.innerHeight * 0.45);
-    wrap.style.maxHeight = Math.max(280, Math.round(window.innerHeight - reservado - 12)) + 'px';
+    const table = wrap.querySelector('table'), thead = table && table.querySelector(':scope > thead'); if (!thead) return;
+    const hdr = document.querySelector('.header');
+    const arriba = hdr && getComputedStyle(hdr).position === 'sticky' ? hdr.getBoundingClientRect().height : 0;
+    const tf = table.querySelector(':scope > tfoot');
+    const libre = wrap.offsetHeight - thead.offsetHeight - (tf ? tf.offsetHeight : 0);
+    const d = Math.max(0, Math.min(libre, Math.round(arriba - wrap.getBoundingClientRect().top)));
+    thead.style.transform = d ? 'translateY(' + d + 'px)' : '';
 };
+if (!window._vaCabeceraBound) {
+    window._vaCabeceraBound = true;
+    let _raf = 0;
+    const _pedir = () => { if (_raf) return; _raf = requestAnimationFrame(() => { _raf = 0; window._vaCabeceraSigue(); }); };
+    window.addEventListener('scroll', _pedir, { passive: true });
+    window.addEventListener('resize', _pedir);
+}
 window._vaAplicarFoco = function () {
     const c = document.getElementById('marcaciones-view-container'); if (!c) return;
     const on = window._vaFocoActivo();
@@ -8313,7 +8326,7 @@ window._vaAplicarFoco = function () {
     }
     const l = c.querySelector('#btn-toggle-leyenda');
     if (l) { const ab = c.classList.contains('va-leyenda-abierta'); l.setAttribute('aria-pressed', String(ab)); l.classList.toggle('btn-primary', ab); l.classList.toggle('btn-outline-secondary', !ab); }
-    window._gridFitHeight();
+    window._vaCabeceraSigue();
     if (window.mxBandasAjustar) window.mxBandasAjustar(); // el modo compacto cambia el alto de las filas: las bandas de pendientes se vuelven a medir
 };
 

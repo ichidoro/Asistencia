@@ -4634,5 +4634,5 @@ tr:hover .emp-name-cell {
 .va-foco .va-legend-bar { padding: 4px 12px; }
 .va-foco .matrix-table-premium thead th { padding-top: 2px; padding-bottom: 2px; }
 .va-foco .matrix-table-premium td { padding-top: 2px; padding-bottom: 2px; }
-/* Pantallas bajas: la leyenda larga no debe empujar la tabla aunque la persona no haya tocado el botón */
-@media (max-height: 820px) { .va-tablewrap { min-height: 280px; } }
+/* El encabezado se mueve con transform (ver _vaCabeceraSigue): se avisa al navegador para que no repinte la tabla en cada scroll */
+.va-tablewrap > table > thead { will-change: transform; }
