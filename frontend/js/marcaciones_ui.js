@@ -7780,9 +7780,10 @@ function renderVistaAnalitica(respData, container) {
         // ── Pantallas táctiles: mantener pulsada una celda muestra el detalle completo (equivale a Shift) ──
         if (tableEl && !tableEl._lpBound) {
             tableEl._lpBound = true;
-            let lpTimer = null, lpStart = null, lpFired = false;
+            let lpTimer = null, lpStart = null, lpFired = false, lpTd = null;
             const LP_MS = 480, LP_MOVE = 10;
-            const clearLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+            // Mientras se mantiene pulsada la celda la pastilla se va hundiendo (va-hold, 480 ms = lo que tarda el detalle); al soltar vuelve rápido.
+            const clearLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } if (lpTd) { lpTd.classList.remove('va-hold'); lpTd = null; } };
             tableEl.addEventListener('touchstart', (e) => {
                 if (e.touches.length !== 1) { clearLp(); return; }
                 const td = e.target.closest('td[data-grid-tooltip]');
@@ -7791,8 +7792,10 @@ function renderVistaAnalitica(respData, container) {
                 lpStart = { x: t.clientX, y: t.clientY };
                 lpFired = false;
                 clearLp();
+                lpTd = td; td.classList.add('va-hold');
                 lpTimer = setTimeout(() => {
                     lpTimer = null; lpFired = true;
+                    if (lpTd) { lpTd.classList.remove('va-hold'); lpTd = null; }
                     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
                     _showFlyTip(td, { clientX: lpStart.x, clientY: lpStart.y });
                     flyTip._pinnedAt = Date.now();

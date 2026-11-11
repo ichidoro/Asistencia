@@ -4643,6 +4643,37 @@ tr:hover .emp-name-cell {
 .va-hscroll { position: sticky; bottom: 0; z-index: 130; overflow-x: auto; overflow-y: hidden; height: 16px; margin-top: 2px;
     background: rgba(255, 255, 255, 0.94); border: 1px solid #dee2e6; border-radius: 8px; }
 .va-hscroll > div { height: 1px; }
-/* El tono va como imagen de fondo encima del color propio de cada celda (estado, fin de semana…): no lo pisa. */
-tr.va-hf > td, td.va-hc, th.va-hc { background-image: linear-gradient(rgba(63, 111, 214, 0.09), rgba(63, 111, 214, 0.09)) !important; }
-tr.va-hf > td.va-hc { background-image: linear-gradient(rgba(63, 111, 214, 0.22), rgba(63, 111, 214, 0.22)) !important; }
+/* El tono va como imagen de fondo encima del color propio de cada celda (estado, fin de semana…): no lo pisa. Aparece con un fundido corto
+   (--va-t es una propiedad registrada, por eso se puede animar); al salir se quita de golpe para que el cursor no deje estela. */
+@property --va-t { syntax: '<color>'; inherits: false; initial-value: rgba(63, 111, 214, 0); }
+@keyframes va-tinte { from { --va-t: rgba(63, 111, 214, 0); } }
+tr.va-hf > td, td.va-hc, th.va-hc {
+    --va-t: rgba(63, 111, 214, 0.09);
+    background-image: linear-gradient(var(--va-t), var(--va-t)) !important;
+    animation: va-tinte 0.1s ease-out;
+}
+tr.va-hf > td.va-hc { --va-t: rgba(63, 111, 214, 0.22); }
+
+/* ── Celdas de día: pasar, presionar y mantener ───────────────────────────────────────────────
+   - La pastilla del estado se agranda un poco al pasar (transform, sin mover nada alrededor) y su aro entra con transición en vez de aparecer de golpe.
+   - Al presionar (clic o toque) se hunde enseguida; al mantener pulsado en táctil se hunde despacio (480 ms, lineal) hasta que aparece el detalle,
+     y al soltar vuelve rápido: lento donde la persona decide, rápido donde el sistema responde.
+   - Se quita el scale(1.02) y el brillo de la celda entera: en una tabla densa hacían temblar los vecinos. */
+#marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:hover { transform: none; filter: none; }
+#marcaciones-view-container .matrix-table-premium td.col-day .badge-status {
+    transition: transform 130ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 120ms ease-out;
+}
+@media (hover: hover) and (pointer: fine) {
+    #marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:hover .badge-status { transform: scale(1.06); }
+}
+#marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:active .badge-status { transform: scale(0.92); transition-duration: 90ms; }
+#marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable.va-hold .badge-status {
+    transform: scale(0.86); box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #1b2f8f; transition: transform 480ms linear, box-shadow 480ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+    tr.va-hf > td, td.va-hc, th.va-hc { animation: none; }
+    #marcaciones-view-container .matrix-table-premium td.col-day .badge-status { transition: none; }
+    #marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:hover .badge-status,
+    #marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:active .badge-status,
+    #marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable.va-hold .badge-status { transform: none; }
+}
