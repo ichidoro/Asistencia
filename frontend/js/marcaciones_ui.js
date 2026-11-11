@@ -7652,6 +7652,16 @@ function renderVistaAnalitica(respData, container) {
 
     window._gridApplyPinCap();
     window._vaAplicarFoco();
+    // Entrada escalonada de las filas: solo cuando cambia lo que se muestra (período, pestaña de horario, cantidad de personas), no en cada redibujo.
+    {
+        const claveEntra = (dates[0] || '') + '|' + dates.length + '|' + (gf.esBolsa ? 'b' : 'c') + '|' + visibleRows.length;
+        if (window._vaClaveEntra !== claveEntra) {
+            window._vaClaveEntra = claveEntra;
+            container.classList.add('va-entra');
+            clearTimeout(window._vaEntraT);
+            window._vaEntraT = setTimeout(() => container.classList.remove('va-entra'), 900);
+        }
+    }
 
     // Grilla por horario: el título de cada bloque ocupa todo el ancho de la tabla
     const _tablaGh = container.querySelector('.matrix-table-premium');
@@ -8310,6 +8320,7 @@ window._vaCabeceraSigue = function () {
     const libre = wrap.offsetHeight - thead.offsetHeight - (tf ? tf.offsetHeight : 0);
     const d = Math.max(0, Math.min(libre, Math.round(arriba - wrap.getBoundingClientRect().top)));
     thead.style.transform = d ? 'translateY(' + d + 'px)' : '';
+    thead.classList.toggle('va-flota', d > 0);
 };
 if (!window._vaCabeceraBound) {
     window._vaCabeceraBound = true;

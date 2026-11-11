@@ -4677,3 +4677,65 @@ tr.va-hf > td.va-hc { --va-t: rgba(63, 111, 214, 0.22); }
     #marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:active .badge-status,
     #marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable.va-hold .badge-status { transform: none; }
 }
+
+/* ══ Vista Analítica: movimiento fluido ═══════════════════════════════════════════════════════════
+   Una sola curva (--va-ease) y duraciones cortas; solo transform, opacity y sombras de borde. Todo se apaga con "reducir movimiento". */
+:root { --va-ease: cubic-bezier(0.23, 1, 0.32, 1); }
+
+/* 1. Entrada: las filas suben con un fundido, escalonadas (máx. 14 filas; las demás entran junto con la última). Solo al cambiar lo mostrado. */
+@keyframes va-fila-sube { from { opacity: 0; transform: translateY(8px); } }
+.va-entra tbody tr[id^="row-empleado-"] { animation: va-fila-sube 0.36s var(--va-ease) both; animation-delay: 224ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(1) { animation-delay: 0ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(2) { animation-delay: 16ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(3) { animation-delay: 32ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(4) { animation-delay: 48ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(5) { animation-delay: 64ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(6) { animation-delay: 80ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(7) { animation-delay: 96ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(8) { animation-delay: 112ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(9) { animation-delay: 128ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(10) { animation-delay: 144ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(11) { animation-delay: 160ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(12) { animation-delay: 176ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(13) { animation-delay: 192ms; }
+.va-entra tbody tr[id^="row-empleado-"]:nth-child(14) { animation-delay: 208ms; }
+
+/* 2. Fila bajo el cursor: el nombre se marca con una barra de acento que entra desde el borde */
+#marcaciones-view-container .matrix-table-premium tbody tr .sticky-col-analitica { transition: box-shadow 180ms var(--va-ease); }
+#marcaciones-view-container .matrix-table-premium tbody tr.va-hf .sticky-col-analitica { box-shadow: inset 3px 0 0 #3f6fd6, 3px 0 6px rgba(0, 0, 0, 0.06) !important; }
+
+/* 3. Día bajo el cursor: su encabezado se oscurece suave */
+#marcaciones-view-container .matrix-table-premium thead th.col-day { transition: color 140ms ease; }
+#marcaciones-view-container .matrix-table-premium thead th.col-day.va-hc { color: #1b2f8f; }
+
+/* 4. Encabezado que flota: al despegarse de la tabla (se baja la página) gana una sombra suave que dice "está por encima" */
+#marcaciones-view-container .matrix-table-premium thead th { transition: box-shadow 200ms ease; }
+#marcaciones-view-container .matrix-table-premium thead.va-flota th { box-shadow: 0 8px 10px -8px rgba(15, 35, 80, 0.38); }
+
+/* 5. Leyenda: al abrirla en modo ampliado baja con un fundido en vez de aparecer de golpe */
+@keyframes va-baja { from { opacity: 0; transform: translateY(-6px); } }
+.va-foco.va-leyenda-abierta .va-legend-bar { animation: va-baja 220ms var(--va-ease); }
+#marcaciones-view-container .va-legend-bar .badge-status { transition: transform 130ms var(--va-ease); }
+
+/* 6. Botones de la barra y pestañas de horario: sube un poco al pasar, se hunde al presionar */
+#marcaciones-view-container .va-toolbar-premium .btn:not(.segmented-btn),
+#marcaciones-view-container .gc-tab { transition: transform 140ms var(--va-ease), background-color 150ms ease, box-shadow 150ms ease, color 150ms ease; }
+#marcaciones-view-container .va-toolbar-premium .btn:not(.segmented-btn):active,
+#marcaciones-view-container .gc-tab:active,
+#marcaciones-view-container .va-toolbar-premium .segmented-btn:active { transform: scale(0.96); transition-duration: 80ms; }
+.va-hscroll { transition: opacity 200ms ease; }
+@media (hover: hover) and (pointer: fine) {
+    #marcaciones-view-container .va-toolbar-premium .btn:not(.segmented-btn):hover { transform: translateY(-1px); }
+    #marcaciones-view-container .va-legend-bar .badge-status:hover { transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .va-entra tbody tr[id^="row-empleado-"], .va-foco.va-leyenda-abierta .va-legend-bar { animation: none; }
+    #marcaciones-view-container .matrix-table-premium tbody tr .sticky-col-analitica,
+    #marcaciones-view-container .matrix-table-premium thead th,
+    #marcaciones-view-container .va-toolbar-premium .btn,
+    #marcaciones-view-container .gc-tab,
+    #marcaciones-view-container .va-legend-bar .badge-status { transition: none; }
+    #marcaciones-view-container .va-toolbar-premium .btn:hover, #marcaciones-view-container .va-toolbar-premium .btn:active,
+    #marcaciones-view-container .gc-tab:active, #marcaciones-view-container .va-legend-bar .badge-status:hover { transform: none; }
+}
