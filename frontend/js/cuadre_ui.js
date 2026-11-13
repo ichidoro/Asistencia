@@ -51,10 +51,16 @@
     function nombreEstado(e) { if (!e) return 'Sin registro'; return ESTADOS[e] || frase(String(e).replace(/_/g, ' ')); }
     function toast(msg, tipo) { if (typeof showToast === 'function') showToast(msg, tipo || 'info'); }
 
-    const estado = { data: null, eleccion: null, minutos: null, empleadoId: null, nombre: '', diaSel: null, motivo: '' };
+    const estado = { data: null, eleccion: null, minutos: null, empleadoId: null, nombre: '', diaSel: null, motivo: '', tramo: null, alCambiar: null };
+
+    // Quien abre la ventana avisa que cambió el cuadre (el asistente de cierre recarga su lista)
+    function avisarCambio() {
+        if (typeof estado.alCambiar === 'function') { try { estado.alCambiar(); } catch (e) { /* la ventana ya guardó */ } }
+    }
 
     async function cargar(empleadoId) {
-        const p = (window.stateMarcacionesApp && window.stateMarcacionesApp.data && window.stateMarcacionesApp.data.periodo) || {};
+        // El tramo lo da quien abre la ventana (el cierre de un período pasado) o, si no, el que muestra la grilla
+        const p = estado.tramo || (window.stateMarcacionesApp && window.stateMarcacionesApp.data && window.stateMarcacionesApp.data.periodo) || {};
         const ini = p.inicio || window.stateMarcacionesApp?.fechaInicioRRHH, fin = p.fin || window.stateMarcacionesApp?.fechaFinRRHH;
         if (!ini || !fin) throw new Error('No se conoce el tramo abierto.');
         const r = await fetch('/api/cuadre/libro/?empleado_id=' + empleadoId + '&fecha_inicio=' + ini + '&fecha_fin=' + fin,
@@ -374,6 +380,7 @@
             const mEl = document.getElementById('modalCuadre');
             if (mEl) { const m = bootstrap.Modal.getInstance(mEl); if (m) m.hide(); }
             if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData({ silent: true });
+            avisarCambio();
         } catch (e) {
             toast('No se pudo guardar el cuadre: ' + e.message, 'danger');
         } finally {
@@ -392,6 +399,7 @@
             toast('Política quitada: las horas quedan como estaban; decide de nuevo.', 'info');
             render();
             if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData({ silent: true });
+            avisarCambio();
         } catch (e) { toast('No se pudo quitar la política: ' + e.message, 'danger'); }
     };
 
@@ -522,9 +530,14 @@
         return (p.length >= 3 ? p[2][0] + p[0][0] : p.length === 2 ? p[1][0] + p[0][0] : (p[0] || '—').slice(0, 2)).toUpperCase();
     }
 
-    window.openCuadreModal = async function (empleadoId, nombre) {
+    // opciones (asistente de cierre, dueño 13-11-2026): { tramo: {inicio, fin}, alCambiar: fn }. Con tramo propio la ventana
+    // cuadra ese período aunque la grilla muestre otro, y no ofrece el ajuste por día de la grilla (el cierre lista los días).
+    window.openCuadreModal = async function (empleadoId, nombre, opciones) {
         estilos();
+        const op = opciones || {};
         estado.empleadoId = Number(empleadoId); estado.nombre = nombre || ''; estado.eleccion = null; estado.minutos = null; estado.data = null; estado.diaSel = null; estado.motivo = '';
+        estado.tramo = (op.tramo && op.tramo.inicio && op.tramo.fin) ? { inicio: op.tramo.inicio, fin: op.tramo.fin } : null;
+        estado.alCambiar = typeof op.alCambiar === 'function' ? op.alCambiar : null;
         let existing = document.getElementById('modalCuadre');
         if (existing) existing.remove();
         const icono = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#5A6487" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="12" height="8.5" rx="1.5"></rect><path d="M6 5V3.8c0-.44.36-.8.8-.8h2.4c.44 0 .8.36.8.8V5M2 8.5h12"></path></svg>';
@@ -536,14 +549,26 @@
             + '<button type="button" class="cq-cerrar" data-bs-dismiss="modal" aria-label="Cerrar"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"></path></svg></button></div>'
             + '<div class="modal-body" id="cq-cuerpo"><div class="cq-sec">Cargando el tramo…</div></div>'
             + '<div class="modal-footer">'
-            + '<div class="cq-pie-izq"><button type="button" class="cq-link" onclick="window.cuadreAjusteManual()">Ajuste manual por día</button>'
+            + '<div class="cq-pie-izq">' + (estado.tramo ? '' : '<button type="button" class="cq-link" onclick="window.cuadreAjusteManual()">Ajuste manual por día</button>')
             + '<button type="button" class="cq-link cq-link-rojo" id="cq-quitar" hidden onclick="window.cuadreQuitar()">Quitar política</button></div>'
             + '<div class="cq-pie-der"><button type="button" class="cq-btn-sec" data-bs-dismiss="modal">Cerrar</button>'
             + '<button type="button" class="cq-btn-pri" id="cq-confirmar" disabled onclick="window.cuadreConfirmar()">Confirmar cuadre</button></div>'
             + '</div></div></div></div>';
         document.body.insertAdjacentHTML('beforeend', html);
         const el = document.getElementById('modalCuadre');
-        el.addEventListener('hidden.bs.modal', function () { el.remove(); });
+        // Encima de otra ventana abierta (el asistente de cierre): queda adelante y, al cerrarse, la de abajo sigue con su scroll
+        const sobreOtra = !!document.querySelector('.modal.show');
+        if (sobreOtra) {
+            el.style.zIndex = '1075';
+            el.addEventListener('shown.bs.modal', function () {
+                const fondos = document.querySelectorAll('.modal-backdrop');
+                if (fondos.length) fondos[fondos.length - 1].style.zIndex = '1070';
+            });
+        }
+        el.addEventListener('hidden.bs.modal', function () {
+            el.remove();
+            if (document.querySelector('.modal.show')) document.body.classList.add('modal-open');
+        });
         new bootstrap.Modal(el).show();
         try {
             const data = await cargar(estado.empleadoId);

@@ -5330,62 +5330,8 @@ function renderWizardStep(step) {
             btnNext.style.display = 'inline-block';
             btnNext.onclick = () => renderWizardStep(3);
         }
-    } else if (step === 3) { // HE Pendientes
-        if (ev.he_pendientes > 0) {
-            const canApproveHE = typeof AuthService !== 'undefined' && AuthService.hasPermission("marcaciones.horas_extras");
-            const list = ev.detalle_he.map(a => `
-                <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom hover-bg-light">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-clock-fill text-primary me-2"></i>
-                        <div>
-                            <span class="fw-bold text-dark small">${a.fecha}</span>
-                            <span class="mx-2 text-muted">|</span>
-                            <span class="text-secondary small">${a.nombre_completo}</span>
-                            <span class="badge bg-light text-primary border border-primary-subtle ms-2">${formatExactMinutesToTime(a.minutos_bruto)}</span>
-                            ${cierreGetHEContextBadges(a)}
-                        </div>
-                    </div>
-                    ${canApproveHE ? `
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-sm btn-outline-success fw-bold py-0 px-2" onclick="cierreResolverHE(${a.empleado_id}, '${a.fecha}', ${a.minutos_bruto}, 'APROBADO')" title="Aprobar esta Hora Extra">
-                            <i class="bi bi-check-lg"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger fw-bold py-0 px-2" onclick="cierreResolverHE(${a.empleado_id}, '${a.fecha}', ${a.minutos_bruto}, 'RECHAZADO')" title="Rechazar esta Hora Extra">
-                            <i class="bi bi-x-lg"></i>
-                        </button>
-                    </div>
-                    ` : ''}
-                </li>
-            `).join('');
-
-            content.innerHTML = `
-                <h4 class="text-primary fw-bold mb-3"><i class="bi bi-exclamation-circle-fill"></i> HARD STOP: Horas Extras Pendientes</h4>
-                <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-primary bg-opacity-10 border border-primary-subtle rounded-3">
-                    <div class="small text-primary-emphasis fw-semibold">
-                        <i class="bi bi-info-circle-fill me-1"></i> Existen <strong>${ev.he_pendientes} registros</strong> pendientes en el periodo seleccionado.
-                    </div>
-                    ${canApproveHE ? `
-                    <button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="cierreResolverTodasHE()">
-                        <i class="bi bi-check-all me-1"></i> Aprobar Todas
-                    </button>
-                    ` : ''}
-                </div>
-                <div class="border rounded-3 shadow-sm" style="max-height:230px; overflow-y:auto; background:#ffffff;">
-                    <ul class="list-unstyled mb-0">${list}</ul>
-                </div>
-            `;
-            btnNext.style.display = 'none';
-        } else {
-            content.innerHTML = `
-                <div class="text-center py-5">
-                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                    <h4 class="mt-3">Sin HE Pendientes</h4>
-                    <p class="text-muted">Todas las Horas Extras han sido resueltas.</p>
-                </div>
-            `;
-            btnNext.style.display = 'inline-block';
-            btnNext.onclick = () => renderWizardStep(4);
-        }
+    } else if (step === 3) { // Horas extra: se cuadran por persona (dueño, 13-11-2026)
+        window.cierrePaso3(content, btnNext, ev);
     } else if (step === 4) { // Inasistencias (Soft Stop)
         if (ev.inasistencias_injustificadas > 0) {
             const list = ev.detalle_ina.map(a => {
@@ -5479,6 +5425,124 @@ function nextWizardStep() {
     const s = window.cierreWizardState.currentStep;
     if (s < 5) renderWizardStep(s + 1);
 }
+
+// ── Paso 3 del cierre: horas extra por persona (dueño, 13-11-2026) ─────────────────────────────────────────────────────────
+// Aprobar día por día paga el 100 % de cada día y lo deja fijo: el cuadre ya no puede usarlo para cubrir atrasos. Por eso el
+// paso lista a las personas con horas extra por decidir y cada una se cuadra en su ventana (Llevar a cero o Pagar), con el
+// período que se está cerrando. Aprobar o rechazar un día suelto queda como excepción, dentro de la fila de la persona.
+// Bolsa Flexible no tiene cuadre (su meta va en la columna de la bolsa) y un rango que no es un período no tiene política:
+// en esos casos solo están los días.
+function cierreEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+window.cierrePaso3 = async function (content, btnNext, ev) {
+    const s = window.cierreWizardState;
+    const hhmmss = m => (typeof formatExactMinutesToTime === 'function' ? formatExactMinutesToTime(Math.abs(Number(m) || 0)) : String(m));
+    const nombreP = n => (typeof window.nombrePersona === 'function' ? window.nombrePersona(n) : String(n || ''));
+    const puedeHE = typeof AuthService !== 'undefined' && AuthService.hasPermission("marcaciones.horas_extras");
+    const esTramo = (s.periodos || []).some(p => p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin);
+    btnNext.style.display = 'none';
+    content.innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Calculando el balance de cada persona…</div>';
+
+    let libro = { filas: [] };
+    if (esTramo) {
+        try {
+            const area = s.area && s.area !== 'Todas' ? '&area=' + encodeURIComponent(s.area) : '';
+            const r = await fetch('/api/cuadre/libro-periodo/?fecha_inicio=' + s.fIni + '&fecha_fin=' + s.fFin + area,
+                { headers: { 'Authorization': 'Bearer ' + AuthService.getToken() } });
+            if (r.ok) libro = await r.json();
+        } catch (e) { /* sin balance: quedan los días */ }
+    }
+    if (s.currentStep !== 3) return;   // se cambió de paso mientras cargaba
+    const porId = {};
+    (libro.filas || []).forEach(f => { if (f.empleado_id != null) porId[String(f.empleado_id)] = f; });
+
+    // Personas con horas extra por decidir, en el orden en que llegan (apellido)
+    const personas = [];
+    const idx = {};
+    (ev.detalle_he || []).forEach(a => {
+        const k = String(a.empleado_id);
+        if (!(k in idx)) { idx[k] = personas.length; personas.push({ id: a.empleado_id, nombre: a.nombre_completo, dias: [], minutos: 0 }); }
+        const p = personas[idx[k]];
+        p.dias.push(a); p.minutos += Number(a.minutos_bruto) || 0;
+    });
+    const cuadradas = (libro.filas || []).filter(f => f.politica && !(String(f.empleado_id) in idx));
+    const etiquetaPol = f => f.politica === 'CERO' ? 'Llevar a cero'
+        : (f.minutos_a_pagar == null ? 'Pagar todas las que sobren' : 'Pagar hasta ' + hhmmss(f.minutos_a_pagar));
+
+    // El nombre va en un atributo de datos (no dentro del código del onclick); el clic no pliega la fila
+    const botonCuadrar = (id, nombre, texto, clase) => '<button type="button" class="btn btn-sm ' + clase + ' fw-bold px-3 text-nowrap" '
+        + 'data-id="' + Number(id) + '" data-nombre="' + cierreEsc(nombre) + '" onclick="event.preventDefault(); event.stopPropagation(); window.cierreAbrirCuadre(this)">' + texto + '</button>';
+
+    const filaDia = a => '<li class="d-flex justify-content-between align-items-center py-1 px-3 border-top small">'
+        + '<span class="text-nowrap"><b>' + window.formatFechaDDMMYYYY(a.fecha) + '</b>'
+        + '<span class="badge bg-light text-primary border border-primary-subtle ms-2">' + hhmmss(a.minutos_bruto) + '</span>'
+        + (typeof cierreGetHEContextBadges === 'function' ? cierreGetHEContextBadges(a) : '') + '</span>'
+        + (puedeHE ? '<span class="btn-group btn-group-sm">'
+            + '<button class="btn btn-sm btn-outline-success py-0 px-2" title="Aprobar solo este día (queda fijo: el cuadre no lo reparte)" '
+            + 'onclick="cierreResolverHE(' + Number(a.empleado_id) + ', \'' + a.fecha + '\', ' + Number(a.minutos_bruto) + ', \'APROBADO\')"><i class="bi bi-check-lg"></i></button>'
+            + '<button class="btn btn-sm btn-outline-danger py-0 px-2" title="Rechazar solo este día (no se paga ni cubre atrasos)" '
+            + 'onclick="cierreResolverHE(' + Number(a.empleado_id) + ', \'' + a.fecha + '\', ' + Number(a.minutos_bruto) + ', \'RECHAZADO\')"><i class="bi bi-x-lg"></i></button>'
+            + '</span>' : '')
+        + '</li>';
+
+    const filaPendiente = p => {
+        const f = porId[String(p.id)];
+        const cifras = f
+            ? '<span class="text-nowrap">Trabajó de más <b style="color:#b7791f">' + hhmmss(f.he_trabajadas) + '</b></span>'
+              + '<span class="text-nowrap">Debe <b style="color:#c53030">' + hhmmss(f.deuda_bruta) + '</b></span>'
+            : '<span class="text-nowrap text-muted">' + (esTramo ? 'Bolsa Flexible: sin cuadre, se decide por día' : 'Rango sin período: se decide por día') + '</span>';
+        // Ya cuadrada y con días aún por decidir: son días que el cuadre no reparte (día libre, feriado o llamado sobre una
+        // jornada especial); se deciden aquí, día por día. «Cuadrar» de nuevo no los cambiaría.
+        const yaCuadrada = !!(f && f.politica);
+        const accion = !f || !puedeHE ? ''
+            : (yaCuadrada ? botonCuadrar(p.id, p.nombre, 'Ver cuadre', 'btn-outline-primary') : botonCuadrar(p.id, p.nombre, 'Cuadrar', 'btn-primary'));
+        const nota = yaCuadrada ? '<li class="px-3 py-2 small text-secondary border-top">Cuadre ya decidido (' + etiquetaPol(f) + '). '
+            + 'Estos días son de una jornada especial o un llamado y el cuadre no los reparte: apruébalos o recházalos aquí.</li>' : '';
+        return '<li class="border-bottom"><details' + (f && !yaCuadrada ? '' : ' open') + '>'
+            + '<summary class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 px-3" style="cursor:pointer;list-style:none">'
+            + '<span class="fw-bold text-dark text-nowrap">' + cierreEsc(nombreP(p.nombre)) + '</span>'
+            + '<span class="d-flex flex-wrap align-items-center gap-3 small">'
+            + '<span class="text-nowrap">' + p.dias.length + (p.dias.length === 1 ? ' día' : ' días') + ' por decidir · <b>' + hhmmss(p.minutos) + '</b></span>'
+            + cifras + accion + '</span></summary>'
+            + '<ul class="list-unstyled mb-0 bg-light">' + nota + p.dias.map(filaDia).join('') + '</ul>'
+            + '</details></li>';
+    };
+
+    const filaCuadrada = f => '<li class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 px-3 border-bottom small">'
+        + '<span class="fw-semibold text-dark text-nowrap">' + cierreEsc(nombreP(f.nombre)) + '</span>'
+        + '<span class="d-flex flex-wrap align-items-center gap-3">'
+        + '<span class="badge rounded-pill ' + (f.politica === 'CERO' ? 'bg-secondary-subtle text-secondary-emphasis' : 'bg-success-subtle text-success-emphasis') + '">' + etiquetaPol(f) + '</span>'
+        + '<span class="text-nowrap">A pagar <b>' + hhmmss(f.he_a_pagar) + '</b></span>'
+        + '<span class="text-nowrap">Pendiente <b>' + hhmmss(f.pendiente) + '</b></span>'
+        + (puedeHE ? botonCuadrar(f.empleado_id, f.nombre, 'Ver o cambiar', 'btn-outline-primary') : '')
+        + '</span></li>';
+
+    const bloqueCuadradas = cuadradas.length ? '<details class="mt-3"><summary class="fw-bold small text-secondary" style="cursor:pointer">Ya cuadradas (' + cuadradas.length + ')</summary>'
+        + '<div class="border rounded-3 bg-white mt-2" style="max-height:220px;overflow-y:auto"><ul class="list-unstyled mb-0">' + cuadradas.map(filaCuadrada).join('') + '</ul></div></details>' : '';
+
+    if (personas.length) {
+        content.innerHTML = '<h4 class="text-primary fw-bold mb-2"><i class="bi bi-exclamation-circle-fill"></i> Faltan cuadrar (' + personas.length + ')</h4>'
+            + '<p class="small text-muted mb-3">' + (personas.length === 1 ? 'Esta persona tiene' : 'Estas personas tienen') + ' <b>' + ev.he_pendientes + ' días</b> con horas extra por decidir. '
+            + '«Cuadrar» abre su ventana con este período: las horas extra pagan primero lo que debe y se elige si lo que sobra se paga o se lleva a cero. '
+            + 'Abre la fila para aprobar o rechazar un día suelto (queda fijo y el cuadre no lo reparte).</p>'
+            + '<div class="border rounded-3 shadow-sm bg-white" style="max-height:320px;overflow-y:auto"><ul class="list-unstyled mb-0">' + personas.map(filaPendiente).join('') + '</ul></div>'
+            + bloqueCuadradas;
+        btnNext.style.display = 'none';
+    } else {
+        content.innerHTML = '<div class="text-center py-4"><i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>'
+            + '<h4 class="mt-3">Sin horas extra por decidir</h4><p class="text-muted mb-0">Todas las personas del período están cuadradas o resueltas.</p></div>'
+            + bloqueCuadradas;
+        btnNext.style.display = 'inline-block';
+        btnNext.onclick = () => renderWizardStep(4);
+    }
+};
+
+window.cierreAbrirCuadre = function (btn) {
+    const s = window.cierreWizardState;
+    const empleadoId = Number(btn.dataset.id), nombre = btn.dataset.nombre || '';
+    if (typeof window.openCuadreModal !== 'function') { showToast('La ventana de cuadre no está disponible.', 'danger'); return; }
+    window.openCuadreModal(empleadoId, nombre, { tramo: { inicio: s.fIni, fin: s.fFin }, alCambiar: () => recargarPreEvaluacionCierre() });
+};
 
 async function recargarPreEvaluacionCierre() {
     const s = window.cierreWizardState;
