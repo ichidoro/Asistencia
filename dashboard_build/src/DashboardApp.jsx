@@ -284,7 +284,7 @@ function Cargando() {
   );
 }
 
-function Dashboard() {
+function Dashboard({ visita }) {
   useDashboardStyles();
   const [area, setArea] = useState('Todas');
   const [areas, setAreas] = useState([]);
@@ -365,8 +365,16 @@ function Dashboard() {
     }
   }, [area, tramoId, headers]);
 
-  useEffect(() => { if (vista === 'pendientes') cargar(); }, [cargar, vista]);
-  useEffect(() => { if (vista === 'indicadores') cargarIndicadores(); }, [cargarIndicadores, vista]);
+  // `visita` cambia cada vez que se entra al Dashboard: vuelve a pedir los datos (antes solo se pedían al montarse y un área
+  // recién cerrada seguía «Lista para cerrar» hasta recargar la página; dueño, 13-11-2026)
+  useEffect(() => { if (vista === 'pendientes') cargar(); }, [cargar, vista, visita]);
+  useEffect(() => { if (vista === 'indicadores') cargarIndicadores(); }, [cargarIndicadores, vista, visita]);
+  // Al cerrar o reabrir un período (asistente de cierre, Tramos de cierre) la app avisa y el Dashboard se actualiza solo
+  useEffect(() => {
+    const alCambiar = () => { if (vista === 'pendientes') cargar(); else cargarIndicadores(); };
+    window.addEventListener('aguacol:periodos-cambiaron', alCambiar);
+    return () => window.removeEventListener('aguacol:periodos-cambiaron', alCambiar);
+  }, [cargar, cargarIndicadores, vista]);
 
   const pedirDetalle = useCallback(async (id, tramo) => {
     const q = new URLSearchParams({ indicador: id });
@@ -478,10 +486,10 @@ function Dashboard() {
   );
 }
 
-export default function DashboardApp() {
+export default function DashboardApp({ visita }) {
   return (
     <ErrorBoundary>
-      <Dashboard />
+      <Dashboard visita={visita} />
     </ErrorBoundary>
   );
 }

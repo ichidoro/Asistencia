@@ -5695,6 +5695,7 @@ async function confirmarCierreRRHH() {
             if (m) m.hide();
             loadMarcacionesData();
             cargarPeriodosEnToolbar();
+            window.dispatchEvent(new CustomEvent('aguacol:periodos-cambiaron'));   // el Dashboard se actualiza solo
             // Sello del cierre (diseño HD): los cinco pasos se completan uno a uno, el candado se cierra y el texto dice
             // qué mes y qué área quedaron cerrados
             const e = window.escHtml || (x => String(x == null ? '' : x));
@@ -5982,6 +5983,7 @@ window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
             const m = bootstrap.Modal.getInstance(document.getElementById('modal-historial-cierres'));
             if (m) m.hide();
             loadMarcacionesData();
+            window.dispatchEvent(new CustomEvent('aguacol:periodos-cambiaron'));   // el Dashboard se actualiza solo
         } else {
             showToast(res.detail || "No se pudo reabrir el período.", "error");
         }

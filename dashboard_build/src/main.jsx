@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import DashboardApp from './DashboardApp';
 
 let reactRoot = null;
+let visitas = 0;   // cada entrada al Dashboard cuenta una visita y el Dashboard vuelve a pedir sus datos
 
 function initDashboard() {
   const container = document.getElementById('page-dashboard');
@@ -20,7 +21,7 @@ function initDashboard() {
     
     reactRoot.render(
       <React.StrictMode>
-        <DashboardApp />
+        <DashboardApp visita={++visitas} />
       </React.StrictMode>
     );
   }
