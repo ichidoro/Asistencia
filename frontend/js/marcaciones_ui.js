@@ -5257,10 +5257,33 @@ function renderWizardStep(step) {
                         </li>`;
                     }).join('')}</ul>
                 </div>` : '';
-        if (porRevisar > 0 && !(ev.anomalias > 0)) {
+        // Jornadas especiales por validar (dueño, 15-11-2026): un día libre o feriado trabajado sin decidir no se paga, así que
+        // frena el cierre igual que los días por revisar. «Abrir» lleva a la tarjeta del día, donde se valida.
+        const jeN = ev.je_por_validar || 0;
+        const ORIGEN_JE = { DIA_LIBRE: 'Día libre trabajado', FERIADO: 'Feriado trabajado', JORNADA_ESPECIAL: 'Jornada especial' };
+        const jeHtml = jeN > 0 ? `
+                <h5 class="text-danger fw-bold mt-3"><i class="bi bi-patch-exclamation-fill"></i> Jornadas especiales por validar</h5>
+                <p class="mb-2">Hay <strong>${jeN} ${jeN === 1 ? 'jornada' : 'jornadas'}</strong> en días libres o feriados sin decidir. Sin validar no se pagan: valídelas en la tarjeta de su día antes de cerrar.</p>
+                <div class="border rounded-3 shadow-sm bg-white mb-3" style="max-height:220px; overflow-y:auto;">
+                    <ul class="list-unstyled mb-0">${(ev.detalle_je || []).map(j => {
+                        const nEsc = (j.nombre_completo || '').replace(/'/g, "\\'");
+                        const h = (j.hora_entrada || j.hora_salida) ? ` · ${String(j.hora_entrada || '--:--').slice(0, 5)} a ${String(j.hora_salida || '--:--').slice(0, 5)}` : '';
+                        return `
+                        <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom">
+                            <div class="small"><span class="fw-bold">${window.formatFechaDDMMYYYY(j.fecha)}</span>
+                                <span class="mx-2 text-muted">|</span>${j.nombre_completo}
+                                <span class="badge bg-info-subtle text-info-emphasis ms-2" style="font-size:0.72rem;">${ORIGEN_JE[j.origen] || 'Jornada especial'}${h}</span></div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold py-1 px-3" onclick="window.cierreGestionarInasistencia(${j.empleado_id}, '${j.fecha}', '${nEsc}')">
+                                <i class="bi bi-patch-check me-1"></i> Abrir
+                            </button>
+                        </li>`;
+                    }).join('')}</ul>
+                </div>` : '';
+        if ((porRevisar > 0 || jeN > 0) && !(ev.anomalias > 0)) {
             content.innerHTML = `
-                <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: Días por revisar</h4>
+                <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: ${porRevisar > 0 ? 'Días por revisar' : 'Jornadas especiales por validar'}</h4>
                 ${porRevisarHtml}
+                ${jeHtml}
             `;
             btnNext.style.display = 'none';
         } else if (ev.anomalias > 0) {
@@ -5295,13 +5318,14 @@ function renderWizardStep(step) {
                     <ul class="list-unstyled mb-0">${list}</ul>
                 </div>
                 ${porRevisarHtml}
+                ${jeHtml}
             `;
             btnNext.style.display = 'none';
         } else {
             content.innerHTML = `
                 <div class="text-center py-5">
                     <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                    <h4 class="mt-3">Sin Anomalías ni días por revisar</h4>
+                    <h4 class="mt-3">Sin anomalías, días por revisar ni jornadas por validar</h4>
                     <p class="text-muted">Las marcaciones están íntegras. Puede continuar al siguiente paso.</p>
                 </div>
             `;
@@ -5707,7 +5731,12 @@ async function confirmarCierreRRHH() {
                 html: '<div class="cz-sello"><div class="cz-pasos" role="list" aria-label="Pasos del cierre">'
                     + pasos.map(p => '<i role="listitem" title="' + p + '" aria-label="' + p + ': listo"></i>').join('')
                     + '</div><b class="cz-que">' + e(queMes) + ' cerrado · ' + e(s.area) + '</b></div>'
-                    + '<p class="cz-tx">El informe de cierre, un PDF por tipo de horario, se envió a Recursos Humanos. También queda en Configuración → Tramos de cierre.</p>',
+                    // Lo que pasó de verdad con el correo (dueño, 15-11-2026: decía «se envió» aunque no había destinatarios)
+                    + '<p class="cz-tx">' + ({
+                        enviado: 'El informe de cierre, un PDF por tipo de horario, se envió a Recursos Humanos.',
+                        sin_destinatarios: 'El informe no se envió por correo: no hay destinatarios configurados para el cierre.',
+                    }[res.correo] || 'El informe no se pudo enviar por correo.')
+                    + ' También queda en Configuración → Tramos de cierre.</p>',
                 icon: 'success',
                 iconHtml: '<svg class="cz-candado" viewBox="0 0 40 48" aria-hidden="true"><path class="cz-arco" d="M11 22 V14 a9 9 0 0 1 18 0 V22" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><rect x="5" y="21" width="30" height="24" rx="6" fill="currentColor"/></svg>',
                 customClass: { popup: 'cz-cerrado' },

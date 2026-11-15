@@ -147,9 +147,10 @@ def clasificar_area(cerrado: Optional[Dict[str, Any]], b: Optional[Dict[str, Any
         return {"estado": "cerrado", "cerrado": cerrado}
     b = b or {}
     bloqueos = (b.get("he_pendientes", 0) + b.get("por_revisar", 0) + b.get("libreta_dias", 0)
-                + b.get("anomalias", 0) + b.get("otros_pendientes", 0) + b.get("en_curso", 0))
+                + b.get("anomalias", 0) + b.get("otros_pendientes", 0) + b.get("en_curso", 0)
+                + b.get("je_por_validar", 0))
     salida = {k: b.get(k, 0) for k in ("he_pendientes", "por_revisar", "libreta_dias", "libreta_personas",
-                                         "anomalias", "otros_pendientes", "en_curso", "inasistencias")}
+                                         "anomalias", "otros_pendientes", "en_curso", "inasistencias", "je_por_validar")}
     salida["he_minutos"] = _num(b.get("he_minutos"))
     salida["he_horas"] = round(salida["he_minutos"] / 60.0, 1)
     salida["fechas_por_revisar"] = b.get("fechas_por_revisar", [])
@@ -243,6 +244,7 @@ class DashboardPendientes:
                 "otros_pendientes": sum(1 for d in det.values() if d["estado"] == "PENDIENTE" and d["libreta"] == 0),
                 "en_curso": len(unicos(b["en_curso"])),
                 "inasistencias": len(unicos(b["inasistencias"])),
+                "je_por_validar": len(unicos(b["je_por_validar"])),
             }
             # Un día por revisar que también está en anomalía se cuenta una sola vez (como por revisar);
             # los que el detalle no encontró se cuentan como anomalía para no esconder un bloqueo.

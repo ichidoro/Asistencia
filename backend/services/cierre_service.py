@@ -435,10 +435,32 @@ class CierreService:
             logger.warning(f"Pre-evaluación: no se pudieron leer los días por revisar: {e_rev}")
             por_revisar = []
 
+        # ── HARD STOP 5: Jornadas especiales por validar (dueño, 15-11-2026) ───
+        # Un día libre o feriado trabajado sin decidir no se paga: el cierre no lo deja pasar (antes se cerraron meses con
+        # jornadas sin validar). Mismo criterio que «Jornadas por validar» del Dashboard: decidida = EXTRA, HORAS_EXTRAS o
+        # COMPENSATORIA; el +2 (COBERTURA_TURNO) ya no se valida aquí, va a las horas extra del día.
+        query_je = f"""
+            SELECT je.id, je.empleado_id, je.fecha, je.origen, je.minutos_trabajados, je.hora_entrada, je.hora_salida,
+                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
+                   ar.nombre AS area
+            FROM jornadas_especiales je
+            JOIN empleados e ON je.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND je.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR je.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE je.fecha BETWEEN ? AND ?
+              AND COALESCE(je.estado, '') NOT IN ('EXTRA', 'HORAS_EXTRAS', 'COMPENSATORIA')
+              AND COALESCE(je.origen, '') != 'COBERTURA_TURNO'
+            {filtro_area}
+            ORDER BY e.apellido_paterno, je.fecha
+        """
+        je_por_validar = await self.db.fetch_all(query_je, tuple([fecha_inicio, fecha_fin] + params_area))
+
         return {
             "params_area": params_area, "filtro_area": filtro_area,
             "he_pendientes": he_pendientes, "anomalias": anomalias, "en_curso": en_curso,
-            "inasistencias": inasistencias, "por_revisar": por_revisar,
+            "inasistencias": inasistencias, "por_revisar": por_revisar, "je_por_validar": je_por_validar,
             "ultimo_fin_estimado": ultimo_fin_estimado,
         }
 
@@ -467,6 +489,7 @@ class CierreService:
         params_area, filtro_area = b['params_area'], b['filtro_area']
         he_pendientes, anomalias, en_curso = b['he_pendientes'], b['anomalias'], b['en_curso']
         inasistencias, por_revisar = b['inasistencias'], b['por_revisar']
+        je_por_validar = b['je_por_validar']
         ultimo_fin_estimado = b['ultimo_fin_estimado']
 
         # ── Resumen ejecutivo siempre visible ─────────────────────────────────
@@ -516,12 +539,15 @@ class CierreService:
             and len(anomalias) == 0
             and len(en_curso) == 0
             and len(por_revisar) == 0
+            and len(je_por_validar) == 0
         )
 
         return {
             "puede_cerrar": puede_cerrar,
             "dias_por_revisar": len(por_revisar),
             "detalle_por_revisar": por_revisar,
+            "je_por_validar": len(je_por_validar),
+            "detalle_je": [dict(r) for r in je_por_validar],
             # Hard Stops
             "he_pendientes": len(he_pendientes),
             "detalle_he": [dict(r) for r in he_pendientes],
@@ -564,6 +590,11 @@ class CierreService:
             raise ValueError(
                 f"No se puede cerrar el periodo. Hay {evaluacion['dias_por_revisar']} días por revisar "
                 f"(Reglas de marcaciones): corrija sus marcas o confírmelos en «Marcaciones del día» antes de cerrar."
+            )
+        if evaluacion.get("je_por_validar", 0) > 0:
+            raise ValueError(
+                f"No se puede cerrar el periodo. Hay {evaluacion['je_por_validar']} jornadas especiales por validar "
+                f"(días libres o feriados trabajados): valídelas en la tarjeta de su día antes de cerrar."
             )
 
         # Validar Soft Stop
@@ -682,6 +713,9 @@ class CierreService:
         # Informe de cierre en PDF (uno por tipo de horario del área) y correo a RRHH. El Excel con el detalle día a
         # día ya no va adjunto: se descarga desde la aplicación (Reportes). Solo si los PDF fallan se adjunta el Excel,
         # para que RRHH no se quede sin el cierre.
+        # Lo que pasó con el correo vuelve al asistente para que su mensaje diga la verdad (dueño, 15-11-2026: decía «se envió
+        # a Recursos Humanos» aunque no había destinatarios): 'enviado', 'sin_destinatarios' o 'no_enviado'.
+        correo = "no_enviado"
         try:
             from backend.repositories.asistencia import AsistenciaRepository
             from backend.services.asistencia_service import AsistenciaService
@@ -717,9 +751,11 @@ class CierreService:
                                  "content": excel_file.getvalue()}]
 
             recipients = await ConfiguracionService(ConfiguracionRepository(self.db)).get_destinatarios_cierre(area)
+            if not recipients:
+                correo = "sin_destinatarios"
             if recipients:
                 logger.info(f"📧 Enviando email de notificación de cierre a {recipients}...")
-                await NotificationService().send_cierre_email(
+                enviado = await NotificationService().send_cierre_email(
                     area=area,
                     fecha_inicio=fecha_inicio,
                     fecha_fin=fecha_fin,
@@ -730,10 +766,11 @@ class CierreService:
                     recipients=recipients,
                     resumen_tipos=resumen_tipos
                 )
+                correo = "enviado" if enviado else "no_enviado"
             else:
                 logger.warning(f"⚠️ No hay destinatarios configurados para recibir la notificación de cierre de área '{area}'.")
         except Exception as e_email:
             logger.error(f"❌ Error al generar o enviar el correo de cierre: {e_email}")
 
-        return {"success": True, "message": "Periodo cerrado exitosamente.", "tipo_cierre": tipo_cierre}
+        return {"success": True, "message": "Periodo cerrado exitosamente.", "tipo_cierre": tipo_cierre, "correo": correo}
 

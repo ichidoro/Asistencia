@@ -57,6 +57,7 @@ function lecturaArea(a, tramo, hoy) {
   if (a.anomalias) partes.push(`${plural(a.anomalias, 'día', 'días')} con anomalía`);
   if (a.otros_pendientes) partes.push(`${plural(a.otros_pendientes, 'día', 'días')} sin calcular`);
   if (a.en_curso) partes.push(`${plural(a.en_curso, 'jornada', 'jornadas')} en curso`);
+  if (a.je_por_validar) partes.push(`${plural(a.je_por_validar, 'jornada especial', 'jornadas especiales')} por validar`);
   if (aceptar) partes.push(aceptar);
   let chip = 'Con pendientes';
   let accion = { label: 'Ver en la grilla', op: 'grilla' };
@@ -64,6 +65,8 @@ function lecturaArea(a, tramo, hoy) {
   else if (a.por_revisar) { chip = `Falta revisar ${plural(a.por_revisar, 'día', 'días')}`; accion = { label: 'Revisar días', op: 'revisar' }; }
   else if (a.he_pendientes) { chip = 'Faltan horas extra por decidir'; accion = { label: 'Decidir horas extra', op: 'he' }; }
   else if (a.anomalias) { chip = `${plural(a.anomalias, 'día', 'días')} con anomalía`; }
+  // Jornadas especiales por validar (dueño, 15-11-2026): frenan el cierre; el asistente las lista con su botón «Abrir»
+  else if (a.je_por_validar) { chip = 'Faltan jornadas por validar'; accion = { label: 'Ver en el cierre', op: 'cierre' }; }
   return { chip, por: partes.join(' · '), accion };
 }
 
