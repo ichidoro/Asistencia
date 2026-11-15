@@ -221,6 +221,42 @@ def _aplicar_alternada(consumidos: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     return [dict(l, tipo=('Entrada' if i % 2 == 0 else 'Salida')) for i, l in enumerate(orden)]
 
 
+def _marcas_como_las_lee_la_regla(marcas: List[Dict[str, Any]], tipo_prog: Optional[str]) -> List[Dict[str, Any]]:
+    """Las marcas con el tipo que les da la regla de marcaciones de su secuencia, para elegir el ciclo del día (dueño,
+    15-11-2026): con rotación el ciclo se elegía con el rótulo del reloj y la regla corregía el rótulo después (dos SALIDAS
+    a las 08:30 y 09:46: se medía solo la última SALIDA, ganaba el ciclo que termina a las 09:00 y la regla dejaba 270 min de
+    atraso contra las 04:00). Mismas condiciones que la regla en el día: Ciclo Inteligente, jornada terminada y una regla que
+    lee las marcas (no la que solo revisa). Solo cambia el tipo; ninguna marca sale de la lista. Devuelve copias."""
+    if tipo_prog != 'CICLO_INTELIGENTE' or not marcas:   # una sola marca: su regla no la lee (solo revisa)
+        return marcas
+    reglas = REGLAS_MARCAS_ENSAYO.get()
+    if reglas is None:
+        reglas = REGLAS_MARCAS_ACTIVAS
+    if not reglas:
+        return marcas
+    if max(str(m.get('fecha_hora', ''))[:10] for m in marcas) >= _get_now_local().strftime("%Y-%m-%d"):
+        return marcas
+    orden = sorted(marcas, key=lambda l: str(l.get('fecha_hora', '')))
+    letras = ''.join('E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E
+                     else ('S' if str(l.get('tipo', '')).strip().lower() in _TIPOS_S else '?') for l in orden)
+    regla = reglas.get(letras) if '?' not in letras else None
+    if not regla or regla.get('lectura') == 'NINGUNA' or regla.get('accion') == 'SOLO_REVISA':
+        return marcas
+    lectura = regla.get('lectura')
+    if lectura == 'ALTERNADA':
+        leidas = _aplicar_alternada(orden)
+    elif lectura == 'ORDEN':
+        leidas = _aplicar_orden(orden, str(regla.get('orden_marcas') or ''))
+    elif lectura == 'EXTREMOS':
+        leidas = _aplicar_extremos(orden, str(regla.get('colacion') or ''))
+    else:
+        return marcas
+    def _clave(l):
+        return ('id', l.get('id')) if l.get('id') is not None else ('hora', str(l.get('fecha_hora', '')))
+    tipo_leido = {_clave(l): l.get('tipo') for l in leidas}
+    return [dict(m, tipo=tipo_leido.get(_clave(m), m.get('tipo'))) for m in marcas]
+
+
 class QuantumPhaseTopology:
     """Manejo de tiempo modular y distancias geodésicas en el círculo unitario S^1 (24 horas = 1440 minutos)."""
     
@@ -954,6 +990,7 @@ class QuantumShiftWeekMatcher:
         f_asig_ini: Optional[datetime] = None,
         last_matched_sem: Optional[int] = None,
         rotacion_dinamica: bool = False,
+        tipo_programacion: Optional[str] = None,
     ) -> int:
         if total_sems <= 1:
             return 1
@@ -1038,6 +1075,8 @@ class QuantumShiftWeekMatcher:
                     abierta = es_e
 
         marcas_cand = marcas_hoy + marcas_madrugada_next
+        # El ciclo se elige con las marcas como las lee la regla de marcaciones del día, no con el rótulo del reloj
+        marcas_cand = _marcas_como_las_lee_la_regla(marcas_cand, tipo_programacion)
 
         if marcas_cand:
             min_phase_dist = float('inf')

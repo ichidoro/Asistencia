@@ -2171,6 +2171,7 @@ class AsistenciaService:
                     f_asig_ini=f_asig_ini,
                     last_matched_sem=last_matched_sem,
                     rotacion_dinamica=is_rot_dinamica,
+                    tipo_programacion=tipo_prog,
                 )
 
                 if bulk_ctx:
