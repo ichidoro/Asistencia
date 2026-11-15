@@ -8,3 +8,11 @@
 /frontend/js/sweetalert2.all.min.js
 # Dashboard compilado: su código original está en dashboard_build/src y el grafo ya lo lee.
 /frontend/js/dashboard_react.js
+# Carpeta de trabajo de Claude: ensayos con datos reales, capturas y copias de pantallas. Nunca va al mapa (se publica).
+/.claude/
+# Plan con nombres reales: solo en el PC de la persona dueña.
+/docs/PLAN_PENDIENTE_local.md
+# Íconos y logos: no tienen código ni texto que mapear.
+/frontend/assets/img/
+# La página principal (HTML, 4.400 líneas): leerla exige IA en cada actualización. Sus pantallas se ven por los JS.
+/frontend/index.html

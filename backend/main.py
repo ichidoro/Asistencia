@@ -218,6 +218,8 @@ app.include_router(llaves.router, prefix="/api", tags=["Entrega de Llaves"])
 app.include_router(flota.router, prefix="/api", tags=["Flota Aguacol"])
 app.include_router(reglas_marcas.router, prefix="/api", tags=["Reglas de marcaciones"])
 app.include_router(cuadre.router, prefix="/api", tags=["Cuadre"])
+from backend.routers import mapa_codigo  # noqa: E402  (Configuración → Mapa del código, solo súper administrador)
+app.include_router(mapa_codigo.router, prefix="/api", tags=["Mapa del código"])
 
 
 # ============================================

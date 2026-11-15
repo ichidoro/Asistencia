@@ -22,7 +22,9 @@ def test_el_codigo_ya_no_usa_viajes_largos():
     usos = []
     for carpeta in ("backend", "frontend"):
         for p in (RAIZ / carpeta).rglob("*"):
-            if p.suffix not in (".py", ".js", ".html", ".css") or "tests" in p.parts or "__pycache__" in p.parts:
+            # mapa_codigo: la copia publicada del grafo, que describe el código y sus documentos (no es código que se ejecute)
+            if (p.suffix not in (".py", ".js", ".html", ".css") or "tests" in p.parts or "__pycache__" in p.parts
+                    or "mapa_codigo" in p.parts):
                 continue
             if ".min." in p.name:
                 continue

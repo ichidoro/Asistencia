@@ -2495,3 +2495,61 @@ window.abrirModalCrearCargo = async function() {
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
+
+// ── Mapa del código (dueño, 15-11-2026) ────────────────────────────────────────────────────────────────────────────
+// El grafo de graphify, solo para el súper administrador. El servidor lo entrega con la sesión (no está en /static, que es
+// público); la página se arma en un Blob para el iframe. Arriba dice de cuándo es y cuántos archivos cambiaron después.
+window.cargarMapaCodigo = async function () {
+    const cont = document.getElementById('mapa-codigo-container');
+    if (!cont) return;
+    const e = window.escHtml || (t => String(t == null ? '' : t));
+    const h = { 'Authorization': 'Bearer ' + AuthService.getToken() };
+    const fecha = iso => { try { return new Date(iso).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' }); } catch (_) { return iso || ''; } };
+    cont.innerHTML = '<div class="text-muted py-4"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando el mapa del código…</div>';
+    let est;
+    try {
+        const r = await fetch('/api/configuracion/mapa-codigo/estado/', { headers: h });
+        est = await r.json();
+        if (!r.ok) throw new Error(est.detail || ('Error ' + r.status));
+    } catch (err) {
+        cont.innerHTML = '<div class="alert alert-danger">No se pudo leer el mapa: ' + e(err.message) + '</div>';
+        return;
+    }
+    const comoSeActualiza = '<p class="small text-muted mb-0">No se actualiza solo: en el PC de desarrollo, <code>scripts/publicar_mapa.py</code> '
+        + 'lo rehace con el código de ese momento, y se sube junto con cada cambio de código.</p>';
+    if (!est.publicado) {
+        cont.innerHTML = '<div class="fcB-h mb-3"><div><h2>Mapa del código</h2><p>Todavía no hay un mapa publicado.</p></div></div>' + comoSeActualiza;
+        return;
+    }
+    const n = (est.cambiados || []).length + (est.borrados || []).length;
+    const aviso = est.al_dia
+        ? '<span class="badge rounded-pill bg-success-subtle text-success-emphasis"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Al día con el código</span>'
+        : '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Desactualizado: '
+          + n + (n === 1 ? ' archivo cambió' : ' archivos cambiaron') + ' después de armarlo</span>';
+    const lista = n ? '<details class="mt-2 small"><summary style="cursor:pointer">Ver cuáles</summary><ul class="mb-0 mt-1">'
+        + (est.cambiados || []).map(f => '<li><code>' + e(f) + '</code></li>').join('')
+        + (est.borrados || []).map(f => '<li><code>' + e(f) + '</code> (ya no existe)</li>').join('') + '</ul></details>' : '';
+    cont.innerHTML = '<div class="fcB-h mb-2"><div><h2>Mapa del código</h2><p>Cómo se conectan los archivos y funciones de la aplicación (graphify). Solo lectura.</p></div></div>'
+        + '<div class="border rounded-3 bg-white p-3 mb-3"><div class="d-flex flex-wrap align-items-center gap-3">' + aviso
+        + '<span class="small text-nowrap">Armado el <b>' + e(fecha(est.armado)) + '</b></span>'
+        + (est.commit ? '<span class="small text-nowrap">sobre el commit <code>' + e(est.commit) + '</code></span>' : '')
+        + '<span class="small text-muted text-nowrap">' + e(est.archivos_comparados) + ' archivos comparados</span>'
+        + '<button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="mapa-codigo-abrir"><i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Abrir en otra pestaña</button>'
+        + '</div>' + lista + '<div class="mt-2">' + comoSeActualiza + '</div></div>'
+        + '<div class="border rounded-3 overflow-hidden mb-3" style="height:72vh;min-height:420px"><iframe id="mapa-codigo-iframe" title="Mapa del código" style="width:100%;height:100%;border:0" sandbox="allow-scripts allow-popups"></iframe></div>'
+        + '<details class="border rounded-3 bg-white p-3"><summary class="fw-semibold" style="cursor:pointer">Informe del mapa</summary><pre id="mapa-codigo-informe" class="small mt-2 mb-0" style="white-space:pre-wrap">Cargando…</pre></details>';
+    try {
+        const r = await fetch('/api/configuracion/mapa-codigo/grafo/', { headers: h });
+        if (!r.ok) throw new Error('Error ' + r.status);
+        const url = URL.createObjectURL(new Blob([await r.text()], { type: 'text/html' }));
+        if (window._mapaCodigoUrl) URL.revokeObjectURL(window._mapaCodigoUrl);
+        window._mapaCodigoUrl = url;
+        document.getElementById('mapa-codigo-iframe').src = url;
+        document.getElementById('mapa-codigo-abrir').onclick = () => window.open(url, '_blank', 'noopener');
+    } catch (err) {
+        document.getElementById('mapa-codigo-iframe').outerHTML = '<div class="alert alert-danger m-3">No se pudo cargar el mapa: ' + e(err.message) + '</div>';
+    }
+    fetch('/api/configuracion/mapa-codigo/informe/', { headers: h }).then(r => r.ok ? r.text() : Promise.reject(r.status))
+        .then(t => { document.getElementById('mapa-codigo-informe').textContent = t; })
+        .catch(() => { document.getElementById('mapa-codigo-informe').textContent = 'No se pudo cargar el informe.'; });
+};

@@ -12,14 +12,17 @@ Sistema de control de asistencia y horas de Aguacol. Backend en Python 3.13 con 
 - `frontend/`: pantallas HTML, CSS y JS.
 - `docs/DEPLOY_DOCKER_POSTGRES.md`: despliegue, respaldos y operación.
 - `backend/tests/`: pruebas con pytest.
-- `graphify-out/`: mapa del código generado con graphify (no va a git). Para orientarte en el proyecto, consulta el grafo antes de leer muchos archivos. Después de cambios grandes, actualízalo con /graphify.
+- `graphify-out/`: mapa del código generado con graphify (no va a git). Para orientarte en el proyecto, consulta el grafo antes de leer muchos archivos.
+- `backend/mapa_codigo/`: la copia publicada del mapa (sí va a git). Se ve en Configuración → Mapa del código, solo el súper administrador; la pantalla dice si quedó atrás del código. La arma `scripts/publicar_mapa.py`, que rehace el grafo del código (sin IA) y lo copia. Nunca debe incluir `.claude/` ni el plan con nombres (`.graphifyignore`).
 
 ## Reglas de trabajo
 
 - **Una sola rama: `main`.** Cada push a `main` se despliega solo en el servidor en ~1 minuto. No hagas push sin confirmación de la persona dueña.
 - Flujo de cada cambio: (a) programar y correr las pruebas en local con `.venv\Scripts\python.exe -m pytest backend\tests -q`; (b) resumir en palabras simples qué cambió y qué se probó, y preguntar ‘¿Subo a GitHub?’; (c) solo con el sí, hacer commit y push a main, incluyendo archivos pendientes como .gitignore o .graphifyignore; (d) el servidor se actualiza solo en ~1 minuto con deploy.sh; después comprobar que asistencia.aguacol.cl responde y revisar ~/asistencia/logs/autodeploy.log.
 - Antes de cada push a main, correr ./backup-postgres.sh en el servidor, porque deploy.sh no respalda la base.
+- **El mapa del código se sube con cada cambio de código.** Antes del commit, correr `.venv\Scripts\python.exe scripts\publicar_mapa.py` y sumar `backend/mapa_codigo/` al commit. Si cambiaron documentos .md importantes, antes correr `/graphify . --update`.
 - Las pruebas nuevas test_*.py se agregan con `git add -f`, porque el .gitignore las ignora.
+- **El plan se mantiene al día.** Cuando se termina o se decide algo de `docs/PLAN_PENDIENTE.md`, se actualiza en el mismo cambio, sin nombres (iniciales y horario), y también `docs/PLAN_PENDIENTE_local.md` (con nombres, no va a git).
 - **SQL compatible con PostgreSQL.** Los repositorios escriben SQL estilo SQLite. `backend/core/sql_compat.py` y `sql_groupby.py` lo traducen. Si escribes SQL nuevo, revisa esa traducción.
 - **Instancia de prueba apagada.** En el `.env` local deben quedar en `false`: `SYNC_ENABLED`, `SCRAPER_ENABLED`, `BACKUP_ENABLED` y `FEATURE_NOTIFICACIONES_EMAIL`. Una copia activa duplicaría marcaciones, correos y respaldos.
 - **Secretos fuera de git.** `.env` no se sube. No escribas contraseñas, claves ni tokens en código ni en documentos.
