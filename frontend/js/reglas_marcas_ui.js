@@ -336,7 +336,7 @@ const ReglasMarcasModule = (() => {
         return '<div class="rmx-card p-3 mt-3"><div class="fw-semibold mb-1">Secuencias encontradas sin regla</div>'
             + '<div class="text-muted" style="font-size:.84rem;">Mientras no tengan regla, el cálculo las lee como siempre. Cree su regla una vez: nace apagada y usted la configura y la corre cuando quiera.</div>'
             + '<div class="mt-2 d-flex flex-wrap gap-2">'
-            + sin.map(s => '<span class="rmx-card d-inline-flex align-items-center gap-2 px-2 py-1" style="font-size:.8rem;">' + chipsSecuencia(s.secuencia, false)
+            + sin.map(s => '<span class="rmx-card d-inline-flex flex-wrap align-items-center gap-2 px-2 py-1" style="font-size:.8rem;max-width:100%;">' + chipsSecuencia(s.secuencia, false)
                 + ' · ' + s.dias + ' días' + (canEdit() ? ' <button type="button" class="btn btn-sm btn-outline-primary py-0" data-rm-crear="' + esc(s.secuencia) + '">Crear regla</button>' : '') + '</span>').join('')
             + '</div></div>';
     }

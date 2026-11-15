@@ -192,7 +192,9 @@ function _escAttr(v) {
 function _estadoSiglaDefecto(codigo) { return codigo === 'JORNADA_ESPECIAL' ? 'ESP' : String(codigo).substring(0, 3); }
 // Vista previa idéntica a la grilla HD: la sigla en una pastilla de su color, dentro de una celda de día real (css/configuracion.css)
 function _estadoPreviewHtml(color, icono, sigla) {
-    return `<table class="matrix-table-premium mb-0 mx-auto" style="width:84px;border:0;background:transparent" aria-hidden="true"><tbody><tr>
+    // La vista previa usa la clase de la grilla para verse igual, pero no su ancho mínimo de tabla completa (en el teléfono
+    // la tabla de una celda quedaba de 1.200 px y se salía de la pantalla)
+    return `<table class="matrix-table-premium mb-0 mx-auto" style="width:84px !important;min-width:0 !important;border:0;background:transparent" aria-hidden="true"><tbody><tr>
         <td class="col-day text-center p-0" style="height:38px;min-width:0;width:84px;border:1px solid #e2e8f0;background:#fff;position:relative;overflow:visible">
             <span class="badge-status ${_escAttr(color)}"><span><i class="bi ${_escAttr(icono || 'bi-circle')}"></i>${_escAttr(sigla)}</span></span>
         </td></tr></tbody></table>`;

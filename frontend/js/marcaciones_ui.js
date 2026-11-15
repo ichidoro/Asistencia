@@ -580,7 +580,7 @@ function renderMarcacionesToolbar(container) {
                 <!-- Filtro Tiempo (Dinámico) -->
                 <div class="col-12 col-md-6 col-lg-5 col-xxl-3">
                     <div id="filter-time-rrhh">
-                        <div class="d-flex gap-2">
+                        <div class="d-flex flex-wrap gap-2">
                             <div class="flex-grow-1">
                                 <label for="rrhh-fecha-inicio" class="form-label small fw-semibold text-muted mb-1">Desde</label>
                                 <input type="date" class="form-control form-control-sm" id="rrhh-fecha-inicio" 
