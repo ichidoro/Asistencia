@@ -54,6 +54,16 @@ async def estado(current_user: SecurityContext = Depends(RequirePermission("conf
     return estado_del_mapa()
 
 
+@router.get("/hallazgos/")
+async def hallazgos(current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))):
+    """Lo que el análisis del código encontró, en datos para mostrar en palabras (lo arma scripts/hallazgos_codigo.py)."""
+    _solo_super(current_user)
+    f = CARPETA / "hallazgos.json"
+    if not f.exists():
+        raise HTTPException(status_code=404, detail="Todavía no hay hallazgos publicados.")
+    return json.loads(f.read_text(encoding="utf-8"))
+
+
 @router.get("/grafo/", response_class=HTMLResponse)
 async def grafo(current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))):
     _solo_super(current_user)

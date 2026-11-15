@@ -1,0 +1,343 @@
+{
+ "archivos_revisados": 165,
+ "repetidas": {
+  "total": 141,
+  "top": [
+   {
+    "nombre": "esc",
+    "archivos": [
+     "frontend/js/articulo22_ui.js",
+     "frontend/js/buscador.js",
+     "frontend/js/compensar_inasistencia.js",
+     "frontend/js/config_ficha.js",
+     "frontend/js/configuracion_ui.js",
+     "frontend/js/contratos_ui.js",
+     "frontend/js/cuadre_ui.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/llaves_ui.js",
+     "frontend/js/main.js",
+     "frontend/js/marcaciones_ui.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/reglas_marcas_ui.js",
+     "frontend/js/reincorporacion_ui.js",
+     "frontend/js/tarjeta_dia.js",
+     "frontend/js/ui_dialogs.js",
+     "frontend/js/velocidades_ui.js"
+    ]
+   },
+   {
+    "nombre": "pintar",
+    "archivos": [
+     "frontend/js/articulo22_ui.js",
+     "frontend/js/buscador.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/llaves_ui.js",
+     "frontend/js/personas_hd.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/tarjeta_dia.js",
+     "frontend/js/ui_dialogs.js",
+     "frontend/js/velocidades_ui.js"
+    ]
+   },
+   {
+    "nombre": "init",
+    "archivos": [
+     "frontend/js/buscador.js",
+     "frontend/js/configuracion_ui.js",
+     "frontend/js/personas_hd.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/porteria_ui.js",
+     "frontend/js/reglas_marcas_ui.js",
+     "frontend/js/sidebar_riel.js",
+     "frontend/js/ui_dialogs.js"
+    ]
+   },
+   {
+    "nombre": "cargar",
+    "archivos": [
+     "backend/services/reglas_marcas_runtime.py",
+     "frontend/js/cuadre_ui.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/marcaciones_manuales.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/velocidades_ui.js"
+    ]
+   },
+   {
+    "nombre": "main",
+    "archivos": [
+     "scripts/comparar_marcas_fuente.py",
+     "scripts/diagnostico_turno_noche.py",
+     "scripts/exportar_ciclos_periodo.py",
+     "scripts/exportar_turnos_ciclo.py",
+     "scripts/horas_art22_empleado.py",
+     "scripts/publicar_mapa.py"
+    ]
+   },
+   {
+    "nombre": "puede",
+    "archivos": [
+     "frontend/js/articulo22_ui.js",
+     "frontend/js/buscador.js",
+     "frontend/js/config_ficha.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/tarjeta_dia.js"
+    ]
+   },
+   {
+    "nombre": "_norm",
+    "archivos": [
+     "backend/core/sql_groupby.py",
+     "backend/services/comunas_geo.py",
+     "backend/services/gps_nexacol.py",
+     "backend/services/informe_cierre_pdf.py",
+     "backend/services/telegram_porteria.py"
+    ]
+   },
+   {
+    "nombre": "ddmm",
+    "archivos": [
+     "dashboard_build/src/DashboardApp.jsx",
+     "frontend/js/calendario_ui.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/tarjeta_dia.js",
+     "frontend/js/velocidades_ui.js"
+    ]
+   },
+   {
+    "nombre": "fmt",
+    "archivos": [
+     "dashboard_build/src/ui.jsx",
+     "frontend/js/configuracion_ui.js",
+     "frontend/js/cuadre_ui.js",
+     "frontend/js/horarios.js",
+     "frontend/js/marcaciones_ui.js"
+    ]
+   },
+   {
+    "nombre": "hhmm",
+    "archivos": [
+     "dashboard_build/src/DashboardApp.jsx",
+     "frontend/js/articulo22_ui.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/tarjeta_dia.js"
+    ]
+   }
+  ]
+ },
+ "funciones_largas": {
+  "total": 1316,
+  "top": [
+   {
+    "funcion": "_solve_core",
+    "archivo": "backend/services/quantum_matrix_engine.py",
+    "lineas": 820
+   },
+   {
+    "funcion": "sync_marcaciones",
+    "archivo": "backend/services/sync_service.py",
+    "lineas": 695
+   },
+   {
+    "funcion": "reprocesar_periodo_empleado",
+    "archivo": "backend/services/asistencia_service.py",
+    "lineas": 646
+   },
+   {
+    "funcion": "procesar_empleado_dia",
+    "archivo": "backend/services/asistencia_service.py",
+    "lineas": 563
+   },
+   {
+    "funcion": "_generate_excel_workbook",
+    "archivo": "backend/services/report_service.py",
+    "lineas": 560
+   },
+   {
+    "funcion": "init_tables",
+    "archivo": "backend/repositories/turno.py",
+    "lineas": 558
+   },
+   {
+    "funcion": "init_tables",
+    "archivo": "backend/repositories/configuracion.py",
+    "lineas": 451
+   },
+   {
+    "funcion": "get_matrix_data_with_projections",
+    "archivo": "backend/services/asistencia_service.py",
+    "lineas": 451
+   },
+   {
+    "funcion": "_calcular_filas",
+    "archivo": "backend/services/report_service.py",
+    "lineas": 316
+   },
+   {
+    "funcion": "get_bulk_context",
+    "archivo": "backend/services/asistencia_service.py",
+    "lineas": 312
+   }
+  ]
+ },
+ "archivos_grandes": [
+  {
+   "archivo": "frontend/js/marcaciones_ui.js",
+   "lineas": 9909
+  },
+  {
+   "archivo": "frontend/js/marcaciones_manuales.js",
+   "lineas": 5217
+  },
+  {
+   "archivo": "backend/routers/asistencia.py",
+   "lineas": 4178
+  },
+  {
+   "archivo": "backend/services/asistencia_service.py",
+   "lineas": 3520
+  },
+  {
+   "archivo": "frontend/js/sync_wizard.js",
+   "lineas": 3239
+  },
+  {
+   "archivo": "frontend/js/main.js",
+   "lineas": 2953
+  },
+  {
+   "archivo": "backend/services/quantum_matrix_engine.py",
+   "lineas": 2810
+  },
+  {
+   "archivo": "frontend/js/configuracion_ui.js",
+   "lineas": 2606
+  },
+  {
+   "archivo": "frontend/js/productos_4.js",
+   "lineas": 1918
+  },
+  {
+   "archivo": "backend/services/sync_service.py",
+   "lineas": 1862
+  }
+ ],
+ "sql_en_routers": {
+  "total": 177,
+  "top": [
+   {
+    "archivo": "backend/routers/asistencia.py",
+    "consultas": 57
+   },
+   {
+    "archivo": "backend/routers/configuracion.py",
+    "consultas": 33
+   },
+   {
+    "archivo": "backend/routers/articulo22.py",
+    "consultas": 15
+   },
+   {
+    "archivo": "backend/routers/llaves.py",
+    "consultas": 15
+   },
+   {
+    "archivo": "backend/routers/porteria.py",
+    "consultas": 13
+   },
+   {
+    "archivo": "backend/routers/flota.py",
+    "consultas": 8
+   },
+   {
+    "archivo": "backend/routers/visitas.py",
+    "consultas": 8
+   },
+   {
+    "archivo": "backend/routers/cierre.py",
+    "consultas": 7
+   },
+   {
+    "archivo": "backend/routers/productos_4.py",
+    "consultas": 7
+   },
+   {
+    "archivo": "backend/routers/sync.py",
+    "consultas": 7
+   }
+  ]
+ },
+ "sin_uso": [
+  {
+   "funcion": "get_table_names",
+   "archivo": "backend/core/database.py"
+  },
+  {
+   "funcion": "save_setting",
+   "archivo": "backend/core/database.py"
+  },
+  {
+   "funcion": "get_empleado_service_internal",
+   "archivo": "backend/core/events.py"
+  },
+  {
+   "funcion": "get_cierres_bulk",
+   "archivo": "backend/repositories/asistencia.py"
+  },
+  {
+   "funcion": "get_turno_detalle_dia",
+   "archivo": "backend/repositories/asistencia.py"
+  },
+  {
+   "funcion": "save_cierre_periodo",
+   "archivo": "backend/repositories/asistencia.py"
+  },
+  {
+   "funcion": "toggle_condonacion_deuda",
+   "archivo": "backend/repositories/asistencia.py"
+  },
+  {
+   "funcion": "is_feriado",
+   "archivo": "backend/repositories/calendario.py"
+  },
+  {
+   "funcion": "get_vehiculo_by_patente",
+   "archivo": "backend/repositories/flota.py"
+  },
+  {
+   "funcion": "get_embudo_he",
+   "archivo": "backend/repositories/hora_extra.py"
+  },
+  {
+   "funcion": "save_raw_log",
+   "archivo": "backend/repositories/turno.py"
+  },
+  {
+   "funcion": "_apply_rounding",
+   "archivo": "backend/services/asistencia_service.py"
+  },
+  {
+   "funcion": "replicar_libreta_chofer",
+   "archivo": "backend/services/asistencia_service.py"
+  },
+  {
+   "funcion": "evaluar_bonos_mes",
+   "archivo": "backend/services/bono_service.py"
+  },
+  {
+   "funcion": "audit_all_assignments",
+   "archivo": "backend/services/configuracion_service.py"
+  },
+  {
+   "funcion": "repair_all_period_inconsistencies",
+   "archivo": "backend/services/empleado_service.py"
+  },
+  {
+   "funcion": "draw",
+   "archivo": "backend/services/informe_cierre_pdf.py"
+  }
+ ],
+ "ciclos": []
+}

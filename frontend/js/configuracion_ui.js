@@ -2529,26 +2529,76 @@ window.cargarMapaCodigo = async function () {
     const lista = n ? '<details class="mt-2 small"><summary style="cursor:pointer">Ver cuáles</summary><ul class="mb-0 mt-1">'
         + (est.cambiados || []).map(f => '<li><code>' + e(f) + '</code></li>').join('')
         + (est.borrados || []).map(f => '<li><code>' + e(f) + '</code> (ya no existe)</li>').join('') + '</ul></details>' : '';
-    cont.innerHTML = '<div class="fcB-h mb-2"><div><h2>Mapa del código</h2><p>Cómo se conectan los archivos y funciones de la aplicación (graphify). Solo lectura.</p></div></div>'
+    // Lo primero son los hallazgos en palabras (dueño, 15-11-2026: «para mí el grafo es solo ver puntos»); el grafo queda
+    // como detalle para quien programa y se pide recién al abrirlo (pesa unos 5 MB).
+    cont.innerHTML = '<div class="fcB-h mb-2"><div><h2>Mapa del código</h2><p>Lo que muestra el análisis del código de la aplicación: dónde conviene mejorar. Solo lectura.</p></div></div>'
         + '<div class="border rounded-3 bg-white p-3 mb-3"><div class="d-flex flex-wrap align-items-center gap-3">' + aviso
         + '<span class="small text-nowrap">Armado el <b>' + e(fecha(est.armado)) + '</b></span>'
         + (est.commit ? '<span class="small text-nowrap">sobre el commit <code>' + e(est.commit) + '</code></span>' : '')
         + '<span class="small text-muted text-nowrap">' + e(est.archivos_comparados) + ' archivos comparados</span>'
-        + '<button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="mapa-codigo-abrir"><i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Abrir en otra pestaña</button>'
         + '</div>' + lista + '<div class="mt-2">' + comoSeActualiza + '</div></div>'
-        + '<div class="border rounded-3 overflow-hidden mb-3" style="height:72vh;min-height:420px"><iframe id="mapa-codigo-iframe" title="Mapa del código" style="width:100%;height:100%;border:0" sandbox="allow-scripts allow-popups"></iframe></div>'
-        + '<details class="border rounded-3 bg-white p-3"><summary class="fw-semibold" style="cursor:pointer">Informe del mapa</summary><pre id="mapa-codigo-informe" class="small mt-2 mb-0" style="white-space:pre-wrap">Cargando…</pre></details>';
+        + '<div id="mapa-codigo-hallazgos" class="d-flex flex-column gap-3 mb-3"><div class="text-muted small">Cargando los hallazgos…</div></div>'
+        + '<details id="mapa-codigo-grafo-det" class="border rounded-3 bg-white p-3 mb-3"><summary class="fw-semibold" style="cursor:pointer">Ver el grafo (para quien programa)</summary>'
+        + '<div class="d-flex justify-content-end my-2"><button type="button" class="btn btn-sm btn-outline-primary" id="mapa-codigo-abrir" disabled><i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Abrir en otra pestaña</button></div>'
+        + '<div class="border rounded-3 overflow-hidden" style="height:72vh;min-height:420px"><iframe id="mapa-codigo-iframe" title="Mapa del código" style="width:100%;height:100%;border:0" sandbox="allow-scripts allow-popups"></iframe></div></details>'
+        + '<details class="border rounded-3 bg-white p-3"><summary class="fw-semibold" style="cursor:pointer">Informe técnico del mapa</summary><pre id="mapa-codigo-informe" class="small mt-2 mb-0" style="white-space:pre-wrap">Cargando…</pre></details>';
+
+    const tarjeta = (titulo, porQue, cuerpo) => '<section class="border rounded-3 bg-white p-3"><h3 class="h6 fw-bold mb-1">' + titulo + '</h3>'
+        + '<p class="small text-muted mb-2">' + porQue + '</p>' + cuerpo + '</section>';
+    const tabla = (cabeza, filas) => filas.length ? '<div class="table-responsive"><table class="table table-sm small mb-0"><thead><tr>'
+        + cabeza.map(c => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>' + filas.map(f => '<tr>' + f.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('')
+        + '</tbody></table></div>' : '<p class="small mb-0 text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>No se encontró ninguno.</p>';
+    const num = v => Number(v || 0).toLocaleString('es-CL');
+    const dondeCorto = lista2 => '<span class="text-muted">' + lista2.slice(0, 4).map(a => e(a.split('/').pop())).join(', ') + (lista2.length > 4 ? '…' : '') + '</span>';
     try {
-        const r = await fetch('/api/configuracion/mapa-codigo/grafo/', { headers: h });
-        if (!r.ok) throw new Error('Error ' + r.status);
-        const url = URL.createObjectURL(new Blob([await r.text()], { type: 'text/html' }));
-        if (window._mapaCodigoUrl) URL.revokeObjectURL(window._mapaCodigoUrl);
-        window._mapaCodigoUrl = url;
-        document.getElementById('mapa-codigo-iframe').src = url;
-        document.getElementById('mapa-codigo-abrir').onclick = () => window.open(url, '_blank', 'noopener');
+        const r = await fetch('/api/configuracion/mapa-codigo/hallazgos/', { headers: h });
+        const hz = await r.json();
+        if (!r.ok) throw new Error(hz.detail || ('Error ' + r.status));
+        const rep = hz.repetidas || {}, lar = hz.funciones_largas || {}, sql = hz.sql_en_routers || {};
+        const sinUso = hz.sin_uso || [], ciclos = hz.ciclos || [];
+        document.getElementById('mapa-codigo-hallazgos').innerHTML = [
+            tarjeta('1. Funciones con el mismo nombre en varios archivos (' + num(rep.total) + ')',
+                'Puede ser la misma ayuda escrita varias veces: si se corrige un error en una, las demás lo siguen teniendo. Revisar las primeras: si hacen lo mismo, conviene dejar una sola.',
+                tabla(['Nombre', 'Archivos', 'Dónde'], (rep.top || []).map(x => ['<code>' + e(x.nombre) + '</code>', num(x.archivos.length), dondeCorto(x.archivos)]))),
+            tarjeta('2. Las funciones más largas del servidor',
+                'Una función muy larga es difícil de leer y de probar por partes; cambiarla es más riesgoso. Las del cálculo se parten en pasos chicos, con la prueba guardiana.',
+                tabla(['Función', 'Líneas', 'Archivo'], (lar.top || []).map(x => ['<code>' + e(x.funcion) + '</code>', num(x.lineas), '<span class="text-muted">' + e(x.archivo) + '</span>']))),
+            tarjeta('3. Los archivos más grandes',
+                'Un archivo enorme mezcla temas: cuesta encontrar las cosas y un cambio toca muchas líneas.',
+                tabla(['Archivo', 'Líneas'], (hz.archivos_grandes || []).map(x => [e(x.archivo), num(x.lineas)]))),
+            tarjeta('4. Consultas a la base escritas en los routers (' + num(sql.total) + ')',
+                'Lo ordenado es que las consultas vivan en los repositorios; repartidas en los routers cuesta revisar su traducción a PostgreSQL.',
+                tabla(['Archivo', 'Consultas'], (sql.top || []).map(x => [e(x.archivo), num(x.consultas)]))),
+            tarjeta('5. Funciones que nadie usa (' + num(sinUso.length) + ')',
+                'Nadie las llama según el grafo y su nombre no aparece en otra parte del código. Son candidatas: revisar una por una antes de borrarlas.',
+                tabla(['Función', 'Archivo'], sinUso.map(x => ['<code>' + e(x.funcion) + '</code>', '<span class="text-muted">' + e(x.archivo) + '</span>']))),
+            tarjeta('6. Dependencias circulares (' + num(ciclos.length) + ')',
+                'Dos archivos que se necesitan mutuamente: un cambio en uno puede romper el otro.',
+                tabla(['Ciclo'], ciclos.map(c => ['<code>' + e(c) + '</code>']))),
+        ].join('');
     } catch (err) {
-        document.getElementById('mapa-codigo-iframe').outerHTML = '<div class="alert alert-danger m-3">No se pudo cargar el mapa: ' + e(err.message) + '</div>';
+        document.getElementById('mapa-codigo-hallazgos').innerHTML = '<div class="alert alert-warning mb-0">No se pudieron leer los hallazgos: ' + e(err.message) + '</div>';
     }
+
+    const det = document.getElementById('mapa-codigo-grafo-det');
+    const cargarGrafo = async () => {
+        if (!det.open) return;
+        det.removeEventListener('toggle', cargarGrafo);
+        try {
+            const r = await fetch('/api/configuracion/mapa-codigo/grafo/', { headers: h });
+            if (!r.ok) throw new Error('Error ' + r.status);
+            const url = URL.createObjectURL(new Blob([await r.text()], { type: 'text/html' }));
+            if (window._mapaCodigoUrl) URL.revokeObjectURL(window._mapaCodigoUrl);
+            window._mapaCodigoUrl = url;
+            document.getElementById('mapa-codigo-iframe').src = url;
+            const b = document.getElementById('mapa-codigo-abrir');
+            b.disabled = false;
+            b.onclick = () => window.open(url, '_blank', 'noopener');
+        } catch (err) {
+            document.getElementById('mapa-codigo-iframe').outerHTML = '<div class="alert alert-danger m-3">No se pudo cargar el grafo: ' + e(err.message) + '</div>';
+        }
+    };
+    det.addEventListener('toggle', cargarGrafo);
     fetch('/api/configuracion/mapa-codigo/informe/', { headers: h }).then(r => r.ok ? r.text() : Promise.reject(r.status))
         .then(t => { document.getElementById('mapa-codigo-informe').textContent = t; })
         .catch(() => { document.getElementById('mapa-codigo-informe').textContent = 'No se pudo cargar el informe.'; });

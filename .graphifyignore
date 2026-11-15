@@ -16,3 +16,5 @@
 /frontend/assets/img/
 # La página principal (HTML, 4.400 líneas): leerla exige IA en cada actualización. Sus pantallas se ven por los JS.
 /frontend/index.html
+# La copia publicada del propio mapa: si se lee, el mapa se describe a sí mismo.
+/backend/mapa_codigo/

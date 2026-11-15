@@ -53,3 +53,18 @@ def test_no_va_por_static_ni_trae_la_carpeta_de_trabajo():
         if os.path.exists(f):
             texto = open(f, encoding='utf-8', errors='replace').read()
             assert '.claude/' not in texto and 'PLAN_PENDIENTE_local' not in texto
+
+
+def test_hallazgos_se_calculan_sin_umbrales(tmp_path):
+    import sys
+    sys.path.insert(0, os.path.join(R, 'scripts'))
+    from hallazgos_codigo import analizar
+    (tmp_path / 'backend' / 'routers').mkdir(parents=True)
+    (tmp_path / 'frontend' / 'js').mkdir(parents=True)
+    (tmp_path / 'frontend' / 'js' / 'a.js').write_text('function esc(t){return t}\nconst fmt = (m) => m;', encoding='utf-8')
+    (tmp_path / 'frontend' / 'js' / 'b.js').write_text('function esc(t){return t}', encoding='utf-8')
+    (tmp_path / 'backend' / 'routers' / 'r.py').write_text('async def f(db):\n    await db.fetch_all("x")\n    await db.execute("y")\n', encoding='utf-8')
+    h = analizar(tmp_path)
+    assert h['repetidas']['top'][0] == {'nombre': 'esc', 'archivos': ['frontend/js/a.js', 'frontend/js/b.js']}
+    assert h['sql_en_routers']['top'] == [{'archivo': 'backend/routers/r.py', 'consultas': 2}]
+    assert h['funciones_largas']['top'][0]['funcion'] == 'f'

@@ -100,6 +100,13 @@ def main() -> int:
         'archivos': archivos,
     }
     (DESTINO / 'meta.json').write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding='utf-8')
+    # Hallazgos en palabras para la pantalla (repetidos, funciones largas, SQL en routers, sin uso, ciclos)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from hallazgos_codigo import analizar
+    grafo_json = ORIGEN / 'graph.json'
+    hallazgos = analizar(RAIZ, json.loads(grafo_json.read_text(encoding='utf-8')) if grafo_json.exists() else None,
+                         informe.read_text(encoding='utf-8', errors='replace'))
+    (DESTINO / 'hallazgos.json').write_text(json.dumps(hallazgos, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'Mapa publicado en {DESTINO} (commit {commit or "?"}, {len(archivos)} archivos con huella).')
     return 0
 
