@@ -524,6 +524,12 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - **Ensayos:** con el respaldo, **idéntico**. El respaldo tiene 4 días con reasignación manual (de una persona) y entran en el ensayo. Guardando en la copia de práctica, los de las partes 12, 13 y 14: **idénticos**.
 - Pasan las 577 pruebas.
 
+**Avance (16-11-2026): paso 2d hecho; con él, el paso 2 completo.** El final de `procesar_empleado_dia` (60 líneas) pasó a `_cerrar_dia`, con el mismo texto (comparado línea por línea): completar el resultado (persona, fecha, turno y semana ganadora), anotar las marcas que usó el día, la trazabilidad de una reasignación manual y el guardado de la jornada especial, las horas extra y el día. Completa el mismo resultado que recibe, y `procesar_empleado_dia` lo devuelve como antes.
+- `procesar_empleado_dia` bajó de 563 a 215 líneas, con cinco piezas con nombre.
+- **Ensayos:** con el respaldo, **idéntico**. Guardando en la copia de práctica, los de las partes 12, 13 y 14: **idénticos**. También el de la parte 10 (marcas manuales): recalcula un día a la vez guardando, el único camino que desde aquí vuelve a repartir el cuadre. **Idéntico.**
+- Una revisión de nombres confirmó que no falta ninguna variable.
+- Pasan las 577 pruebas.
+
 ---
 
 ## 7. Lo que no promete este plan

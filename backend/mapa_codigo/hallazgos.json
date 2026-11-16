@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1436,
+  "total": 1437,
   "top": [
    {
     "funcion": "_solve_core",
@@ -200,7 +200,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3417
+   "lineas": 3430
   },
   {
    "archivo": "frontend/js/sync_wizard.js",

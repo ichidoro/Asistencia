@@ -2222,6 +2222,75 @@ class AsistenciaService:
         return consumidas_emp, raw_logs, asist_row_manual
 
 
+    async def _cerrar_dia(self, *, resultado: Dict[str, Any], empleado_id: int, fecha: str, save: bool, manual_override: bool,
+                          asignacion: Optional[Dict], semana_ganadora, consumidas_emp: set, asist_row_manual: Optional[Dict],
+                          je_prev: Optional[Dict], bulk_ctx: Optional[Dict]) -> None:
+        """Final de procesar_empleado_dia: completa el resultado (persona, fecha, turno y semana ganadora), anota las
+        marcas que usó el día (en el resultado y en las marcas ya usadas de la sesión), deja la trazabilidad de una
+        reasignación manual y, si se guarda, guarda la jornada especial, las horas extra y el día. Completa el mismo
+        diccionario que recibe. Mismo código que estaba en procesar_empleado_dia."""
+        # ── METADATOS DE CONTEXTO (no son cálculo) ───────────────────────────
+        resultado['empleado_id'] = empleado_id
+        resultado['fecha'] = fecha
+        if not manual_override:
+            resultado['turno_asignado_id'] = (asignacion.get('id') or asignacion.get('turno_id')) if asignacion else None
+        resultado['num_semana_ganadora'] = semana_ganadora
+        resultado['_manual_override'] = manual_override
+
+        # ── AGOTAMIENTO ATÓMICO DE MARCAS (MEMORIA DE SESIÓN) ────────────────
+        raw_c_ids = resultado.get('marcas_consumidas_ids') or []
+        if isinstance(raw_c_ids, str):
+            try:
+                raw_c_ids = json.loads(raw_c_ids)
+            except Exception:
+                raw_c_ids = []
+        ids_consumidos = []
+        for mid in raw_c_ids:
+            if mid:
+                m_int = int(mid)
+                ids_consumidos.append(m_int)
+                consumidas_emp.add(m_int)
+        m_auth_previo = resultado.get('_log_id_entrada')
+        if m_auth_previo:
+            ids_consumidos.append(int(m_auth_previo))
+            consumidas_emp.add(int(m_auth_previo))
+        resultado['marcas_consumidas_ids'] = json.dumps(ids_consumidos)
+
+        # ── TRAZABILIDAD DE REASIGNACIÓN MANUAL ──────────────────────────────
+        if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL':
+            resultado['origen'] = 'MANUAL'
+            obs_manual = asist_row_manual.get('observaciones') or ''
+            if ('Reasignado' in obs_manual or 'reasignada' in obs_manual or '[MANUAL]' in obs_manual) \
+                    and obs_manual not in (resultado.get('observaciones') or ''):
+                resultado['observaciones'] = f"{obs_manual} | {resultado.get('observaciones', '')}".strip(" |")
+
+        # ── PERSISTENCIA (I/O PURO) ──────────────────────────────────────────
+        if save:
+            if not manual_override:
+                je_data = resultado.get('_jornada_especial')
+                if je_data:
+                    await self.repository.upsert_jornada_especial(je_data)
+                elif je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                    await self._delete_je_no_validada(empleado_id, fecha)
+
+            if float(resultado.get('minutos_extra_bruto') or 0) > 0:
+                await self.he_repo.upsert(
+                    empleado_id=empleado_id,
+                    fecha=fecha,
+                    minutos_bruto=resultado.get('minutos_extra_bruto', 0),
+                    minutos_autorizados=resultado.get('_he_minutos_autorizados', 0),
+                    estado=resultado.get('_he_estado') or 'PENDIENTE',
+                    reabrir=bool(resultado.get('_he_reabrir')),
+                )
+            elif not resultado.get('_he_conservar'):
+                # (día sin calcular con horas extra ya decididas: su fila queda tal cual)
+                await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+
+            await self.repository.upsert_asistencia(resultado)
+            if not bulk_ctx:
+                await self._reaplicar_politicas_cuadre([empleado_id], fecha)
+
+
     async def procesar_empleado_dia(
         self,
         empleado_id: int,
@@ -2431,66 +2500,10 @@ class AsistenciaService:
                     await self._delete_je_no_validada(empleado_id, fecha)
             return None
 
-        # ── METADATOS DE CONTEXTO (no son cálculo) ───────────────────────────
-        resultado['empleado_id'] = empleado_id
-        resultado['fecha'] = fecha
-        if not manual_override:
-            resultado['turno_asignado_id'] = (asignacion.get('id') or asignacion.get('turno_id')) if asignacion else None
-        resultado['num_semana_ganadora'] = semana_ganadora
-        resultado['_manual_override'] = manual_override
-
-        # ── AGOTAMIENTO ATÓMICO DE MARCAS (MEMORIA DE SESIÓN) ────────────────
-        raw_c_ids = resultado.get('marcas_consumidas_ids') or []
-        if isinstance(raw_c_ids, str):
-            try:
-                raw_c_ids = json.loads(raw_c_ids)
-            except Exception:
-                raw_c_ids = []
-        ids_consumidos = []
-        for mid in raw_c_ids:
-            if mid:
-                m_int = int(mid)
-                ids_consumidos.append(m_int)
-                consumidas_emp.add(m_int)
-        m_auth_previo = resultado.get('_log_id_entrada')
-        if m_auth_previo:
-            ids_consumidos.append(int(m_auth_previo))
-            consumidas_emp.add(int(m_auth_previo))
-        resultado['marcas_consumidas_ids'] = json.dumps(ids_consumidos)
-
-        # ── TRAZABILIDAD DE REASIGNACIÓN MANUAL ──────────────────────────────
-        if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL':
-            resultado['origen'] = 'MANUAL'
-            obs_manual = asist_row_manual.get('observaciones') or ''
-            if ('Reasignado' in obs_manual or 'reasignada' in obs_manual or '[MANUAL]' in obs_manual) \
-                    and obs_manual not in (resultado.get('observaciones') or ''):
-                resultado['observaciones'] = f"{obs_manual} | {resultado.get('observaciones', '')}".strip(" |")
-
-        # ── PERSISTENCIA (I/O PURO) ──────────────────────────────────────────
-        if save:
-            if not manual_override:
-                je_data = resultado.get('_jornada_especial')
-                if je_data:
-                    await self.repository.upsert_jornada_especial(je_data)
-                elif je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
-                    await self._delete_je_no_validada(empleado_id, fecha)
-
-            if float(resultado.get('minutos_extra_bruto') or 0) > 0:
-                await self.he_repo.upsert(
-                    empleado_id=empleado_id,
-                    fecha=fecha,
-                    minutos_bruto=resultado.get('minutos_extra_bruto', 0),
-                    minutos_autorizados=resultado.get('_he_minutos_autorizados', 0),
-                    estado=resultado.get('_he_estado') or 'PENDIENTE',
-                    reabrir=bool(resultado.get('_he_reabrir')),
-                )
-            elif not resultado.get('_he_conservar'):
-                # (día sin calcular con horas extra ya decididas: su fila queda tal cual)
-                await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
-
-            await self.repository.upsert_asistencia(resultado)
-            if not bulk_ctx:
-                await self._reaplicar_politicas_cuadre([empleado_id], fecha)
+        await self._cerrar_dia(resultado=resultado, empleado_id=empleado_id, fecha=fecha, save=save,
+                               manual_override=manual_override, asignacion=asignacion, semana_ganadora=semana_ganadora,
+                               consumidas_emp=consumidas_emp, asist_row_manual=asist_row_manual, je_prev=je_prev,
+                               bulk_ctx=bulk_ctx)
 
         return resultado
 
