@@ -738,69 +738,13 @@ class AsistenciaService:
             'fecha_destino': dict(res_dest) if res_dest else None
         }
 
-    async def reprocesar_periodo_empleado(
-        self,
-        empleado_id: int,
-        fecha_inicio: str,
-        fecha_fin: str,
-        force: bool = False,
-        job_id: Optional[str] = None,
-        feriados_preloaded: Optional[Dict] = None,
-        collect_only: bool = False,
-        ignore_closures: bool = False,
-        transformar_logs=None,
-    ) -> Dict[str, Any]:
-        """
-        transformar_logs: función que recibe las marcas leídas y devuelve las marcas a usar (simulación de una
-                          corrección en la ventana de revisión). Solo con collect_only=True.
-        Parámetros extra para modo batch:
-          feriados_preloaded: dict {fecha: descripcion} pre-cargado por el caller
-                              para evitar N llamadas a get_feriados() (1 por empleado).
-          collect_only:       Si True, NO escribe en la DB. Devuelve los resultados
-                              calculados en crudo para que el caller los persista en
-                              un solo execute_batch masivo al final del batch.
-        """
-
-        import time
-        _time = time.time
-        t0 = _time()
-
-        logger.debug(f"📊 Calculando asistencia empleado {empleado_id}: {fecha_inicio} a {fecha_fin} (Force: {force})")
-
-        start = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-        end = datetime.strptime(fecha_fin, "%Y-%m-%d")
-        db = self.repository.db
-
-        # Pre-carga ONE-SHOT
-        emp_row = await db.fetch_one("SELECT * FROM empleados WHERE id = ?", (empleado_id,))
-        if not emp_row:
-            return {'error': 'Empleado no encontrado'}
-
-        # Article 22 Compliance - Exclusión en reprocesamientos
-        if emp_row.get("excluido_asistencia"):
-            logger.info(f"📊 Omitiendo reprocesamiento para empleado {empleado_id} (Art. 22). Limpiando registros residuales...")
-            if collect_only:
-                delete_list = []
-                he_delete_list = []
-                curr = start
-                while curr <= end:
-                    f_str = curr.strftime("%Y-%m-%d")
-                    delete_list.append((empleado_id, f_str))
-                    he_delete_list.append((empleado_id, f_str))
-                    curr += timedelta(days=1)
-                return {
-                    '_collect': [],
-                    '_delete_collect': delete_list,
-                    '_he_collect': [],
-                    '_he_delete': he_delete_list,
-                    'status': 'omitted',
-                    'message': 'Empleado excluido por Art. 22'
-                }
-            else:
-                await db.execute("DELETE FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
-                await db.execute("DELETE FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
-                return {"status": "omitted", "message": "Empleado excluido por Art. 22"}
-
+    async def _precargar_periodo_empleado(self, db, empleado_id: int, fecha_inicio: str, fecha_fin: str, start: datetime,
+                                          end: datetime, feriados_preloaded: Optional[Dict], collect_only: bool,
+                                          ignore_closures: bool, transformar_logs) -> Dict[str, Any]:
+        """Lo que reprocesar_periodo_empleado lee de la base antes de recorrer los días: áreas y cierres (días cerrados),
+        turnos con sus días, justificaciones, intercambios, compensaciones, jornadas especiales, feriados, primera
+        asignación, períodos de empleo, marcas, días y horas extra guardados. Mismo código que estaba en esa función;
+        no decide nada del cálculo."""
         # Pre-cargar periodos cerrados para el empleado
         q_areas = """
             SELECT ha.fecha_desde, ha.fecha_hasta, a.nombre as area_nombre
@@ -1015,6 +959,108 @@ class AsistenciaService:
         )
         for h in he_rows:
             he_map[h['fecha']] = dict(h)
+
+        return {
+            'all_asignaciones': all_asignaciones,
+            'all_logs': all_logs,
+            'asistencias_map': asistencias_map,
+            'closed_dates': closed_dates,
+            'compensaciones_por_fecha': compensaciones_por_fecha,
+            'fechas_cerradas': fechas_cerradas,
+            'feriados_dict': feriados_dict,
+            'first_assignment': first_assignment,
+            'he_map': he_map,
+            'intercambios_por_fecha': intercambios_por_fecha,
+            'jornadas_especiales_por_fecha': jornadas_especiales_por_fecha,
+            'justs': justs,
+            'periodos': periodos,
+            'turno_detalles': turno_detalles,
+            'turno_ids': turno_ids,
+            'turno_weeks_count': turno_weeks_count,
+        }
+
+
+    async def reprocesar_periodo_empleado(
+        self,
+        empleado_id: int,
+        fecha_inicio: str,
+        fecha_fin: str,
+        force: bool = False,
+        job_id: Optional[str] = None,
+        feriados_preloaded: Optional[Dict] = None,
+        collect_only: bool = False,
+        ignore_closures: bool = False,
+        transformar_logs=None,
+    ) -> Dict[str, Any]:
+        """
+        transformar_logs: función que recibe las marcas leídas y devuelve las marcas a usar (simulación de una
+                          corrección en la ventana de revisión). Solo con collect_only=True.
+        Parámetros extra para modo batch:
+          feriados_preloaded: dict {fecha: descripcion} pre-cargado por el caller
+                              para evitar N llamadas a get_feriados() (1 por empleado).
+          collect_only:       Si True, NO escribe en la DB. Devuelve los resultados
+                              calculados en crudo para que el caller los persista en
+                              un solo execute_batch masivo al final del batch.
+        """
+
+        import time
+        _time = time.time
+        t0 = _time()
+
+        logger.debug(f"📊 Calculando asistencia empleado {empleado_id}: {fecha_inicio} a {fecha_fin} (Force: {force})")
+
+        start = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+        end = datetime.strptime(fecha_fin, "%Y-%m-%d")
+        db = self.repository.db
+
+        # Pre-carga ONE-SHOT
+        emp_row = await db.fetch_one("SELECT * FROM empleados WHERE id = ?", (empleado_id,))
+        if not emp_row:
+            return {'error': 'Empleado no encontrado'}
+
+        # Article 22 Compliance - Exclusión en reprocesamientos
+        if emp_row.get("excluido_asistencia"):
+            logger.info(f"📊 Omitiendo reprocesamiento para empleado {empleado_id} (Art. 22). Limpiando registros residuales...")
+            if collect_only:
+                delete_list = []
+                he_delete_list = []
+                curr = start
+                while curr <= end:
+                    f_str = curr.strftime("%Y-%m-%d")
+                    delete_list.append((empleado_id, f_str))
+                    he_delete_list.append((empleado_id, f_str))
+                    curr += timedelta(days=1)
+                return {
+                    '_collect': [],
+                    '_delete_collect': delete_list,
+                    '_he_collect': [],
+                    '_he_delete': he_delete_list,
+                    'status': 'omitted',
+                    'message': 'Empleado excluido por Art. 22'
+                }
+            else:
+                await db.execute("DELETE FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
+                await db.execute("DELETE FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
+                return {"status": "omitted", "message": "Empleado excluido por Art. 22"}
+
+        pc = await self._precargar_periodo_empleado(db, empleado_id, fecha_inicio, fecha_fin, start, end, feriados_preloaded,
+                                                    collect_only, ignore_closures, transformar_logs)
+        all_asignaciones = pc['all_asignaciones']
+        all_logs = pc['all_logs']
+        asistencias_map = pc['asistencias_map']
+        closed_dates = pc['closed_dates']
+        compensaciones_por_fecha = pc['compensaciones_por_fecha']
+        fechas_cerradas = pc['fechas_cerradas']
+        feriados_dict = pc['feriados_dict']
+        first_assignment = pc['first_assignment']
+        he_map = pc['he_map']
+        intercambios_por_fecha = pc['intercambios_por_fecha']
+        jornadas_especiales_por_fecha = pc['jornadas_especiales_por_fecha']
+        justs = pc['justs']
+        periodos = pc['periodos']
+        turno_detalles = pc['turno_detalles']
+        turno_ids = pc['turno_ids']
+        turno_weeks_count = pc['turno_weeks_count']
 
         # Asignaciones map por empleado — se recalcula por día dentro del loop
         # (No se usa aquí el asigned estático; la selección por fecha ocurre en el loop)
@@ -1368,7 +1414,7 @@ class AsistenciaService:
 
         # Los hechos cambiaron: la política del cuadre de la persona se vuelve a repartir sola, como en procesar_dia.
         # Va aunque la asistencia no cambie: validar un +2 como horas extra solo cambia su fila de horas extra
-        # (27-10-2026: el cuadre de Badilla y González quedó desfasado hasta el siguiente arranque).
+        # (27-10-2026: el cuadre de dos personas quedó desfasado hasta el siguiente arranque).
         await self._reaplicar_cuadre_en_fechas(empleado_id, fechas_abiertas(start, end, fechas_cerradas))
 
         t_total = int((_time() - t0) * 1000)

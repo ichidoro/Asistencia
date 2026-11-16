@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1428,
+  "total": 1429,
   "top": [
    {
     "funcion": "_solve_core",
@@ -142,11 +142,6 @@
     "funcion": "sync_marcaciones",
     "archivo": "backend/services/sync_service.py",
     "lineas": 695
-   },
-   {
-    "funcion": "reprocesar_periodo_empleado",
-    "archivo": "backend/services/asistencia_service.py",
-    "lineas": 646
    },
    {
     "funcion": "procesar_empleado_dia",
@@ -172,6 +167,11 @@
     "funcion": "get_matrix_data_with_projections",
     "archivo": "backend/services/asistencia_service.py",
     "lineas": 451
+   },
+   {
+    "funcion": "reprocesar_periodo_empleado",
+    "archivo": "backend/services/asistencia_service.py",
+    "lineas": 450
    },
    {
     "funcion": "_calcular_filas",
@@ -200,7 +200,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3274
+   "lineas": 3320
   },
   {
    "archivo": "frontend/js/sync_wizard.js",

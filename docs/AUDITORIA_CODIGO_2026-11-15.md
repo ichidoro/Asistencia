@@ -438,10 +438,51 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.
 
+**Plan detallado (16-11-2026, propuesto; falta el visto bueno de la persona dueña):**
+
+Partir no cambia ninguna regla. Cada pieza sale con el mismo código, en el mismo orden, y la función grande pasa a llamar a sus piezas. Las jornadas especiales (+2) y la libreta del Art. 25 bis no se tocan: sus partes quedan donde están.
+
+Tamaño hoy: `_solve_core` 820 líneas (en `quantum_matrix_engine.py`), `reprocesar_periodo_empleado` 646 y `procesar_empleado_dia` 563 (en `asistencia_service.py`).
+
+Se empieza por lo menos delicado (las lecturas y el guardado) y se termina con el corazón del cálculo:
+
+1. **`reprocesar_periodo_empleado`** (recalcula un período de una persona):
+   - 1a. La precarga: todo lo que lee de la base antes de empezar (ficha, áreas, cierres, turnos, justificaciones, intercambios, compensaciones, jornadas especiales, feriados, marcas, días y horas extra guardados).
+   - 1b. La semana de partida de los horarios con rotación.
+   - 1c. El cálculo de un día dentro del recorrido.
+   - 1d. El guardado final y el cuadre.
+2. **`procesar_empleado_dia`** (recalcula un día de una persona):
+   - 2a. La primera asignación y los casos en que el día no se calcula.
+   - 2b. El turno del día, con la reasignación manual.
+   - 2c. El contexto del día anterior.
+   - 2d. Las marcas usadas y el guardado.
+3. **`_solve_core`** (el cálculo de un día), por sus secciones numeradas:
+   - 3a. Ajustes y configuración del día (secciones 1 y 2).
+   - 3b. Las marcas disponibles y la ventana de observación (sección 3).
+   - 3c. Los bloques y las reglas de marcaciones (sección 4, unas 230 líneas).
+   - 3d. Una sola marca (sección 6).
+   - 3e. Varias marcas (sección 7).
+   - 3f. Colación y permisos (secciones 8 y 9).
+   - 3g. Atrasos y salidas adelantadas (sección 11).
+   - 3h. Bolsa y turnos ordinarios (sección 12).
+   - La sección 10 (separar la jornada especial) queda como está.
+
+Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
+
 **Cómo se prueba, en cada paso:**
-- La prueba guardiana de valores fijos en verde.
-- Un ensayo con los días reales del período abierto, en memoria (`collect_only`, sin guardar), que tiene que dar **0 diferencias** contra lo guardado.
+- **Ensayo de cálculo antes y después.** Antes de empezar, el código actual calcula en memoria (`collect_only`, sin guardar nada) todos los días de todas las personas, desde el primer período hasta hoy, y se guarda el resultado. Después de cada pieza se vuelve a calcular y se compara campo por campo: tiene que dar **0 diferencias**. Se compara código contra código, no contra lo guardado: lo guardado puede venir de reglas que cambiaron después.
+- El mismo ensayo pasa también por `procesar_empleado_dia` (un día a la vez, sin guardar), en una muestra de días de cada persona.
+- La conexión del ensayo va en modo solo lectura (`default_transaction_read_only`): aunque algo intentara guardar, la base lo rechaza.
+- **Datos del ensayo (decidido el 16-11-2026 por la persona dueña):** el respaldo de producción del 16-11-2026 restaurado en una base aparte del PC, solo para leer. Se borra al terminar la etapa 5. La copia de práctica (2 empleados de prueba) no alcanzaba.
+- Las 577 pruebas en verde, incluida la prueba guardiana de valores fijos.
 - Revisar contra `backend/docs/REGLAS_ASISTENCIA.md`.
+
+**De paso:** un comentario de `reprocesar_periodo_empleado` nombra a dos personas por su apellido. En el paso 1 se quitan los apellidos y queda «dos personas».
+
+**Avance (16-11-2026): paso 1a hecho.** La precarga de `reprocesar_periodo_empleado` (214 líneas: todo lo que lee de la base antes de recorrer los días) pasó a `_precargar_periodo_empleado`, con el mismo texto (comparado línea por línea con el original). La función grande la llama y toma de vuelta los 16 datos que usa después; quedó en 450 líneas.
+- Los apellidos del comentario se quitaron.
+- **Ensayo:** 114 personas, del 26-04 al 15-11-2026, con el reloj fijo. El cálculo devuelve 16.756 días y se probaron 2.586 días sueltos. Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**.
+- Pasan las 577 pruebas.
 
 ---
 

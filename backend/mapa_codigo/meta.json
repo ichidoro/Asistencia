@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-16T15:01:34+00:00",
- "publicado": "2026-11-16T15:01:35+00:00",
- "commit": "123ec76",
+ "armado": "2026-11-16T15:20:13+00:00",
+ "publicado": "2026-11-16T15:20:13+00:00",
+ "commit": "3c26675",
  "archivos_leidos": 261,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -78,7 +78,7 @@
   "backend/scraper/easytime_scraper.py": "7c78fd444720503f17635ff2f061d8d3",
   "backend/scripts/construir_limites_comunas.py": "f063dde8093b8c12bbb210acdbdbf22b",
   "backend/services/__init__.py": "c013e476a045ace63f511c034cdcb9d9",
-  "backend/services/asistencia_service.py": "4af8663ce7b15890a52d92c01da03652",
+  "backend/services/asistencia_service.py": "d3190932c166a9021ef2981bc986312c",
   "backend/services/bolsa_prorrateo.py": "2358999c2e56098b5bb82c6c1d865167",
   "backend/services/bono_service.py": "0939e64bf8788968b098a6ff6517cdc1",
   "backend/services/calendario_service.py": "3b2f97312fe56ddbcecd9225b0b41f7c",
