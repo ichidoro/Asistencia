@@ -1,17 +1,17 @@
 # Graph Report - Asistencia  (2026-11-16)
 
 ## Corpus Check
-- 252 files · ~505,502 words
+- 252 files · ~505,598 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 63 file(s) not represented in the graph (top: .css 33, .woff2 14, .ttf 6)
 
 ## Summary
-- 5050 nodes · 11785 edges · 259 communities (182 shown, 77 thin omitted)
-- Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 1664 edges (avg confidence: 0.9)
+- 5050 nodes · 11786 edges · 259 communities (182 shown, 77 thin omitted)
+- Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 1665 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `23a6d8b0`
+- Built from commit: `8c714807`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -254,7 +254,7 @@
 - FakeEmpleados
 
 ## God Nodes (most connected - your core abstractions)
-1. `SecurityContext` - 290 edges
+1. `SecurityContext` - 291 edges
 2. `AsistenciaService` - 148 edges
 3. `EmpleadoRepository` - 107 edges
 4. `AsistenciaRepository` - 102 edges
@@ -1026,8 +1026,8 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `SecurityContext` connect `SecurityContext` to `.get_by_rut`, `ConfiguracionService`, `Any`, `EmpleadoService`, `cierre.py`, `AsistenciaRepository`, `routers/productos_4.py`, `PorteriaRepository`, `ReglasMarcasRepository`, `turnos.py`, `AreaRepository`, `.get_expiring_contracts`, `routers/sync.py`, `FlotaRepository`, `delete`, `routers/reglas_marcas.py`, `create_catalogo_hallazgo`, `PeriodoRRHHCreate`, `update_rol`, `routers/configuracion.py`, `create_justificacion`, `routers/porteria.py`, `agregar_marcacion_manual`, `login_for_access_token`, `articulo22 + deshacer_porteria`, `get_catalogo_hallazgos`, `empleados.py`, `.get_empleado`, `json`, `delete_rol`, `_repo`, `Productos4Repository`, `CalendarioService`, `routers/cuadre.py`, `registrar_visita`, `registrar_movimiento`, `SeguridadRepository`, `_auditar`, `.get_all`, `RequireAnyPermission`, `obtener_metadatos`, `.get_expiring_contracts`, `ReportService`, `get_tipos_justificacion`?**
   _High betweenness centrality (0.082) - this node is a cross-community bridge._
-- **Are the 263 inferred relationships involving `SecurityContext` (e.g. with `exportar_excel()` and `get_empleados_art22()`) actually correct?**
-  _`SecurityContext` has 263 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 264 inferred relationships involving `SecurityContext` (e.g. with `exportar_excel()` and `get_empleados_art22()`) actually correct?**
+  _`SecurityContext` has 264 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `test_pantallas.py (contenido inalcanzable en 3 tamanos, Playwright)`, `APScheduler 3.11.2`, `google-api-python-client 2.118.0` to the rest of the system?**
   _33 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ConfiguracionService` be split into smaller, more focused modules?**

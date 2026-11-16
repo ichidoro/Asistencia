@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-16T03:47:48+00:00",
- "publicado": "2026-11-16T03:47:48+00:00",
- "commit": "23a6d8b",
+ "armado": "2026-11-16T04:11:18+00:00",
+ "publicado": "2026-11-16T04:11:19+00:00",
+ "commit": "8c71480",
  "archivos_leidos": 257,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -58,7 +58,7 @@
   "backend/routers/reportes.py": "c2d15c6c1b5d31aca2fd65010c2dcd9c",
   "backend/routers/seguridad.py": "55849a4eeb5da36f28586de8e4b94a55",
   "backend/routers/startup.py": "55f75d144ddddc2137848782d8ea6050",
-  "backend/routers/sync.py": "67ff2a45f4c5e4cd0909fd2e59708c35",
+  "backend/routers/sync.py": "e3c12ecda301fd7f92a3783c77a9ba79",
   "backend/routers/turnos.py": "9e846401643fbb3fef21a3a43093a87f",
   "backend/routers/visitas.py": "89285ae04fa67e0c58f0fc2d6dac1f17",
   "backend/schemas/__init__.py": "eec12ff296d73f35ee152c8a5708e079",

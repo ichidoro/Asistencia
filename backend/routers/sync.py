@@ -796,7 +796,11 @@ async def sincronizar_asistencia_empleado(
     description="Historial reciente de sincronizaciones con BioAlba"
 )
 async def get_sync_logs(
-    limit: int = Query(10, description="Cantidad de registros a obtener")
+    limit: int = Query(10, description="Cantidad de registros a obtener"),
+    # Antes respondía sin sesión (auditoría, 16-11-2026). Lo ve quien ve Configuración (pestaña del robot) o quien
+    # puede sincronizar, igual que las demás rutas de este archivo.
+    current_user: SecurityContext = Depends(RequireAnyPermission(
+        ["configuracion.ver", "configuracion.wizard", "marcaciones.sincronizar", "reportes.sincronizar"]))
 ) -> List[Dict[str, Any]]:
     """Obtiene el historial de ejecuciones técnicas de BioAlba."""
     try:

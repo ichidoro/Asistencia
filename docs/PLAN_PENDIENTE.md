@@ -85,6 +85,8 @@ Etapa 4, parte 3 (16-11-2026): Cierre también (7 consultas, todas de la reapert
 
 Etapa 4, parte 4 (16-11-2026): Sync también (7 consultas); en los routers quedan 112 de 177. Siguen Empleados, Auth y Turnos, después Artículo 22, Configuración y Asistencia.
 
+**Rutas sin sesión (16-11-2026):** el historial de sincronizaciones respondía sin iniciar sesión (fechas y cantidades, sin nombres ni RUT); ahora pide sesión y el permiso de ver Configuración o de sincronizar. Una prueba (`test_rutas_con_sesion.py`) revisa todas las rutas: cada una pública lleva su motivo. **Para decidir:** `/api/sync/test/` sigue sin sesión y hace que el servidor pruebe la conexión con BioAlba.
+
 **Para decidir (visto en el ensayo de Cierre, sin cambiar nada):** al reabrir un período cerrado, la app lo marca vigente pero no desactiva los demás. En la copia de práctica, después de reabrir dos meses quedaron tres períodos vigentes a la vez. ¿Es lo que se quiere o al reabrir solo debería quedar vigente el período reabierto (o el mes en curso)?
 
 ### 2.7 bis Limpieza de restos del desarrollo (15-11-2026, hecha)
