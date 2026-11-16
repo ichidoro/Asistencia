@@ -542,6 +542,13 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - **Ensayos:** con el respaldo, **idéntico**. Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**.
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
 
+**Avance (16-11-2026): paso 3b hecho.** Varias marcas (sección 7, 99 líneas) pasó a `_varias_marcas`, con el mismo texto (comparado línea por línea): los pares Entrada → Salida del bloque, los anclajes de inicio y fin del turno y las horas brutas.
+- Anota en el mismo resultado que recibe las observaciones y la entrada y salida reales. Devuelve la entrada y la salida reales, las pausas intermedias y las horas brutas.
+- `_solve_core` bajó a 644 líneas.
+- **Ensayos:** con el respaldo, **idéntico**. Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**.
+- Una revisión de nombres confirmó que no falta ninguna variable.
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan

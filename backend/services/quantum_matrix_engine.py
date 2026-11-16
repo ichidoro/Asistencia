@@ -2081,6 +2081,117 @@ class QuantumMatrixEngine:
         return dt_fecha, es_nocturno, marcas_disponibles
 
 
+    @staticmethod
+    def _varias_marcas(bloque_p: List[Dict[str, Any]], dt_list: List[datetime], res: Dict[str, Any], is_bolsa: bool,
+                       repetidas_seg, dt_ent_teo, dt_sal_teo, horas_teoricas: float, is_holiday: bool, es_libre_dia: bool,
+                       anclaje_entrada: int, anclaje_salida: int):
+        """Sección 7 de _solve_core: arma los pares Entrada → Salida del bloque, aplica los anclajes de inicio y fin del
+        turno y suma las horas brutas. Anota en el resultado que recibe las observaciones y la entrada y salida reales.
+        Devuelve (entrada real, salida real, pausas intermedias, horas brutas). Mismo código que estaba en _solve_core.
+        """
+        # ─────────────────────────────────────────────────────────────────────
+        # 7. RESOLUCIÓN MULTI-MARCA (2, 4, 6 o más marcas)
+        # ─────────────────────────────────────────────────────────────────────
+        pares_trabajo: List[Tuple[datetime, datetime]] = []
+        pausas_intermedias: List[Tuple[datetime, datetime, float]] = []
+
+        # Partición respetando la alternancia natural (Entrada -> Salida)
+        items_emparejar = []
+        for l in bloque_p:
+            dt = MultiBlockTensorSolver.parse_dt(l)
+            if dt:
+                t = str(l.get('tipo', '')).strip().lower()
+                items_emparejar.append((dt, 'E' if t in _TIPOS_E else ('S' if t in _TIPOS_S else 'U')))
+
+        if items_emparejar and items_emparejar[0][1] == 'S':
+            res['observaciones'] += f"Salida huérfana inicial a las {items_emparejar[0][0].strftime('%H:%M:%S')}. "
+            items_emparejar = items_emparejar[1:]
+
+        idx_e = 0
+        while idx_e < len(items_emparejar):
+            if items_emparejar[idx_e][1] == 'E':
+                if idx_e + 1 < len(items_emparejar) and items_emparejar[idx_e + 1][1] == 'S':
+                    pares_trabajo.append((items_emparejar[idx_e][0], items_emparejar[idx_e + 1][0]))
+                    idx_e += 2
+                elif idx_e + 1 < len(items_emparejar) and items_emparejar[idx_e + 1][1] in ('E', 'U'):
+                    dt_ini = items_emparejar[idx_e][0]
+                    dt_fin = items_emparejar[idx_e + 1][0]
+                    dur_delta = (dt_fin - dt_ini).total_seconds() / 60.0
+                    # Una Entrada no puede cerrar la jornada si justo después viene una Salida (Entrada, Entrada, Salida): falta una de las
+                    # dos marcas de la pausa (la salida o el regreso) y no se sabe cuál. Se conserva la 1ª Entrada como inicio, se descarta la
+                    # del medio y se sigue con el par Entrada → Salida; la colación automática del turno asignado descuenta la pausa.
+                    # (Caso 29-09-2026: E 06:40, E 13:17, S 16:29 cerraba a las 13:17 con 192 min de deuda y dejaba la Salida real afuera.)
+                    # Sin Salida posterior (Entrada, Entrada) la 2ª sigue valiendo como Salida mal rotulada, igual que antes.
+                    if (not is_bolsa and items_emparejar[idx_e + 1][1] == 'E'
+                            and idx_e + 2 < len(items_emparejar) and items_emparejar[idx_e + 2][1] == 'S'):
+                        res['observaciones'] += (f"Dos Entradas seguidas ({dt_ini.strftime('%H:%M:%S')} y {dt_fin.strftime('%H:%M:%S')}): "
+                                                 f"falta una marca de colación; la jornada se calculó desde la primera Entrada hasta la Salida. ")
+                        del items_emparejar[idx_e + 1]
+                        continue
+                    # A menos de «marcas repetidas» (Reglas de marcaciones) son la misma ENTRADA; a esa distancia o más, la segunda cierra.
+                    if dur_delta >= (repetidas_seg or 0.0) / 60.0:
+                        pares_trabajo.append((dt_ini, dt_fin))
+                        idx_e += 2
+                    else:
+                        res['observaciones'] += f"Entrada final sin salida a las {dt_ini.strftime('%H:%M:%S')}. "
+                        idx_e += 1
+                else:
+                    res['observaciones'] += f"Entrada final sin salida a las {items_emparejar[idx_e][0].strftime('%H:%M:%S')}. "
+                    idx_e += 1
+            else:
+                idx_e += 1
+
+        if pares_trabajo:
+            r_ent_dt = pares_trabajo[0][0]
+            r_sal_dt = pares_trabajo[-1][1]
+            res['hora_entrada_real'] = r_ent_dt.strftime("%H:%M:%S")
+            res['hora_salida_real'] = r_sal_dt.strftime("%H:%M:%S")
+
+            for k in range(len(pares_trabajo) - 1):
+                s_int = pares_trabajo[k][1]
+                e_int = pares_trabajo[k + 1][0]
+                dur_min = max(0.0, (e_int - s_int).total_seconds() / 60.0)
+                pausas_intermedias.append((s_int, e_int, dur_min))
+        else:
+            r_ent_dt = dt_list[0]
+            r_sal_dt = dt_list[-1]
+            res['hora_entrada_real'] = r_ent_dt.strftime("%H:%M:%S")
+            res['hora_salida_real'] = r_sal_dt.strftime("%H:%M:%S")
+            pares_trabajo.append((r_ent_dt, r_sal_dt))
+
+        # Aplicación de anclajes paramétricos de inicio y fin de turno
+        if pares_trabajo and dt_ent_teo and dt_sal_teo and horas_teoricas > 0 and not is_holiday and not es_libre_dia:
+            # 1. Anclaje de entrada para el primer bloque
+            p0_in, p0_out = pares_trabajo[0]
+            if p0_in < dt_ent_teo:
+                anticip_seg = (dt_ent_teo - p0_in).total_seconds()
+                anticip_min = anticip_seg / 60.0
+                # Sin «Rango Anticipación Entrada» (0) no se ajusta ninguna marca: cuenta la hora real
+                if anclaje_entrada > 0 and anticip_min <= anclaje_entrada:
+                    p0_in = dt_ent_teo
+
+            # 2. Anclaje de salida para el último bloque
+            pn_in, pn_out = pares_trabajo[-1]
+            if pn_out > dt_sal_teo:
+                demora_seg = (pn_out - dt_sal_teo).total_seconds()
+                demora_min = demora_seg / 60.0
+                # Sin «Rango Demora Salida» (0) no se ajusta ninguna marca: cuenta la hora real
+                if anclaje_salida > 0 and demora_min <= anclaje_salida:
+                    pn_out = dt_sal_teo
+
+            if len(pares_trabajo) == 1:
+                pares_trabajo = [(p0_in, pn_out)]
+            else:
+                pares_trabajo[0] = (p0_in, p0_out)
+                pares_trabajo[-1] = (pn_in, pn_out)
+
+        # Suma estricta de tiempo presencial efectivo trabajado
+        duracion_bruta_sec = sum(max(0.0, (p[1] - p[0]).total_seconds()) for p in pares_trabajo)
+        horas_brutas = max(0.0, duracion_bruta_sec / 3600.0)
+
+        return r_ent_dt, r_sal_dt, pausas_intermedias, horas_brutas
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2492,105 +2603,9 @@ class QuantumMatrixEngine:
                 res['observaciones'] += 'Solo una marcación registrada. '
             return res
 
-        # ─────────────────────────────────────────────────────────────────────
-        # 7. RESOLUCIÓN MULTI-MARCA (2, 4, 6 o más marcas)
-        # ─────────────────────────────────────────────────────────────────────
-        pares_trabajo: List[Tuple[datetime, datetime]] = []
-        pausas_intermedias: List[Tuple[datetime, datetime, float]] = []
-
-        # Partición respetando la alternancia natural (Entrada -> Salida)
-        items_emparejar = []
-        for l in bloque_p:
-            dt = MultiBlockTensorSolver.parse_dt(l)
-            if dt:
-                t = str(l.get('tipo', '')).strip().lower()
-                items_emparejar.append((dt, 'E' if t in _TIPOS_E else ('S' if t in _TIPOS_S else 'U')))
-
-        if items_emparejar and items_emparejar[0][1] == 'S':
-            res['observaciones'] += f"Salida huérfana inicial a las {items_emparejar[0][0].strftime('%H:%M:%S')}. "
-            items_emparejar = items_emparejar[1:]
-
-        idx_e = 0
-        while idx_e < len(items_emparejar):
-            if items_emparejar[idx_e][1] == 'E':
-                if idx_e + 1 < len(items_emparejar) and items_emparejar[idx_e + 1][1] == 'S':
-                    pares_trabajo.append((items_emparejar[idx_e][0], items_emparejar[idx_e + 1][0]))
-                    idx_e += 2
-                elif idx_e + 1 < len(items_emparejar) and items_emparejar[idx_e + 1][1] in ('E', 'U'):
-                    dt_ini = items_emparejar[idx_e][0]
-                    dt_fin = items_emparejar[idx_e + 1][0]
-                    dur_delta = (dt_fin - dt_ini).total_seconds() / 60.0
-                    # Una Entrada no puede cerrar la jornada si justo después viene una Salida (Entrada, Entrada, Salida): falta una de las
-                    # dos marcas de la pausa (la salida o el regreso) y no se sabe cuál. Se conserva la 1ª Entrada como inicio, se descarta la
-                    # del medio y se sigue con el par Entrada → Salida; la colación automática del turno asignado descuenta la pausa.
-                    # (Caso 29-09-2026: E 06:40, E 13:17, S 16:29 cerraba a las 13:17 con 192 min de deuda y dejaba la Salida real afuera.)
-                    # Sin Salida posterior (Entrada, Entrada) la 2ª sigue valiendo como Salida mal rotulada, igual que antes.
-                    if (not is_bolsa and items_emparejar[idx_e + 1][1] == 'E'
-                            and idx_e + 2 < len(items_emparejar) and items_emparejar[idx_e + 2][1] == 'S'):
-                        res['observaciones'] += (f"Dos Entradas seguidas ({dt_ini.strftime('%H:%M:%S')} y {dt_fin.strftime('%H:%M:%S')}): "
-                                                 f"falta una marca de colación; la jornada se calculó desde la primera Entrada hasta la Salida. ")
-                        del items_emparejar[idx_e + 1]
-                        continue
-                    # A menos de «marcas repetidas» (Reglas de marcaciones) son la misma ENTRADA; a esa distancia o más, la segunda cierra.
-                    if dur_delta >= (repetidas_seg or 0.0) / 60.0:
-                        pares_trabajo.append((dt_ini, dt_fin))
-                        idx_e += 2
-                    else:
-                        res['observaciones'] += f"Entrada final sin salida a las {dt_ini.strftime('%H:%M:%S')}. "
-                        idx_e += 1
-                else:
-                    res['observaciones'] += f"Entrada final sin salida a las {items_emparejar[idx_e][0].strftime('%H:%M:%S')}. "
-                    idx_e += 1
-            else:
-                idx_e += 1
-
-        if pares_trabajo:
-            r_ent_dt = pares_trabajo[0][0]
-            r_sal_dt = pares_trabajo[-1][1]
-            res['hora_entrada_real'] = r_ent_dt.strftime("%H:%M:%S")
-            res['hora_salida_real'] = r_sal_dt.strftime("%H:%M:%S")
-
-            for k in range(len(pares_trabajo) - 1):
-                s_int = pares_trabajo[k][1]
-                e_int = pares_trabajo[k + 1][0]
-                dur_min = max(0.0, (e_int - s_int).total_seconds() / 60.0)
-                pausas_intermedias.append((s_int, e_int, dur_min))
-        else:
-            r_ent_dt = dt_list[0]
-            r_sal_dt = dt_list[-1]
-            res['hora_entrada_real'] = r_ent_dt.strftime("%H:%M:%S")
-            res['hora_salida_real'] = r_sal_dt.strftime("%H:%M:%S")
-            pares_trabajo.append((r_ent_dt, r_sal_dt))
-
-        # Aplicación de anclajes paramétricos de inicio y fin de turno
-        if pares_trabajo and dt_ent_teo and dt_sal_teo and horas_teoricas > 0 and not is_holiday and not es_libre_dia:
-            # 1. Anclaje de entrada para el primer bloque
-            p0_in, p0_out = pares_trabajo[0]
-            if p0_in < dt_ent_teo:
-                anticip_seg = (dt_ent_teo - p0_in).total_seconds()
-                anticip_min = anticip_seg / 60.0
-                # Sin «Rango Anticipación Entrada» (0) no se ajusta ninguna marca: cuenta la hora real
-                if anclaje_entrada > 0 and anticip_min <= anclaje_entrada:
-                    p0_in = dt_ent_teo
-
-            # 2. Anclaje de salida para el último bloque
-            pn_in, pn_out = pares_trabajo[-1]
-            if pn_out > dt_sal_teo:
-                demora_seg = (pn_out - dt_sal_teo).total_seconds()
-                demora_min = demora_seg / 60.0
-                # Sin «Rango Demora Salida» (0) no se ajusta ninguna marca: cuenta la hora real
-                if anclaje_salida > 0 and demora_min <= anclaje_salida:
-                    pn_out = dt_sal_teo
-
-            if len(pares_trabajo) == 1:
-                pares_trabajo = [(p0_in, pn_out)]
-            else:
-                pares_trabajo[0] = (p0_in, p0_out)
-                pares_trabajo[-1] = (pn_in, pn_out)
-
-        # Suma estricta de tiempo presencial efectivo trabajado
-        duracion_bruta_sec = sum(max(0.0, (p[1] - p[0]).total_seconds()) for p in pares_trabajo)
-        horas_brutas = max(0.0, duracion_bruta_sec / 3600.0)
+        r_ent_dt, r_sal_dt, pausas_intermedias, horas_brutas = cls._varias_marcas(
+            bloque_p, dt_list, res, is_bolsa, repetidas_seg, dt_ent_teo, dt_sal_teo, horas_teoricas, is_holiday, es_libre_dia,
+            anclaje_entrada, anclaje_salida)
 
         # ─────────────────────────────────────────────────────────────────────
         # 8. DISCRIMINACIÓN DE PAUSAS: COLACIÓN VS PERMISOS
