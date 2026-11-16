@@ -9,6 +9,7 @@ from typing import Optional, List
 
 from backend.core.database import Database, get_db
 from backend.repositories.empleado import EmpleadoRepository, BorradoPermanenteBloqueado
+from backend.repositories.area import AreaRepository
 from backend.services.empleado_service import EmpleadoService
 from backend.schemas.empleado import (
     EmpleadoCreate,
@@ -220,7 +221,7 @@ async def crear_empleado(
 ):
     # RLS: Resolver área a partir de ID si es necesario para validación de permisos
     if empleado.area_id and not empleado.area:
-        res = await service.repository.db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (empleado.area_id,))
+        res = await AreaRepository(service.repository.db).get_area_by_id(empleado.area_id)
         if res:
             empleado.area = res["nombre"]
 
@@ -458,11 +459,7 @@ async def confirmar_cambio_area(
     current_user: SecurityContext = Depends(RequirePermission("empleados.editar"))
 ):
     # 1. Buscar el registro histórico específico
-    # Usamos DB directa para obtener el registro por ID (fetch_one garantiza dict)
-    pendiente = await service.repository.db.fetch_one(
-        "SELECT * FROM historial_areas WHERE id = ?",
-        (request.historial_id,)
-    )
+    pendiente = await service.repository.get_historial_area_by_id(request.historial_id)
     
     if not pendiente:
         raise HTTPException(status_code=404, detail="No se encontró el registro histórico")
@@ -604,7 +601,7 @@ async def actualizar_empleado(
 
     # RLS: Resolver área a partir de ID si es necesario para validación de permisos
     if empleado_data.area_id and not empleado_data.area:
-        res = await service.repository.db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (empleado_data.area_id,))
+        res = await AreaRepository(service.repository.db).get_area_by_id(empleado_data.area_id)
         if res:
             empleado_data.area = res["nombre"]
 

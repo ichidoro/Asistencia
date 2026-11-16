@@ -83,7 +83,14 @@ Etapa 4, parte 2 (15-11-2026): Portería y Productos 4 también; sus 20 consulta
 
 Etapa 4, parte 3 (16-11-2026): Cierre también (7 consultas, todas de la reapertura); en los routers quedan 119 de 177.
 
-Etapa 4, parte 4 (16-11-2026): Sync también (7 consultas); en los routers quedan 112 de 177. Siguen Empleados, Auth y Turnos, después Artículo 22, Configuración y Asistencia.
+Etapa 4, parte 4 (16-11-2026): Sync también (7 consultas); en los routers quedan 112 de 177.
+
+Etapa 4, parte 5 (16-11-2026): Empleados, Auth y Turnos (7 consultas); en los routers quedan 105 de 177. Siguen Artículo 22, Configuración y Asistencia.
+
+**Fallas que ya existían, vistas en el ensayo de la parte 5 (para decidir si se arreglan):**
+- Confirmar un cambio de área pendiente da error 500: el código busca un dato «area» que esa tabla no tiene (tiene area_id).
+- Crear o editar un empleado con un área que no existe da error 500 en vez de un aviso.
+- Cambiar un turno que no existe responde «Turno actualizado correctamente».
 
 **Rutas sin sesión (16-11-2026):** el historial de sincronizaciones respondía sin iniciar sesión (fechas y cantidades, sin nombres ni RUT); ahora pide sesión y el permiso de ver Configuración o de sincronizar. Una prueba (`test_rutas_con_sesion.py`) revisa todas las rutas: cada una pública lleva su motivo. La prueba de conexión con BioAlba (`/api/sync/test/`), que también respondía sin sesión, ahora pide el permiso de sincronizar (decisión de la persona dueña, 16-11-2026).
 

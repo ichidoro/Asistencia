@@ -654,6 +654,13 @@ class TurnoRepository:
             JOIN areas a ON a.id = ta.area_id
         """)
 
+    async def get_nombres_areas_del_turno(self, turno_id: int) -> List[Dict]:
+        """Los nombres de las áreas asignadas a un turno (para revisar si el usuario puede cambiarlo o borrarlo)."""
+        return await self.db.fetch_all(
+            "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?",
+            (turno_id,)
+        )
+
     async def get_turno_de_area(self, area_id: int) -> Optional[Dict]:
         """El turno asignado a un área, si tiene."""
         return await self.db.fetch_one("SELECT turno_id FROM turno_areas WHERE area_id = ?", (area_id,))

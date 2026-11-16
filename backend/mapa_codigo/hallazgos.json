@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1341,
+  "total": 1345,
   "top": [
    {
     "funcion": "_solve_core",
@@ -228,7 +228,7 @@
   }
  ],
  "sql_en_routers": {
-  "total": 112,
+  "total": 105,
   "top": [
    {
     "archivo": "backend/routers/asistencia.py",
@@ -241,18 +241,6 @@
    {
     "archivo": "backend/routers/articulo22.py",
     "consultas": 15
-   },
-   {
-    "archivo": "backend/routers/empleados.py",
-    "consultas": 3
-   },
-   {
-    "archivo": "backend/routers/auth.py",
-    "consultas": 2
-   },
-   {
-    "archivo": "backend/routers/turnos.py",
-    "consultas": 2
    }
   ]
  },

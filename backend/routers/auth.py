@@ -58,7 +58,7 @@ async def login_for_access_token(
     # Hash antiguo (sha256+salt): se re-guarda con bcrypt ahora que tenemos la contraseña en claro.
     if repo.password_necesita_migrar(user_data["password_hash"]):
         try:
-            await repo.db.execute("UPDATE usuarios SET password_hash = ? WHERE id = ?", (repo.get_password_hash(form_data.password), user_data["id"]))
+            await repo.actualizar_password_hash(user_data["id"], repo.get_password_hash(form_data.password))
         except Exception as e:
             logger.warning(f"No se pudo migrar el hash de {user_data['username']} a bcrypt: {e}")
 
@@ -77,7 +77,7 @@ async def login_for_access_token(
         
     # Update last access
     try:
-        await repo.db.execute("UPDATE usuarios SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id = ?", (user_data["id"],))
+        await repo.registrar_ultimo_acceso(user_data["id"])
     except Exception as e:
         logger.warning(f"No se pudo actualizar ultimo_acceso para {user_data['username']}: {e}")
 

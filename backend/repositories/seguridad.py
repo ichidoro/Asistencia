@@ -364,6 +364,14 @@ class SeguridadRepository:
         """Obtiene detalles de un Rol por su ID"""
         return await self.db.fetch_one("SELECT * FROM roles WHERE id = ?", (rol_id,))
 
+    async def actualizar_password_hash(self, user_id: int, password_hash: str) -> None:
+        """Guarda la contraseña ya cifrada (al ingresar se re-guarda con bcrypt si venía en el formato antiguo)."""
+        await self.db.execute("UPDATE usuarios SET password_hash = ? WHERE id = ?", (password_hash, user_id))
+
+    async def registrar_ultimo_acceso(self, user_id: int) -> None:
+        """Anota la hora del último ingreso del usuario."""
+        await self.db.execute("UPDATE usuarios SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+
     async def log_auditoria(self, usuario_id: int, username: str, accion: str, modulo: str, detalle: str = None, ip: str = None):
         """Guarda un registro inmutable en auditoría"""
         query = """

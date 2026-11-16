@@ -241,6 +241,34 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
   - Configuración (33).
   - Asistencia (57).
 
+**Avance (16-11-2026): parte 5 hecha.** Empleados, Auth y Turnos ya no tienen consultas en sus routers: eran 7, y en los routers quedan 105 de 177.
+- **Dónde quedó cada consulta:**
+  - el nombre del área por su id: `AreaRepository.get_area_by_id`;
+  - un registro del historial de áreas: `EmpleadoRepository.get_historial_area_by_id`;
+  - al ingresar, volver a guardar una contraseña en el formato antiguo y anotar el último acceso: `SeguridadRepository.actualizar_password_hash` y `registrar_ultimo_acceso`;
+  - las áreas de un turno, que estaba escrita dos veces: `TurnoRepository.get_nombres_areas_del_turno`.
+- **Cómo se probó:**
+  - Ensayo de 15 pasos:
+    - ingresar con una contraseña en el formato antiguo (que se migra a bcrypt), con un usuario inactivo y con una clave equivocada;
+    - el alta y el cambio de un empleado con solo el id del área;
+    - confirmar un cambio de área;
+    - el alta, el cambio y la baja de un turno.
+  - Con el código anterior dio lo mismo en dos corridas.
+- **El ensayo atrapó un error de este cambio, antes de subirlo:**
+  - Qué pasó: al quitar la consulta de «cambiar turno» se borró también la línea `db = …`, que más abajo programaba el recálculo de sus personas. Fallaba en silencio y respondía «recalculo: ninguno».
+  - Se corrigió, y con eso el ensayo dio **idéntico**.
+  - Se repitieron los cuatro ensayos anteriores: siguen idénticos.
+  - Pasan las 573 pruebas.
+- **Prueba nueva** `test_nombres_definidos.py`: revisa todo el servidor con el analizador de Python y falla si se usa un nombre que no existe. Se comprobó que habría atrapado el error de Turnos.
+- **Fallas que ya existían, sin cambiar nada** (vistas en el ensayo; quedan en el plan para decidir):
+  - **Confirmar un cambio de área pendiente da error 500.** El código lee `pendiente['area']`, pero esa tabla no tiene esa columna, solo `area_id` (`KeyError: 'area'`).
+  - **Crear o editar un empleado con un área que no existe da error 500** en vez de un aviso: la base rechaza el área y nadie lo maneja.
+  - **Cambiar un turno que no existe responde «Turno actualizado correctamente».**
+- **Siguen:**
+  - Artículo 22 (15).
+  - Configuración (33).
+  - Asistencia (57).
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

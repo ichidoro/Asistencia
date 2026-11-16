@@ -218,11 +218,7 @@ async def delete_turno(
     current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "configuracion.wizard"]))
 ):
     """Eliminar un turno"""
-    db = service.repository.db
-    areas_res = await db.fetch_all(
-        "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?",
-        (turno_id,)
-    )
+    areas_res = await service.repository.get_nombres_areas_del_turno(turno_id)
     turno_areas = [r['nombre'] for r in areas_res]
     
     # RLS Check
@@ -247,11 +243,7 @@ async def update_turno(
 ):
     """Actualizar configuración de un turno"""
     _exigir_colacion(turno)
-    db = service.repository.db
-    areas_res = await db.fetch_all(
-        "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?",
-        (turno_id,)
-    )
+    areas_res = await service.repository.get_nombres_areas_del_turno(turno_id)
     existing_areas = [r['nombre'] for r in areas_res]
     
     if not current_user.alcance_global:
@@ -274,7 +266,7 @@ async def update_turno(
     # Los valores del turno cambian el cálculo: se recalcula solo el tramo abierto de sus personas (en segundo plano)
     from backend.services.recalculo_service import recalcular_por_turno
     try:
-        recalculo = await recalcular_por_turno(db, turno_id, turno.nombre)
+        recalculo = await recalcular_por_turno(service.repository.db, turno_id, turno.nombre)
     except Exception as e:
         logger.warning(f"[Recálculo] no se pudo programar para el turno {turno_id}: {e}")
         recalculo = None

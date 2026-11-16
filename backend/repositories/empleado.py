@@ -1149,6 +1149,13 @@ class EmpleadoRepository:
     # HISTORIAL DE ÁREAS (TEMPORAL VISIBILITY)
     # ============================================
 
+    async def get_historial_area_by_id(self, historial_id: int) -> Optional[dict]:
+        """Un registro del historial de áreas por su id, tal como está en la tabla (SELECT *)."""
+        return await self.db.fetch_one(
+            "SELECT * FROM historial_areas WHERE id = ?",
+            (historial_id,)
+        )
+
     async def get_historial_areas(self, empleado_id: int) -> List[dict]:
         """Obtener el historial completo de áreas de un empleado"""
         query = """
