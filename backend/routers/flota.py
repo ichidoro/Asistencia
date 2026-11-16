@@ -10,6 +10,8 @@ from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, get_current_user, RequirePermission, RequireAnyPermission
 from backend.services.deshacer_porteria import permiso_deshacer, segundos_para_deshacer
 from backend.repositories.flota import FlotaRepository
+from backend.repositories.area import AreaRepository
+from backend.repositories.seguridad import SeguridadRepository
 
 router = APIRouter(
     prefix="/flota",
@@ -21,6 +23,13 @@ def _now_chile():
     tz = ZoneInfo(settings.TIMEZONE)  # "America/Santiago"
     return datetime.now(tz).replace(tzinfo=None)
 
+async def _auditar(db: Database, current_user: SecurityContext, accion: str, detalle: str) -> None:
+    """Deja el cambio del catálogo de vehículos en el registro de auditoría."""
+    await SeguridadRepository(db).log_auditoria(
+        current_user.user_id if hasattr(current_user, 'user_id') else None,
+        current_user.username or "Sistema", accion, "Flota Aguacol", detalle)
+
+
 @router.get("/maestro/", response_model=List[Dict[str, Any]])
 async def get_maestro(
     db: Database = Depends(get_db),
@@ -30,12 +39,12 @@ async def get_maestro(
     """Obtener catálogo de vehículos activos"""
     repo = FlotaRepository(db)
     vehiculos = await repo.get_all_vehiculos()
-    
+
     # RLS de área
     areas_permitidas = current_user.get_areas_filter()
     if areas_permitidas is not None:
         vehiculos = [v for v in vehiculos if v["area_nombre"] in areas_permitidas]
-        
+
     return vehiculos
 
 @router.post("/maestro/", status_code=201)
@@ -50,9 +59,9 @@ async def create_vehiculo(
     area_id = data.get("area_id")
     if not patente or not area_id:
         raise HTTPException(status_code=400, detail="Patente y área son requeridas")
-    
+
     # RLS: Verificar acceso al área destino
-    area = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+    area = await AreaRepository(db).get_area_by_id(area_id)
     if not area:
         raise HTTPException(status_code=404, detail="El área seleccionada no existe")
     current_user.verificar_acceso_area(area["nombre"], "crear vehículos en esta área")
@@ -61,12 +70,7 @@ async def create_vehiculo(
     try:
         v_id = await repo.create_vehiculo(patente, area_id)
         # Auditoría
-        auditor_nombre = current_user.username or "Sistema"
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (current_user.user_id if hasattr(current_user, 'user_id') else None, 
-             auditor_nombre, "CREATE", "Flota Aguacol", f"Vehículo registrado: {patente.upper().strip()}")
-        )
+        await _auditar(db, current_user, "CREATE", f"Vehículo registrado: {patente.upper().strip()}")
         return {"ok": True, "id": v_id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -84,7 +88,7 @@ async def update_vehiculo(
     area_id = data.get("area_id")
     if not patente or not area_id:
         raise HTTPException(status_code=400, detail="Patente y área son requeridas")
-    
+
     repo = FlotaRepository(db)
     vehiculo = await repo.get_vehiculo_by_id(v_id)
     if not vehiculo:
@@ -94,7 +98,7 @@ async def update_vehiculo(
     current_user.verificar_acceso_area(vehiculo["area_nombre"], "editar este vehículo")
 
     # RLS: Verificar acceso al área nueva de destino
-    nueva_area = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+    nueva_area = await AreaRepository(db).get_area_by_id(area_id)
     if not nueva_area:
         raise HTTPException(status_code=404, detail="El área seleccionada no existe")
     current_user.verificar_acceso_area(nueva_area["nombre"], "asignar vehículos a esta área")
@@ -104,12 +108,7 @@ async def update_vehiculo(
         if not ok:
             raise HTTPException(status_code=404, detail="Vehículo no encontrado")
         # Auditoría
-        auditor_nombre = current_user.username or "Sistema"
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (current_user.user_id if hasattr(current_user, 'user_id') else None, 
-             auditor_nombre, "UPDATE", "Flota Aguacol", f"Vehículo ID {v_id} modificado: {patente.upper().strip()}")
-        )
+        await _auditar(db, current_user, "UPDATE", f"Vehículo ID {v_id} modificado: {patente.upper().strip()}")
         return {"ok": True}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -129,16 +128,11 @@ async def delete_vehiculo(
 
     # RLS: Verificar acceso al área del vehículo
     current_user.verificar_acceso_area(vehiculo["area_nombre"], "eliminar este vehículo")
-    
+
     ok = await repo.delete_vehiculo(v_id)
     if ok:
         # Auditoría
-        auditor_nombre = current_user.username or "Sistema"
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (current_user.user_id if hasattr(current_user, 'user_id') else None, 
-             auditor_nombre, "DELETE", "Flota Aguacol", f"Vehículo ID {v_id} ({vehiculo['patente']}) desactivado")
-        )
+        await _auditar(db, current_user, "DELETE", f"Vehículo ID {v_id} ({vehiculo['patente']}) desactivado")
     return {"ok": ok}
 
 @router.get("/estado-dia/")
@@ -158,26 +152,26 @@ async def get_estado_dia(
       - Cronología de marcas por vehículo (ordenada por ID ASC)
     """
     repo = FlotaRepository(db)
-    
+
     now = _now_chile()
     fecha_hoy = now.strftime("%Y-%m-%d")
-    
+
     if not fecha:
         fecha = fecha_hoy
-        
+
     es_hoy = (fecha == fecha_hoy)
 
     # 1. Obtener todos los vehículos activos
     vehiculos = await repo.get_all_vehiculos(incluir_inactivos=False)
-    
+
     # RLS de área
     areas_permitidas = current_user.get_areas_filter()
     if areas_permitidas is not None:
         vehiculos = [v for v in vehiculos if v["area_nombre"] in areas_permitidas]
-    
+
     # 2. Obtener todas las marcas registradas para esta fecha
     marcas = await repo.get_registros_dia(fecha)
-    
+
     # Agrupar marcas por flota_id (ya vienen ordenadas por r.id ASC, que es cronológico)
     marcas_por_vehiculo = {}
     for m in marcas:
@@ -187,14 +181,14 @@ async def get_estado_dia(
         marcas_por_vehiculo[fid].append(m)
 
     resultado = []
-    
+
     for veh in vehiculos:
         fid = veh["id"]
         veh_marcas = marcas_por_vehiculo.get(fid, [])
-        
+
         # Cargar última marca anterior para heredabilidad de estado
         prev_mark = await repo.get_ultimo_registro_antes(fid, fecha)
-        
+
         # Determinar estado actual y última marca
         if veh_marcas:
             ultima_marca = veh_marcas[-1]
@@ -224,19 +218,19 @@ async def get_estado_dia(
         estadia_min = 0.0
         viaje_min = 0.0
         viajes_completados = 0
-        
+
         # Procesar pares de marcas cronológicamente del día
         i = 0
         while i < len(veh_marcas):
             m = veh_marcas[i]
             dt_curr = dts[i]
-            
+
             # Estadía (ENTRADA -> SALIDA)
             if m["tipo"] == "ENTRADA":
                 if i + 1 < len(veh_marcas) and veh_marcas[i+1]["tipo"] == "SALIDA":
                     diff = (dts[i+1] - dt_curr).total_seconds() / 60.0
                     estadia_min += max(0.0, diff)
-            
+
             # Viaje (SALIDA -> ENTRADA)
             elif m["tipo"] == "SALIDA":
                 if i + 1 < len(veh_marcas) and veh_marcas[i+1]["tipo"] == "ENTRADA":
@@ -244,7 +238,7 @@ async def get_estado_dia(
                     viaje_min += max(0.0, diff)
                     viajes_completados += 1
             i += 1
-            
+
         # Evaluar sesión activa / abierta al final del periodo (solo si hay marcas reales hoy)
         if veh_marcas:
             dt_ultima = dts[-1]
@@ -252,10 +246,10 @@ async def get_estado_dia(
                 end_point = now
             else:
                 end_point = datetime.strptime(f"{fecha} 23:59:59", "%Y-%m-%d %H:%M:%S")
-                
+
             diff_activo = (end_point - dt_ultima).total_seconds() / 60.0
             diff_activo = max(0.0, diff_activo)
-            
+
             if ultima_marca["tipo"] == "ENTRADA":
                 estadia_min += diff_activo
             elif ultima_marca["tipo"] == "SALIDA":
@@ -284,12 +278,12 @@ async def get_estado_dia(
                 if m["tipo"] == "SALIDA":
                     salida_real = m
                     break
-            
+
             if not salida_real:
                 ultimo_global_marca = await repo.get_ultimo_registro_global(fid)
                 if ultimo_global_marca and ultimo_global_marca["tipo"] == "SALIDA":
                     salida_real = ultimo_global_marca
-            
+
             if salida_real and salida_real.get("observaciones"):
                 obs = salida_real["observaciones"]
                 match = re.search(r"Chofer:\s*([^.]+)", obs)
@@ -297,22 +291,13 @@ async def get_estado_dia(
                     chofer_activo = match.group(1).strip()
 
         # Obtener el último registro global para determinar el estado y ciclos
-        ultimo_global = await db.fetch_one(
-            """
-            SELECT id, tipo, fecha, hora 
-            FROM flota_registros 
-            WHERE flota_id = ? 
-            ORDER BY fecha DESC, id DESC 
-            LIMIT 1
-            """,
-            (fid,)
-        )
-        
+        ultimo_global = await repo.get_ultimo_registro_global(fid)
+
         ciclo_salida_hora = None
         ciclo_salida_fecha = None
         ciclo_retorno_hora = None
         ciclo_retorno_fecha = None
-        
+
         if ultimo_global:
             if ultimo_global["tipo"] == "SALIDA":
                 # Vehículo fuera (en ruta), el último registro es la salida activa
@@ -323,16 +308,7 @@ async def get_estado_dia(
                 ciclo_retorno_hora = ultimo_global["hora"]
                 ciclo_retorno_fecha = ultimo_global["fecha"]
                 # Buscar la salida correspondiente (el último SALIDA antes de este ENTRADA)
-                salida_m = await db.fetch_one(
-                    """
-                    SELECT fecha, hora 
-                    FROM flota_registros 
-                    WHERE flota_id = ? AND tipo = 'SALIDA' AND id < ? 
-                    ORDER BY id DESC 
-                    LIMIT 1
-                    """,
-                    (fid, ultimo_global["id"])
-                )
+                salida_m = await repo.get_salida_anterior(fid, ultimo_global["id"])
                 if salida_m:
                     ciclo_salida_hora = salida_m["hora"]
                     ciclo_salida_fecha = salida_m["fecha"]
@@ -391,7 +367,7 @@ async def marcar(
     flota_id = data.get("flota_id")
     observaciones = data.get("observaciones", "")
     tipo_solicitado = data.get("tipo") # "SALIDA" o "ENTRADA"
-    
+
     if not flota_id:
         raise HTTPException(status_code=400, detail="flota_id requerido")
 
@@ -471,12 +447,12 @@ async def get_historial(
     """Obtener el historial de marcas con filtros y paginación"""
     # RLS: verificar acceso si especificó un área
     if area_id:
-        area_obj = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+        area_obj = await AreaRepository(db).get_area_by_id(area_id)
         if area_obj:
             current_user.verificar_acceso_area(area_obj["nombre"], "el área solicitada")
 
     repo = FlotaRepository(db)
-    
+
     # Valores por defecto de fecha si faltan
     now = _now_chile()
     if not hasta:

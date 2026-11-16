@@ -165,6 +165,24 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
 - Revisar la traducción a PostgreSQL de cada consulta movida.
 - Pruebas completas.
 
+**Avance (15-11-2026): parte 1 hecha.** Flota, Visitas y Llaves ya no tienen consultas en sus routers: eran 31, y en todos los routers quedan 146 de 177.
+- **Flota:**
+  - Usa lo que ya existía: el nombre del área sale de `AreaRepository`, el registro de auditoría de `SeguridadRepository.log_auditoria` y la última marca del vehículo de `FlotaRepository`.
+  - Se agregó una sola función: `get_salida_anterior`.
+- **Visitas y Llaves:** cada uno tiene ahora su repositorio (`repositories/visitas.py` y `repositories/llaves.py`), con las mismas consultas sin cambios.
+  - La lista de llaves activas, que estaba escrita dos veces, ahora es una sola.
+- **Cómo se probó:**
+  - Como la copia de práctica no tenía datos de estos módulos, se armó un ensayo de 59 pasos con la propia app:
+    - altas, cambios y bajas;
+    - despachos y retornos;
+    - visitas y entregas de llaves;
+    - los errores esperados (área que no existe, llave ya entregada, empleado no autorizado);
+    - todas las consultas.
+  - El ensayo se corrió dos veces con el código anterior: dio lo mismo, así que es estable. Con el código nuevo dio **exactamente lo mismo**: las 59 respuestas, sus códigos y mensajes, y las filas guardadas, incluido el registro de auditoría.
+  - También pasan las 569 pruebas, con la araña de consultas, la de SQL y las pantallas.
+- **Guardián:** `test_routers_ordenados_sin_consultas_propias` falla si uno de estos routers vuelve a consultar la base directo. Se comprobó contra el código anterior. Cada router que se ordene se suma a su lista.
+- **Siguen:** Portería (13), Productos 4, Cierre y Sync (7 cada uno), los chicos (Empleados, Auth y Turnos), Artículo 22 (15), Configuración (33) y, al final, Asistencia (57).
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

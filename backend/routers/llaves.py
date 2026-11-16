@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
 from backend.services.deshacer_porteria import permiso_deshacer, segundos_para_deshacer
+from backend.repositories.llaves import LlavesRepository
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta, timezone
@@ -42,36 +43,14 @@ class RegistroLlave(BaseModel):
 
 
 # ============================================
-# INICIALIZACIÓN DE TABLAS
+# ACCESO A DATOS
 # ============================================
 
-async def _ensure_tables(db: Database):
-    """Crea las tablas si no existen."""
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS llaves_maestro (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL,
-            ubicacion TEXT NOT NULL,
-            activo INTEGER DEFAULT 1,
-            created_at TEXT DEFAULT (datetime('now'))
-        )
-    """)
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS llaves_registros (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            llave_id INTEGER NOT NULL,
-            empleado_id INTEGER NOT NULL,
-            tipo TEXT NOT NULL,
-            fecha TEXT NOT NULL,
-            hora TEXT NOT NULL,
-            registrado_por_id INTEGER,
-            registrado_por_nombre TEXT,
-            observaciones TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (llave_id) REFERENCES llaves_maestro(id),
-            FOREIGN KEY (empleado_id) REFERENCES empleados(id)
-        )
-    """)
+async def _repo(db: Database) -> LlavesRepository:
+    """El repositorio de llaves con sus tablas aseguradas (las consultas viven en repositories/llaves.py)."""
+    repo = LlavesRepository(db)
+    await repo.init_tables()
+    return repo
 
 
 # ============================================
@@ -81,48 +60,33 @@ async def _ensure_tables(db: Database):
 @router.get("/maestro/", dependencies=[Depends(RequirePermission("porteria.llaves"))])
 async def listar_llaves(db: Database = Depends(get_db)):
     """Listar todas las llaves activas"""
-    await _ensure_tables(db)
-    rows = await db.fetch_all("SELECT * FROM llaves_maestro WHERE activo = 1 ORDER BY nombre")
+    repo = await _repo(db)
+    rows = await repo.listar_activas()
     return [{"id": r["id"], "nombre": r["nombre"], "ubicacion": r["ubicacion"]} for r in rows]
 
 
 @router.post("/maestro/", dependencies=[Depends(RequirePermission("porteria.llaves"))])
 async def crear_llave(data: LlaveCreate, db: Database = Depends(get_db)):
     """Crear una nueva llave"""
-    await _ensure_tables(db)
-    await db.execute(
-        "INSERT INTO llaves_maestro (nombre, ubicacion) VALUES (?, ?)",
-        (data.nombre, data.ubicacion)
-    )
+    repo = await _repo(db)
+    await repo.crear(data.nombre, data.ubicacion)
     return {"ok": True, "message": f"Llave '{data.nombre}' creada"}
 
 
 @router.put("/maestro/{llave_id}/", dependencies=[Depends(RequirePermission("porteria.llaves"))])
 async def actualizar_llave(llave_id: int, data: LlaveUpdate, db: Database = Depends(get_db)):
     """Actualizar datos de una llave"""
-    await _ensure_tables(db)
-    updates, params = [], []
-    if data.nombre is not None:
-        updates.append("nombre = ?")
-        params.append(data.nombre)
-    if data.ubicacion is not None:
-        updates.append("ubicacion = ?")
-        params.append(data.ubicacion)
-    if not updates:
+    repo = await _repo(db)
+    if not await repo.actualizar(llave_id, data.nombre, data.ubicacion):
         raise HTTPException(400, "Nada que actualizar")
-    params.append(llave_id)
-    await db.execute(
-        f"UPDATE llaves_maestro SET {', '.join(updates)} WHERE id = ?",
-        tuple(params)
-    )
     return {"ok": True}
 
 
 @router.delete("/maestro/{llave_id}/", dependencies=[Depends(RequirePermission("porteria.llaves"))])
 async def eliminar_llave(llave_id: int, db: Database = Depends(get_db)):
     """Desactivar una llave (soft delete)"""
-    await _ensure_tables(db)
-    await db.execute("UPDATE llaves_maestro SET activo = 0 WHERE id = ?", (llave_id,))
+    repo = await _repo(db)
+    await repo.desactivar(llave_id)
     return {"ok": True}
 
 
@@ -136,21 +100,7 @@ async def listar_autorizados(
     current_user: SecurityContext = Depends(get_current_user)
 ):
     """Listar empleados autorizados para llaves, filtrados por áreas del usuario"""
-    areas_filter = current_user.get_areas_filter()
-    query = """
-        SELECT e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno,
-               COALESCE(a.nombre, 'Sin área') as area_nombre
-        FROM empleados e
-        LEFT JOIN areas a ON e.area_id = a.id
-        WHERE e.autorizado_llaves = 1 AND e.activo = 1
-    """
-    params = []
-    if areas_filter is not None:
-        placeholders = ','.join(['?' for _ in areas_filter])
-        query += f" AND a.nombre IN ({placeholders})"
-        params = areas_filter
-    query += " ORDER BY e.apellido_paterno, e.apellido_materno, e.nombre"
-    rows = await db.fetch_all(query, tuple(params))
+    rows = await LlavesRepository(db).listar_autorizados(current_user.get_areas_filter())
     return [
         {
             "id": r["id"],
@@ -169,18 +119,12 @@ async def listar_autorizados(
 @router.get("/estado/", dependencies=[Depends(RequirePermission("porteria.llaves"))])
 async def estado_llaves(db: Database = Depends(get_db)):
     """Estado actual de todas las llaves (disponible/entregada)"""
-    await _ensure_tables(db)
-    llaves = await db.fetch_all("SELECT * FROM llaves_maestro WHERE activo = 1 ORDER BY nombre")
+    repo = await _repo(db)
+    llaves = await repo.listar_activas()
     resultado = []
     for ll in llaves:
         # Buscar último registro para esta llave
-        ultimo = await db.fetch_one("""
-            SELECT lr.*, TRIM(e.apellido_paterno || ' ' || COALESCE(e.apellido_materno, '') || ' ' || e.nombre) as empleado_nombre, e.rut as empleado_rut
-            FROM llaves_registros lr
-            JOIN empleados e ON lr.empleado_id = e.id
-            WHERE lr.llave_id = ?
-            ORDER BY lr.created_at DESC LIMIT 1
-        """, (ll["id"],))
+        ultimo = await repo.get_ultimo_movimiento(ll["id"])
         estado = "DISPONIBLE"
         entregada_a = None
         entregada_hora = None
@@ -217,28 +161,20 @@ async def registrar_movimiento(
     current_user: SecurityContext = Depends(get_current_user)
 ):
     """Registrar entrega o devolución de una llave"""
-    await _ensure_tables(db)
+    repo = await _repo(db)
 
     # Validar que la llave existe
-    llave = await db.fetch_one(
-        "SELECT * FROM llaves_maestro WHERE id = ? AND activo = 1",
-        (data.llave_id,)
-    )
+    llave = await repo.get_activa(data.llave_id)
     if not llave:
         raise HTTPException(404, "Llave no encontrada")
 
     # Validar que el empleado está autorizado
-    emp = await db.fetch_one(
-        "SELECT * FROM empleados WHERE id = ? AND autorizado_llaves = 1 AND activo = 1",
-        (data.empleado_id,)
-    )
+    emp = await repo.get_empleado_autorizado(data.empleado_id)
     if not emp:
         raise HTTPException(403, "Empleado no autorizado para llaves")
 
     # Validar consistencia lógica
-    ultimo = await db.fetch_one("""
-        SELECT tipo FROM llaves_registros WHERE llave_id = ? ORDER BY created_at DESC LIMIT 1
-    """, (data.llave_id,))
+    ultimo = await repo.get_ultimo_tipo(data.llave_id)
 
     if data.tipo == "ENTREGA" and ultimo and ultimo["tipo"] == "ENTREGA":
         raise HTTPException(400, "Esta llave ya está entregada. Debe devolverse primero.")
@@ -246,17 +182,14 @@ async def registrar_movimiento(
         raise HTTPException(400, "Esta llave ya está disponible. No hay nada que devolver.")
 
     now = _now_chile()
-    cur = await db.execute("""
-        INSERT INTO llaves_registros (llave_id, empleado_id, tipo, fecha, hora, registrado_por_id, registrado_por_nombre, observaciones)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
+    movimiento_id = await repo.registrar((
         data.llave_id, data.empleado_id, data.tipo,
         now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'),
         current_user.user_id, current_user.username,
         data.observaciones or ''
     ))
     return {"ok": True, "message": f"Llave '{llave['nombre']}' - {data.tipo} registrada",
-            "deshacer": permiso_deshacer("llave", getattr(cur, "lastrowid", None), await segundos_para_deshacer(db))}
+            "deshacer": permiso_deshacer("llave", movimiento_id, await segundos_para_deshacer(db))}
 
 
 # ============================================
@@ -273,37 +206,11 @@ async def historial_llaves(
     db: Database = Depends(get_db)
 ):
     """Historial paginado de movimientos de llaves"""
-    await _ensure_tables(db)
-    where = []
-    params = []
-    if fecha_desde:
-        where.append("lr.fecha >= ?")
-        params.append(fecha_desde)
-    if fecha_hasta:
-        where.append("lr.fecha <= ?")
-        params.append(fecha_hasta)
-    if llave_id:
-        where.append("lr.llave_id = ?")
-        params.append(llave_id)
-    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-
-    count_row = await db.fetch_one(
-        f"SELECT COUNT(*) as total FROM llaves_registros lr{where_sql}",
-        tuple(params)
-    )
-    total = count_row["total"] if count_row else 0
+    repo = await _repo(db)
+    total = await repo.contar_historial(fecha_desde, fecha_hasta, llave_id)
 
     offset = (page - 1) * page_size
-    rows = await db.fetch_all(f"""
-        SELECT lr.*, lm.nombre as llave_nombre, lm.ubicacion,
-               TRIM(e.apellido_paterno || ' ' || COALESCE(e.apellido_materno, '') || ' ' || e.nombre) as empleado_nombre, e.rut as empleado_rut
-        FROM llaves_registros lr
-        JOIN llaves_maestro lm ON lr.llave_id = lm.id
-        JOIN empleados e ON lr.empleado_id = e.id
-        {where_sql}
-        ORDER BY lr.created_at DESC
-        LIMIT ? OFFSET ?
-    """, tuple(params) + (page_size, offset))
+    rows = await repo.get_historial(fecha_desde, fecha_hasta, llave_id, page_size, offset)
 
     registros = [
         {
@@ -326,5 +233,3 @@ async def historial_llaves(
         "page": page,
         "pages": (total + page_size - 1) // page_size
     }
-
-

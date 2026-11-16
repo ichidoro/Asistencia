@@ -108,6 +108,23 @@ def ciclos_de_importacion():
     return ciclos
 
 
+# Etapa 4 (consultas a los repositorios): routers que ya no hablan directo con la base. Se agrega uno cada vez que se
+# ordena; desde entonces sus consultas van en backend/repositories/.
+ROUTERS_SIN_SQL = ["flota.py", "llaves.py", "visitas.py"]
+LLAMADAS_A_LA_BASE = ("fetch_all", "fetch_one", "execute", "execute_batch", "fetchval", "fetchrow", "fetch")
+
+
+def test_routers_ordenados_sin_consultas_propias():
+    con_sql = []
+    for nombre in ROUTERS_SIN_SQL:
+        p = BACKEND / "routers" / nombre
+        for n in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in LLAMADAS_A_LA_BASE
+                    and isinstance(n.func.value, ast.Name) and n.func.value.id == "db"):
+                con_sql.append(f"routers/{nombre}:{n.lineno} db.{n.func.attr}(…)")
+    assert con_sql == [], "estas consultas van en su repositorio (backend/repositories/):\n" + "\n".join(con_sql)
+
+
 def test_sin_funciones_sin_uso_en_el_servidor():
     sin_uso = funciones_sin_uso()
     assert sin_uso == [], "funciones que nadie llama (quitarlas o usarlas):\n" + "\n".join(sin_uso)

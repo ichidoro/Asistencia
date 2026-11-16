@@ -20,7 +20,7 @@ class FlotaRepository:
                 logger.info("🛠️ Ejecutando migración: Agregando columna 'aplica_flota' a la tabla 'areas'...")
                 await self.db.execute("ALTER TABLE areas ADD COLUMN aplica_flota INTEGER DEFAULT 0")
                 logger.success("✅ Columna 'aplica_flota' agregada con éxito")
-                
+
                 # Sembrar valores iniciales para áreas que contengan 'Logística'
                 await self.db.execute(
                     "UPDATE areas SET aplica_flota = 1 WHERE nombre LIKE '%Logística%' OR nombre LIKE '%LOGISTICA%'"
@@ -91,7 +91,7 @@ class FlotaRepository:
 
     async def create_vehiculo(self, patente: str, area_id: int) -> int:
         cleaned_patente = str(patente).strip().upper().replace(" ", "").replace("-", "")
-        
+
         # Verificar si el área existe y aplica para flota
         area = await self.db.fetch_one("SELECT 1 FROM areas WHERE id = ? AND aplica_flota = 1", (area_id,))
         if not area:
@@ -117,7 +117,7 @@ class FlotaRepository:
 
     async def update_vehiculo(self, v_id: int, patente: str, area_id: int) -> bool:
         cleaned_patente = str(patente).strip().upper().replace(" ", "").replace("-", "")
-        
+
         # Verificar que el área aplique para flota
         area = await self.db.fetch_one("SELECT 1 FROM areas WHERE id = ? AND aplica_flota = 1", (area_id,))
         if not area:
@@ -147,20 +147,32 @@ class FlotaRepository:
     async def get_ultimo_registro_global(self, flota_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene la última marca registrada para un vehículo sin filtro de fecha"""
         query = """
-            SELECT * FROM flota_registros 
-            WHERE flota_id = ? 
-            ORDER BY fecha DESC, id DESC 
+            SELECT * FROM flota_registros
+            WHERE flota_id = ?
+            ORDER BY fecha DESC, id DESC
             LIMIT 1
         """
         row = await self.db.fetch_one(query, (flota_id,))
         return dict(row) if row else None
 
+    async def get_salida_anterior(self, flota_id: int, antes_de_id: int) -> Optional[Dict[str, Any]]:
+        """Fecha y hora del último despacho (SALIDA) de un vehículo anterior a un registro: la salida de su retorno."""
+        query = """
+            SELECT fecha, hora
+            FROM flota_registros
+            WHERE flota_id = ? AND tipo = 'SALIDA' AND id < ?
+            ORDER BY id DESC
+            LIMIT 1
+        """
+        row = await self.db.fetch_one(query, (flota_id, antes_de_id))
+        return dict(row) if row else None
+
     async def get_ultimo_registro_antes(self, flota_id: int, fecha: str) -> Optional[Dict[str, Any]]:
         """Obtiene la última marca registrada para un vehículo anterior a la fecha especificada"""
         query = """
-            SELECT * FROM flota_registros 
-            WHERE flota_id = ? AND fecha < ? 
-            ORDER BY fecha DESC, id DESC 
+            SELECT * FROM flota_registros
+            WHERE flota_id = ? AND fecha < ?
+            ORDER BY fecha DESC, id DESC
             LIMIT 1
         """
         row = await self.db.fetch_one(query, (flota_id, fecha))
@@ -168,22 +180,22 @@ class FlotaRepository:
 
 
     async def marcar_movimiento(
-        self, 
-        flota_id: int, 
-        tipo: str, 
-        fecha: str, 
-        hora: str, 
-        registrado_por_id: Optional[int], 
-        registrado_por_nombre: str, 
+        self,
+        flota_id: int,
+        tipo: str,
+        fecha: str,
+        hora: str,
+        registrado_por_id: Optional[int],
+        registrado_por_nombre: str,
         observaciones: str = ""
     ) -> int:
         query = """
-            INSERT INTO flota_registros 
+            INSERT INTO flota_registros
             (flota_id, tipo, fecha, hora, registrado_por_id, registrado_por_nombre, observaciones)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """
         cursor = await self.db.execute(
-            query, 
+            query,
             (flota_id, tipo, fecha, hora, registrado_por_id, registrado_por_nombre, observaciones)
         )
         logger.info(f"📝 Marca registrada: {tipo} para Vehículo ID {flota_id} en {fecha} {hora}")
@@ -203,10 +215,10 @@ class FlotaRepository:
         return [dict(r) for r in rows]
 
     async def get_historial(
-        self, 
-        desde: str, 
-        hasta: str, 
-        area_id: Optional[int] = None, 
+        self,
+        desde: str,
+        hasta: str,
+        area_id: Optional[int] = None,
         patente: Optional[str] = None,
         page: int = 1,
         limit: int = 50,
@@ -237,7 +249,7 @@ class FlotaRepository:
 
         # Contar total
         count_query = f"""
-            SELECT COUNT(*) as total 
+            SELECT COUNT(*) as total
             FROM flota_registros r
             JOIN flota_aguacol f ON r.flota_id = f.id
             JOIN areas a ON f.area_id = a.id

@@ -20,6 +20,7 @@ import re
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
 from backend.services.deshacer_porteria import permiso_deshacer, segundos_para_deshacer
+from backend.repositories.visitas import VisitasRepository
 
 router = APIRouter(
     prefix="/visitas",
@@ -28,37 +29,13 @@ router = APIRouter(
 
 
 # ============================================
-# INICIALIZACIÓN DE TABLA
+# ACCESO A DATOS
 # ============================================
-async def _ensure_table(db: Database):
-    """Crea la tabla si no existe. Índice solo en PK para max velocidad de escritura."""
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS visitas_registros (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rut TEXT NOT NULL,
-            nombre TEXT DEFAULT '',
-            empresa TEXT DEFAULT '',
-            motivo TEXT DEFAULT '',
-            area_destino TEXT DEFAULT '',
-            persona_contacto TEXT DEFAULT '',
-            raw_scan TEXT DEFAULT '',
-            tipo_documento TEXT DEFAULT 'MANUAL',
-            tipo_marca TEXT NOT NULL DEFAULT 'E',
-            fecha TEXT NOT NULL,
-            hora TEXT NOT NULL,
-            registrado_por_id INTEGER,
-            registrado_por_nombre TEXT DEFAULT '',
-            patente_vehiculo TEXT DEFAULT '',
-            observaciones TEXT DEFAULT '',
-            parse_ok INTEGER DEFAULT 1,
-            created_at TEXT DEFAULT (datetime('now'))
-        )
-    """)
-    # Solo idx_visitas_rut_fecha: necesario para E/S toggle y consulta diaria
-    # Compuesto = 1 índice, no 2, minimiza overhead de escritura
-    await db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_visitas_rut_fecha ON visitas_registros(rut, fecha)"
-    )
+async def _repo(db: Database) -> VisitasRepository:
+    """El repositorio de visitas con su tabla asegurada (las consultas viven en repositories/visitas.py)."""
+    repo = VisitasRepository(db)
+    await repo.init_tables()
+    return repo
 
 
 # ============================================
@@ -278,7 +255,7 @@ async def parsear_scan(
     Solo parsea el raw_scan sin registrar. 
     Si el RUT ya visitó antes, auto-completa nombre/empresa del historial.
     """
-    await _ensure_table(db)
+    repo = await _repo(db)
     raw_scan = (data.get('raw_scan') or '').strip()
     if not raw_scan:
         raise HTTPException(status_code=400, detail="raw_scan vacío")
@@ -293,15 +270,7 @@ async def parsear_scan(
 
     # Si tenemos RUT, buscar en historial para auto-completar
     if parsed['rut'] and parsed['parse_ok']:
-        previo = await db.fetch_one(
-            """SELECT nombre, empresa, motivo, area_destino, persona_contacto, 
-                      COUNT(*) as total_visitas
-               FROM visitas_registros 
-               WHERE rut = ? AND nombre != '' AND nombre IS NOT NULL
-               GROUP BY rut
-               ORDER BY created_at DESC LIMIT 1""",
-            (parsed['rut'],)
-        )
+        previo = await repo.get_visita_previa(parsed['rut'])
         if previo:
             p = dict(previo)
             nombre = nombre or p.get('nombre', '')
@@ -348,7 +317,7 @@ async def registrar_visita(
         observaciones: str
     }
     """
-    await _ensure_table(db)
+    repo = await _repo(db)
 
     raw_scan = (data.get('raw_scan') or '').strip()
     rut_manual = (data.get('rut') or '').strip()
@@ -390,10 +359,7 @@ async def registrar_visita(
 
     # Auto-detectar E/S: última marca de este RUT hoy
     if rut != 'PENDIENTE':
-        ultima = await db.fetch_one(
-            "SELECT tipo_marca FROM visitas_registros WHERE rut = ? AND fecha = ? ORDER BY hora DESC LIMIT 1",
-            (rut, fecha_hoy)
-        )
+        ultima = await repo.get_ultima_marca_del_dia(rut, fecha_hoy)
         tipo_marca = 'E' if (not ultima or ultima['tipo_marca'] == 'S') else 'S'
     else:
         tipo_marca = 'E'
@@ -402,13 +368,7 @@ async def registrar_visita(
     registrador = getattr(current_user, 'nombre_completo', None) or getattr(current_user, 'username', 'Sistema')
     reg_id = getattr(current_user, 'user_id', None)
 
-    cur = await db.execute(
-        """INSERT INTO visitas_registros 
-           (rut, nombre, empresa, motivo, area_destino, persona_contacto,
-            raw_scan, tipo_documento, tipo_marca, fecha, hora,
-            registrado_por_id, registrado_por_nombre, patente_vehiculo,
-            observaciones, parse_ok)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+    visita_id = await repo.registrar(
         (rut, nombre, empresa, motivo, area_destino, persona_contacto,
          raw_scan, tipo_doc, tipo_marca, fecha_hoy, hora_actual,
          reg_id, registrador, patente, observaciones, 1 if parse_ok else 0)
@@ -427,7 +387,7 @@ async def registrar_visita(
         "parse_ok": parse_ok,
         "hora": hora_actual,
         "requiere_manual": not parse_ok,
-        "deshacer": permiso_deshacer("visita", getattr(cur, "lastrowid", None), await segundos_para_deshacer(db))
+        "deshacer": permiso_deshacer("visita", visita_id, await segundos_para_deshacer(db))
     }
 
 
@@ -439,18 +399,11 @@ async def get_estado_dia(
     _perm = Depends(RequirePermission("porteria.visitas"))
 ):
     """Visitas del día actual con estado E/S."""
-    await _ensure_table(db)
+    repo = await _repo(db)
     if not fecha:
         fecha = _now_chile().strftime("%Y-%m-%d")
 
-    rows = await db.fetch_all(
-        """SELECT rut, nombre, empresa, motivo, area_destino, persona_contacto,
-                  tipo_documento, tipo_marca, hora, patente_vehiculo, parse_ok
-           FROM visitas_registros
-           WHERE fecha = ?
-           ORDER BY hora DESC""",
-        (fecha,)
-    )
+    rows = await repo.get_marcas_del_dia(fecha)
 
     # Agrupar por RUT para estado actual
     visitantes = {}
@@ -512,32 +465,16 @@ async def get_historial(
     _perm = Depends(RequirePermission("porteria.visitas"))
 ):
     """Historial de visitas con filtros."""
-    await _ensure_table(db)
+    repo = await _repo(db)
     if not hasta:
         hasta = _now_chile().strftime("%Y-%m-%d")
     if not desde:
         desde = (datetime.strptime(hasta, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
-    count_row = await db.fetch_one(
-        "SELECT COUNT(DISTINCT rut || fecha) as total FROM visitas_registros WHERE fecha BETWEEN ? AND ?",
-        (desde, hasta)
-    )
-    total = count_row['total'] if count_row else 0
+    total = await repo.contar_historial(desde, hasta)
 
     offset = (page - 1) * limit
-    rows = await db.fetch_all(
-        """SELECT rut, nombre, empresa, area_destino, fecha,
-                  MIN(CASE WHEN tipo_marca='E' THEN hora END) as primera_entrada,
-                  MAX(CASE WHEN tipo_marca='S' THEN hora END) as ultima_salida,
-                  COUNT(*) as total_marcas,
-                  tipo_documento
-           FROM visitas_registros
-           WHERE fecha BETWEEN ? AND ?
-           GROUP BY rut, fecha
-           ORDER BY fecha DESC, primera_entrada DESC
-           LIMIT ? OFFSET ?""",
-        (desde, hasta, limit, offset)
-    )
+    rows = await repo.get_historial(desde, hasta, limit, offset)
 
     return {
         "desde": desde,
