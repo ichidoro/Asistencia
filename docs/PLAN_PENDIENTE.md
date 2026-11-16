@@ -101,6 +101,8 @@ Etapa 4, parte 11 (16-11-2026): el relleno masivo y los tramos (6 consultas). En
 
 Etapa 4, parte 12 (16-11-2026): asignar turno a una persona, sincronizar en grupo, condonar deuda y reproceso masivo (9 consultas). En Asistencia quedan 14.
 
+Etapa 4, parte 13 (16-11-2026): la ventana de marcas del día (5 consultas). En Asistencia quedan 9: el GPS y las auditorías de la libreta del Art. 25 bis.
+
 **Hecho el 16-11-2026 (decisión de la persona dueña):** se quitaron de la ventana de marcas manuales las casillas antiguas de conducción y espera de Bolsa, y su ruta `/tramos/`. Siempre daban error 500, porque la base nunca tuvo esas columnas. Esos minutos se registran en la libreta del Art. 25 bis, que no se tocó.
 
 **Fallas que ya existían, vistas en el ensayo de la parte 5: arregladas el 16-11-2026** (decisión de la persona dueña):

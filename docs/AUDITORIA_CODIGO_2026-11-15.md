@@ -407,6 +407,19 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
   - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. El relleno del ensayo de la parte 11 también.
   - Pasan las 578 pruebas.
 
+**Avance (16-11-2026): parte 13 hecha.** La ventana de marcas del día (lo que muestra al abrir un día, la colación típica de su horario y lo que pagaría cada opción de un día en revisión): 5 consultas en 3 funciones. En Asistencia quedan 9, según el mapa.
+- **Dónde quedaron, con el mismo texto de cada consulta:**
+  - las marcas del reloj de un horario (para la colación típica; el texto se copió tal cual, con sus escapes), lo guardado del día y el horario y cálculo del día, en `AsistenciaRepository`;
+  - el tipo y la colación del horario y los ciclos del día de la semana, en `TurnoRepository`.
+- **Cómo se probó:**
+  - El ensayo crea un empleado de ensayo en un horario de Ciclo Inteligente, con días de 1, 2, 3, 4 y 5 marcas, un doble toque y dos días que una regla deja en revisión.
+  - Abre la ventana en 14 días: empleado que no existe, días con marcas, un día libre, un día cerrado y un día sin marcas.
+  - Compara la respuesta completa (horario, colación típica, opciones con lo que pagaría cada una) y los días recalculados.
+  - Esas partes tienen resguardos que ocultan un error. El registro de la app no anotó ninguno.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. También el ensayo de la parte 12.
+  - Pasan las 578 pruebas. La prueba de la ventana ahora lee la consulta de los ciclos desde el repositorio de turnos.
+- **Puede que el ensayo no haya pasado por** el caso en que una opción daría lo mismo que ya está guardado (se lee lo guardado). Es una sola consulta de lectura y se movió sin cambios.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

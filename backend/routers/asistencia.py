@@ -1599,17 +1599,7 @@ async def _colacion_tipica(db, turno_id, hora_entrada) -> Optional[Dict[str, Any
     import statistics
     from backend.repositories.reglas_marcas import ReglasMarcasRepository
     desde = await ReglasMarcasRepository(db).inicio_tramo_abierto()
-    filas = await db.fetch_all("""
-        WITH a AS (SELECT a.id AS aid, a.marcas_consumidas_ids AS ids FROM asistencias a
-                    WHERE a.turno_asignado_id = ? AND a.hora_entrada_teorica = ? AND a.fecha >= ?
-                      AND a.marcas_consumidas_ids ~ '^\\[ *[0-9]'),
-        x AS (SELECT a.aid, l.fecha_hora, COALESCE(l.manual, 0) AS man,
-                     CASE WHEN LOWER(COALESCE(o.tipo, l.tipo)) IN ('entrada','entry','e','in','1') THEN 'E' ELSE 'S' END AS t
-                FROM a CROSS JOIN LATERAL jsonb_array_elements_text(a.ids::jsonb) j(v)
-                JOIN logs_raw l ON l.id = j.v::bigint LEFT JOIN logs_tipo_override o ON o.log_id = l.id)
-        SELECT STRING_AGG(t, '' ORDER BY fecha_hora) AS pat, SUM(man) AS man,
-               STRING_AGG(SUBSTR(fecha_hora, 12, 5), ',' ORDER BY fecha_hora) AS horas
-          FROM x GROUP BY aid""", (turno_id, hora_entrada, desde))
+    filas = await AsistenciaRepository(db).get_marcas_del_reloj_de_un_horario(turno_id, hora_entrada, desde)
     sale, vuelve = [], []
     for f in filas:
         if f["pat"] != "ESES" or int(f["man"] or 0):
@@ -1692,9 +1682,7 @@ async def _propuesta_dia_tres_marcas(service, empleado_id: int, fecha: str, usad
         fila = next((c for c in (r.get("_collect") or []) if str(c.get("fecha")) == fecha), None)
         if not fila and r.get("sin_cambio"):
             # Con esas marcas el día da lo mismo que ya está guardado: el cálculo no lo devuelve, se lee lo guardado
-            fila = await db.fetch_one("SELECT horas_trabajadas, estado, minutos_deuda, minutos_atraso, minutos_salida_adelantada "
-                                      "FROM asistencias WHERE empleado_id = ? AND fecha = ?",
-                                      (empleado_id, fecha))
+            fila = await AsistenciaRepository(db).get_resultado_dia(empleado_id, fecha)
         if not fila:
             return None
         return {"horas": round(float(fila.get("horas_trabajadas") or 0), 2), "estado": fila.get("estado"),
@@ -1750,10 +1738,8 @@ async def marcaciones_del_dia(
     # Las marcas de la jornada, no solo las del día del calendario: un turno que cruza la medianoche cierra con una marca de mañana
     rows = await _marcas_del_dia(service.repository.db, empleado_id, fecha)
     # Horario asignado de ese día (lo guarda el cálculo en la asistencia): la ventana lo propone al escribir la marca que falta
-    hd = await service.repository.db.fetch_one(
-        "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id, observaciones, estado, horas_trabajadas, "
-        "minutos_atraso, minutos_salida_adelantada, minutos_deuda FROM asistencias "
-        "WHERE empleado_id = ? AND fecha = ?", (empleado_id, fecha))
+    hd = await AsistenciaRepository(service.repository.db).get_horario_y_calculo_dia(empleado_id, fecha)
+    turno_repo = TurnoRepository(service.repository.db)
     # Doble toque: las marcas que el cálculo deja fuera antes de aplicar la regla. La sugerencia y la colación se calculan
     # solo con las que se usan, igual que el cálculo.
     doble_toque: Dict[Any, Dict[str, Any]] = {}
@@ -1762,8 +1748,7 @@ async def marcaciones_del_dia(
     try:
         from backend.services.quantum_matrix_engine import _rebote_defecto
         if hd and hd.get("turno_asignado_id"):
-            t = await service.repository.db.fetch_one("SELECT tipo_programacion, minutos_colacion_auto FROM turnos WHERE id = ?",
-                                                      (hd["turno_asignado_id"],))
+            t = await turno_repo.get_tipo_y_colacion(hd["turno_asignado_id"])
             tp = (t or {}).get("tipo_programacion")
             col_horario = int(float((t or {}).get("minutos_colacion_auto") or 0))
         # Las que una persona dejó como «No se usa» tampoco las lee el cálculo
@@ -1791,10 +1776,7 @@ async def marcaciones_del_dia(
     if len(usadas) == 1 and hd and hd.get("turno_asignado_id"):
         try:
             dia_semana = datetime.strptime(fecha, "%Y-%m-%d").weekday()
-            ciclos = await service.repository.db.fetch_all(
-                "SELECT hora_entrada, hora_salida FROM turno_dias WHERE turno_id = ? AND dia_semana = ? "
-                "AND COALESCE(es_libre, 0) = 0 AND hora_entrada IS NOT NULL AND hora_salida IS NOT NULL",
-                (hd["turno_asignado_id"], dia_semana))
+            ciclos = await turno_repo.get_ciclos_del_dia(hd["turno_asignado_id"], dia_semana)
             ciclos = [dict(c) for c in ciclos]
             hora_sola = str(usadas[0]["fecha_hora"])[11:16]
             # Si falta la ENTRADA, la marca que hay es la SALIDA: ciclo cuya salida calza. Si falta la SALIDA, la marca

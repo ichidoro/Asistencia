@@ -136,7 +136,8 @@ FUNCIONES_SIN_SQL = {
                       "_hora_de_entrada_sin_cerrar", "agregar_marcacion_manual", "_marcas_del_dia", "reclasificar_marcaciones",
                       "quitar_marcacion_manual", "eliminar_jornada_especial_manual",
                       "agregar_marcaciones_masivas", "post_asignacion_individual", "post_batch_sync",
-                      "condonar_deuda", "reproceso_masivo_async"],
+                      "condonar_deuda", "reproceso_masivo_async", "_colacion_tipica", "_propuesta_dia_tres_marcas",
+                      "marcaciones_del_dia"],
 }
 
 

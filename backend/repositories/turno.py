@@ -1227,3 +1227,15 @@ class TurnoRepository:
             "DELETE FROM asignacion_turnos WHERE empleado_id = ? AND fecha_inicio > ?",
             (empleado_id, fecha)
         )
+
+    async def get_tipo_y_colacion(self, turno_id: int) -> Optional[Dict[str, Any]]:
+        """Tipo de programación del horario y sus minutos de colación automática."""
+        return await self.db.fetch_one("SELECT tipo_programacion, minutos_colacion_auto FROM turnos WHERE id = ?",
+                                       (turno_id,))
+
+    async def get_ciclos_del_dia(self, turno_id: int, dia_semana: int) -> List[Dict[str, Any]]:
+        """Los ciclos con hora de entrada y de salida que tiene el horario ese día de la semana (sin los días libres)."""
+        return await self.db.fetch_all(
+            "SELECT hora_entrada, hora_salida FROM turno_dias WHERE turno_id = ? AND dia_semana = ? "
+            "AND COALESCE(es_libre, 0) = 0 AND hora_entrada IS NOT NULL AND hora_salida IS NOT NULL",
+            (turno_id, dia_semana))

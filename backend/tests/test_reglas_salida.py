@@ -327,7 +327,10 @@ def test_la_ventana_usa_las_opciones_de_la_regla_y_no_guarda_horas_del_horario()
         router = f.read()
     assert 'horario = {"entrada": (hd or {}).get("hora_entrada_teorica")' in router and '"horario": horario' in router
     # con una sola marca, la hora sale del ciclo que calza con el tipo de esa marca
-    assert "ciclo_para_marca_sola(" in router and "FROM turno_dias WHERE turno_id = ? AND dia_semana = ?" in router
+    with open(os.path.join(raiz, 'backend', 'repositories', 'turno.py'), encoding='utf-8') as f:
+        repo_turnos = f.read()
+    assert "ciclo_para_marca_sola(" in router and "get_ciclos_del_dia(" in router
+    assert "FROM turno_dias WHERE turno_id = ? AND dia_semana = ?" in repo_turnos
     # falta la ENTRADA → la marca es la SALIDA; falta la SALIDA → la marca es la ENTRADA (aunque el reloj la rotule al revés)
     assert '"entrada": como_salida["hora_entrada"], "salida": como_entrada["hora_salida"]' in router
 

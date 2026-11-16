@@ -1212,3 +1212,31 @@ class AsistenciaRepository:
             WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
         """
         return await self.db.fetch_one(q_closed, (area, fecha_inicio, fecha_fin))
+
+    async def get_marcas_del_reloj_de_un_horario(self, turno_id: int, hora_entrada: str, desde: str) -> List[Dict[str, Any]]:
+        """Por cada día del horario (misma hora de entrada, desde esa fecha): la secuencia de marcas que usó (E/S), cuántas
+        eran manuales y sus horas. Lo usa la colación típica del horario."""
+        return await self.db.fetch_all("""
+        WITH a AS (SELECT a.id AS aid, a.marcas_consumidas_ids AS ids FROM asistencias a
+                    WHERE a.turno_asignado_id = ? AND a.hora_entrada_teorica = ? AND a.fecha >= ?
+                      AND a.marcas_consumidas_ids ~ '^\\[ *[0-9]'),
+        x AS (SELECT a.aid, l.fecha_hora, COALESCE(l.manual, 0) AS man,
+                     CASE WHEN LOWER(COALESCE(o.tipo, l.tipo)) IN ('entrada','entry','e','in','1') THEN 'E' ELSE 'S' END AS t
+                FROM a CROSS JOIN LATERAL jsonb_array_elements_text(a.ids::jsonb) j(v)
+                JOIN logs_raw l ON l.id = j.v::bigint LEFT JOIN logs_tipo_override o ON o.log_id = l.id)
+        SELECT STRING_AGG(t, '' ORDER BY fecha_hora) AS pat, SUM(man) AS man,
+               STRING_AGG(SUBSTR(fecha_hora, 12, 5), ',' ORDER BY fecha_hora) AS horas
+          FROM x GROUP BY aid""", (turno_id, hora_entrada, desde))
+
+    async def get_resultado_dia(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """Lo que tiene guardado el día: horas, estado, deuda, atraso y salida adelantada."""
+        return await self.db.fetch_one("SELECT horas_trabajadas, estado, minutos_deuda, minutos_atraso, minutos_salida_adelantada "
+                                       "FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+                                       (empleado_id, fecha))
+
+    async def get_horario_y_calculo_dia(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """El horario que el cálculo guardó para ese día y lo que dio (lo muestra la ventana de marcas)."""
+        return await self.db.fetch_one(
+            "SELECT hora_entrada_teorica, hora_salida_teorica, turno_asignado_id, observaciones, estado, horas_trabajadas, "
+            "minutos_atraso, minutos_salida_adelantada, minutos_deuda FROM asistencias "
+            "WHERE empleado_id = ? AND fecha = ?", (empleado_id, fecha))
