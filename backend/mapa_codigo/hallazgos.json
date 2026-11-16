@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1435,
+  "total": 1436,
   "top": [
    {
     "funcion": "_solve_core",
@@ -164,11 +164,6 @@
     "lineas": 451
    },
    {
-    "funcion": "procesar_empleado_dia",
-    "archivo": "backend/services/asistencia_service.py",
-    "lineas": 327
-   },
-   {
     "funcion": "_calcular_filas",
     "archivo": "backend/services/report_service.py",
     "lineas": 316
@@ -182,6 +177,11 @@
     "funcion": "lifespan",
     "archivo": "backend/core/events.py",
     "lineas": 280
+   },
+   {
+    "funcion": "_sync_empleado",
+    "archivo": "backend/services/sync_service.py",
+    "lineas": 275
    }
   ]
  },
@@ -200,7 +200,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3406
+   "lineas": 3417
   },
   {
    "archivo": "frontend/js/sync_wizard.js",

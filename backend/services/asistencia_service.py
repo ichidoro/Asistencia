@@ -2155,6 +2155,73 @@ class AsistenciaService:
         return semana_ganadora, config_dia, (turnos_src if asignacion else None)
 
 
+    async def _marcas_usadas_y_manuales(self, empleado_id: int, fecha: str, dt: datetime, raw_logs: List[Dict],
+                                        marcas_consumidas_session: Optional[Dict], bulk_ctx: Optional[Dict]):
+        """Marcas del día en procesar_empleado_dia: las ya usadas (por días anteriores en esta sesión y por el día de
+        ayer, para que una salida de madrugada no vuelva a contar como entrada) y, si el día tiene una reasignación
+        manual de turno, las marcas que la persona fijó a mano (se liberan y se agregan si faltaban). Devuelve
+        (marcas ya usadas, marcas del día, fila del día guardada). Mismo código que estaba en procesar_empleado_dia;
+        las marcas ya usadas son el mismo conjunto de la sesión, que se sigue llenando."""
+        # ── PARADIGMA DE CONSUMO (STATE MACHINE) ──────────────────────────────
+        if marcas_consumidas_session is None:
+            marcas_consumidas_session = {}
+        if empleado_id not in marcas_consumidas_session:
+            marcas_consumidas_session[empleado_id] = set()
+        consumidas_emp = marcas_consumidas_session[empleado_id]
+
+        # [AISLAMIENTO NOCTURNO]: Heredar marcas consumidas del día anterior
+        # para evitar que marcas de salida de madrugada reaparezcan como entradas falsas hoy
+        asist_ayer = None
+        if bulk_ctx and 'asistencias_ayer' in bulk_ctx:
+            asist_ayer = bulk_ctx['asistencias_ayer'].get(empleado_id)
+        else:
+            ayer_str = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
+            asist_ayer = await self.repository.get_asistencia(empleado_id, ayer_str)
+        if asist_ayer and asist_ayer.get('marcas_consumidas_ids'):
+            try:
+                ayer_m_ids = json.loads(asist_ayer['marcas_consumidas_ids'])
+                if isinstance(ayer_m_ids, list):
+                    for mid in ayer_m_ids:
+                        if mid:
+                            consumidas_emp.add(int(mid))
+            except Exception:
+                pass
+
+        # ── OVERRIDE REASIGNACION MANUAL DE TURNO ──
+        if bulk_ctx and 'asistencias_hoy' in bulk_ctx:
+            asist_row_manual = bulk_ctx['asistencias_hoy'].get(empleado_id)
+        else:
+            asist_row_manual = await self.repository.get_asistencia(empleado_id, fecha)
+        self_m_ids = []
+
+        if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL' and asist_row_manual.get('marcas_consumidas_ids'):
+            try:
+                self_m_ids = json.loads(asist_row_manual['marcas_consumidas_ids'])
+                for smid in self_m_ids:
+                    if smid: consumidas_emp.discard(int(smid))
+                
+                # Inyectar logs explícitos si no estuviesen presentes en raw_logs
+                existing_ids = {int(l['id']) for l in raw_logs if l.get('id')}
+                missing_ids = [int(i) for i in self_m_ids if int(i) not in existing_ids]
+                if missing_ids:
+                    placeholders = ','.join('?' * len(missing_ids))
+                    placed_logs_rows = await self.repository.db.fetch_all(
+                        f"SELECT * FROM logs_raw WHERE id IN ({placeholders})",
+                        tuple(missing_ids)
+                    )
+
+                    placed_logs = [dict(r) for r in placed_logs_rows]
+                    raw_logs = sorted(raw_logs + placed_logs, key=lambda x: str(x.get('fecha_hora', '')))
+                    logs = [l for l in raw_logs if l['id'] not in consumidas_emp]
+                    marcas_disponibles = [l for l in raw_logs if l['id'] not in consumidas_emp]
+
+
+            except Exception as e:
+                logger.error(f"Error inyectando logs manuales para {empleado_id} fecha {fecha}: {e}")
+
+        return consumidas_emp, raw_logs, asist_row_manual
+
+
     async def procesar_empleado_dia(
         self,
         empleado_id: int,
@@ -2243,64 +2310,8 @@ class AsistenciaService:
         is_holiday = fecha in feriados_dict
         is_weekend = dia_semana >= 5  # 5=Sat, 6=Sun
 
-        # ── PARADIGMA DE CONSUMO (STATE MACHINE) ──────────────────────────────
-        if marcas_consumidas_session is None:
-            marcas_consumidas_session = {}
-        if empleado_id not in marcas_consumidas_session:
-            marcas_consumidas_session[empleado_id] = set()
-        consumidas_emp = marcas_consumidas_session[empleado_id]
-
-        # [AISLAMIENTO NOCTURNO]: Heredar marcas consumidas del día anterior
-        # para evitar que marcas de salida de madrugada reaparezcan como entradas falsas hoy
-        asist_ayer = None
-        if bulk_ctx and 'asistencias_ayer' in bulk_ctx:
-            asist_ayer = bulk_ctx['asistencias_ayer'].get(empleado_id)
-        else:
-            ayer_str = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
-            asist_ayer = await self.repository.get_asistencia(empleado_id, ayer_str)
-        if asist_ayer and asist_ayer.get('marcas_consumidas_ids'):
-            try:
-                ayer_m_ids = json.loads(asist_ayer['marcas_consumidas_ids'])
-                if isinstance(ayer_m_ids, list):
-                    for mid in ayer_m_ids:
-                        if mid:
-                            consumidas_emp.add(int(mid))
-            except Exception:
-                pass
-
-        # ── OVERRIDE REASIGNACION MANUAL DE TURNO ──
-        if bulk_ctx and 'asistencias_hoy' in bulk_ctx:
-            asist_row_manual = bulk_ctx['asistencias_hoy'].get(empleado_id)
-        else:
-            asist_row_manual = await self.repository.get_asistencia(empleado_id, fecha)
-        self_m_ids = []
-
-        if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL' and asist_row_manual.get('marcas_consumidas_ids'):
-            try:
-                self_m_ids = json.loads(asist_row_manual['marcas_consumidas_ids'])
-                for smid in self_m_ids:
-                    if smid: consumidas_emp.discard(int(smid))
-                
-                # Inyectar logs explícitos si no estuviesen presentes en raw_logs
-                existing_ids = {int(l['id']) for l in raw_logs if l.get('id')}
-                missing_ids = [int(i) for i in self_m_ids if int(i) not in existing_ids]
-                if missing_ids:
-                    placeholders = ','.join('?' * len(missing_ids))
-                    placed_logs_rows = await self.repository.db.fetch_all(
-                        f"SELECT * FROM logs_raw WHERE id IN ({placeholders})",
-                        tuple(missing_ids)
-                    )
-
-                    placed_logs = [dict(r) for r in placed_logs_rows]
-                    raw_logs = sorted(raw_logs + placed_logs, key=lambda x: str(x.get('fecha_hora', '')))
-                    logs = [l for l in raw_logs if l['id'] not in consumidas_emp]
-                    marcas_disponibles = [l for l in raw_logs if l['id'] not in consumidas_emp]
-
-
-            except Exception as e:
-                logger.error(f"Error inyectando logs manuales para {empleado_id} fecha {fecha}: {e}")
-
-
+        consumidas_emp, raw_logs, asist_row_manual = await self._marcas_usadas_y_manuales(
+            empleado_id, fecha, dt, raw_logs, marcas_consumidas_session, bulk_ctx)
 
         semana_ganadora, config_dia, turnos_src = await self._turno_del_dia(empleado_id, fecha, dt, dia_semana, asignacion,
                                                                             raw_logs, consumidas_emp, bulk_ctx)

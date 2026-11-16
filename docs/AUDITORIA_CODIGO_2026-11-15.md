@@ -516,6 +516,14 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - Una revisión de nombres confirmó que no falta ninguna variable.
 - Pasan las 577 pruebas.
 
+**Avance (16-11-2026): paso 2c hecho.** Las marcas ya usadas y la reasignación manual de turno (56 líneas) pasaron a `_marcas_usadas_y_manuales`, con el mismo texto (comparado línea por línea).
+- Las marcas ya usadas vienen de los días anteriores de la misma sesión y del día de ayer, para que una salida de madrugada no vuelva a contar como entrada.
+- Si el día tiene una reasignación manual de turno, se liberan las marcas que la persona fijó a mano y se agregan las que faltaban.
+- Devuelve las marcas ya usadas (el mismo conjunto de la sesión, que se sigue llenando), las marcas del día y la fila del día guardada, que se usa al final para la trazabilidad de la reasignación.
+- `procesar_empleado_dia` quedó en 271 líneas (antes 563).
+- **Ensayos:** con el respaldo, **idéntico**. El respaldo tiene 4 días con reasignación manual (de una persona) y entran en el ensayo. Guardando en la copia de práctica, los de las partes 12, 13 y 14: **idénticos**.
+- Pasan las 577 pruebas.
+
 ---
 
 ## 7. Lo que no promete este plan
