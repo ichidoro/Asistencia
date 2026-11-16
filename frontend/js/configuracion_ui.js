@@ -185,10 +185,7 @@ const COLOR_OPTIONS = [
 ];
 
 // ── Helpers de la pestaña Estados ───────────────────────────────────────────
-function _escAttr(v) {
-    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+function _escAttr(v) { return window.Ayuda.esc(v); }
 function _estadoSiglaDefecto(codigo) { return codigo === 'JORNADA_ESPECIAL' ? 'ESP' : String(codigo).substring(0, 3); }
 // Vista previa idéntica a la grilla HD: la sigla en una pastilla de su color, dentro de una celda de día real (css/configuracion.css)
 function _estadoPreviewHtml(color, icono, sigla) {
@@ -1538,10 +1535,7 @@ window.deleteAreaNotificaciones = async function (area) {
 }
 
 // Helper para Notificaciones
-function showToast(msg, type = "success") {
-    if (window.Avisos) window.Avisos.avisar(msg, type);
-    else alert(msg);
-}
+// showToast es el de main.js (auditoría 15-11-2026: esta copia la reemplazaba el de main.js al terminar la carga)
 
 
 // ==========================================
@@ -2055,7 +2049,7 @@ window.renderPeriodosRRHH = function(periodos) {
     if (!container) return;
 
     const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.editar') : true;
-    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = (t) => window.Ayuda.esc(t);
     const corta = (f) => { const p = String(f || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] : f; };
 
     // Columnas: las áreas que aparecen en algún tramo (cerradas o por cerrar); salen de los datos, no del código
@@ -2523,8 +2517,8 @@ window.cargarMapaCodigo = async function () {
     }
     const n = (est.cambiados || []).length + (est.borrados || []).length;
     const aviso = est.al_dia
-        ? '<span class="badge rounded-pill bg-success-subtle text-success-emphasis"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Al día con el código</span>'
-        : '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Desactualizado: '
+        ? '<span class="badge rounded-pill bg-success-subtle text-success-emphasis text-start" style="white-space:normal"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Al día con el código</span>'
+        : '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis text-start" style="white-space:normal"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Desactualizado: '
           + n + (n === 1 ? ' archivo cambió' : ' archivos cambiaron') + ' después de armarlo</span>';
     const lista = n ? '<details class="mt-2 small"><summary style="cursor:pointer">Ver cuáles</summary><ul class="mb-0 mt-1">'
         + (est.cambiados || []).map(f => '<li><code>' + e(f) + '</code></li>').join('')

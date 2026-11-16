@@ -21,11 +21,7 @@
             return dia.charAt(0).toUpperCase() + dia.slice(1) + ' ' + f.slice(8, 10) + '-' + f.slice(5, 7) + '-' + f.slice(0, 4);
         } catch (e) { return f; }
     }
-    function esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
+    function esc(s) { return window.Ayuda.esc(s); }
     function avisar(msg, tipo) {
         if (typeof showToast === 'function') showToast(msg, tipo);
         else alert(msg);

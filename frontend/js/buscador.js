@@ -5,7 +5,7 @@
 // Solo lee: no guarda nada por sí mismo. Estilos en css/riel.css.
 (function () {
   'use strict';
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = (s) => window.Ayuda.esc(s);
   const plano = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const titulo = (n) => (typeof window.nombreTitulo === 'function' ? window.nombreTitulo(n) : n) || '';
   const puede = (p) => (typeof AuthService !== 'undefined' && AuthService.hasPermission ? AuthService.hasPermission(p) : true);
@@ -16,11 +16,7 @@
   const TEXTO = 'Buscar persona, día o acción';
   let velo = null, input = null, lista = null, items = [], marcado = 0, espera = null, turno = 0, personas = [];
 
-  function iniciales(nombre) {
-    const p = String(nombre || '').trim().split(/\s+/).filter((t) => t && t !== '.');
-    const ini = p.length >= 3 ? p[2][0] + p[0][0] : p.length === 2 ? p[1][0] + p[0][0] : (p[0] || '—').slice(0, 2);
-    return ini.toUpperCase();
-  }
+  function iniciales(nombre) { return window.Ayuda.iniciales(nombre); }
   function pantallas() {
     return [...document.querySelectorAll('.sidebar-nav .sidebar-item[data-page]')]
       .filter((a) => getComputedStyle(a).display !== 'none' && !a.hidden)

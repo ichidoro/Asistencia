@@ -1747,7 +1747,7 @@ async function saveEmpleado() {
 /** Muestra el modal de bonos asignados con los datos del empleado */
 function mostrarModalBonos(empleado, bonos) {
   const nombre = `${empleado.apellido_paterno} ${empleado.apellido_materno || ''} ${empleado.nombre}`.trim().replace(/  +/g, ' ');
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const esc = (s) => window.Ayuda.esc(s);
   const lista = (bonos || []).map((b) => (b && typeof b === 'object') ? (b.nombre || '') : b).filter(Boolean);
   const contrato = ({ Temporal: 'a plazo fijo', Indefinido: 'indefinido' })[empleado.tipo_contrato] || String(empleado.tipo_contrato || '').toLowerCase();
   document.getElementById('bonos-emp-nombre').textContent = window.nombreTitulo ? window.nombreTitulo(nombre) : nombre;

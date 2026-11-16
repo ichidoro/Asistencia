@@ -29,7 +29,7 @@
     function puedeDecidir() {
         return typeof AuthService === 'undefined' || typeof AuthService.hasPermission !== 'function' || AuthService.hasPermission('marcaciones.horas_extras');
     }
-    function esc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function esc(t) { return window.Ayuda.esc(t); }
     const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const LETRA = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
     function fechaObj(f) { return new Date(String(f).substring(0, 10) + 'T00:00:00'); }
@@ -525,10 +525,7 @@
     }
 
     // Iniciales como en las demás ventanas (cabeceraPersona): nombre de pila + apellido paterno
-    function iniciales(n) {
-        const p = String(n || '').trim().split(/\s+/).filter(t => t && t !== '.');
-        return (p.length >= 3 ? p[2][0] + p[0][0] : p.length === 2 ? p[1][0] + p[0][0] : (p[0] || '—').slice(0, 2)).toUpperCase();
-    }
+    function iniciales(n) { return window.Ayuda.iniciales(n); }
 
     // opciones (asistente de cierre, dueño 13-11-2026): { tramo: {inicio, fin}, alCambiar: fn }. Con tramo propio la ventana
     // cuadra ese período aunque la grilla muestre otro, y no ofrece el ajuste por día de la grilla (el cierre lista los días).

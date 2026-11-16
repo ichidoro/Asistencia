@@ -6,9 +6,9 @@
 (function () {
   'use strict';
   const ID = 'modal-ficha-persona';
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = (s) => window.Ayuda.esc(s);
   const titulo = (n) => (typeof window.nombreTitulo === 'function' ? window.nombreTitulo(n) : n) || '';
-  const ddmm = (f) => String(f || '').slice(8, 10) + '-' + String(f || '').slice(5, 7);
+  const ddmm = (f) => window.Ayuda.ddmm(f);
   const fecha = (f) => (window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(f) : f);
   const hhmm = (h) => String(h || '').slice(0, 5);
   const puede = (p) => (typeof AuthService !== 'undefined' && AuthService.hasPermission ? AuthService.hasPermission(p) : true);
@@ -30,9 +30,13 @@
     const h = Math.floor(t / 60), m = t % 60;
     return h ? h + ' h' + (m ? ' ' + m + ' min' : '') : m + ' min';
   }
+  // Iniciales desde los campos de la ficha (primer nombre + apellido paterno). No usa window.Ayuda.iniciales a propósito:
+  // aquí se sabe cuál es el nombre y cuál el apellido, y no hay que adivinarlo por la posición de las palabras
+  // (sin apellido materno o con apellidos de varias palabras, adivinar da otras letras).
   function iniciales(info) {
-    const n = String(info.nombre || '').trim().split(/\s+/)[0] || '';
-    const a = String(info.apellido_paterno || '').trim();
+    const i = info || {};
+    const n = String(i.nombre || '').trim().split(/\s+/)[0] || '';
+    const a = String(i.apellido_paterno || '').trim();
     return ((n[0] || '') + (a[0] || '')).toUpperCase() || '—';
   }
   function corta(codigo) {

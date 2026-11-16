@@ -25,7 +25,7 @@ const VisitasModule = (() => {
     function _fechaDe(x) { return new Date(x + 'T12:00:00'); }
     function _sumar(x, n) { const d = _fechaDe(x); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
     function _dmy(x) { return x ? String(x).split('-').reverse().join('-') : ''; }
-    function _esc(t) { return window.FichaCfg ? FichaCfg.esc(t) : String(t == null ? '' : t); }
+    function _esc(t) { return window.Ayuda.esc(t); }
     function _nombre(t) { return window.nombrePersona ? window.nombrePersona(t) : String(t || '').toUpperCase(); }
     function _titulo(t) { return String(t || '').toLowerCase().replace(/(^|[\s\-'])([a-záéíóúñü])/g, function (m, a, b) { return a + b.toUpperCase(); }); }
     function _rut(r) {

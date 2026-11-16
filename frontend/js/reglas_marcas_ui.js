@@ -39,7 +39,7 @@ const ReglasMarcasModule = (() => {
     const ensayos = {};    // regla.id -> { clave, estado, res, error } · «cómo quedaría», sin guardar
 
     const $ = (id) => document.getElementById(id);
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = (s) => window.Ayuda.esc(s);
     const canEdit = () => (typeof AuthService !== 'undefined') ? AuthService.hasPermission('configuracion.reglas_marcaciones') : false;
     const headers = () => ({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('access_token') });
     const palabras = (sec) => String(sec || '').split('').map(c => PALABRA[c] || c).join(' · ');

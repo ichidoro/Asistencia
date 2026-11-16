@@ -1,12 +1,13 @@
 {
- "archivos_revisados": 168,
+ "archivos_revisados": 169,
  "repetidas": {
-  "total": 141,
+  "total": 138,
   "top": [
    {
     "nombre": "esc",
     "archivos": [
      "frontend/js/articulo22_ui.js",
+     "frontend/js/ayudantes.js",
      "frontend/js/buscador.js",
      "frontend/js/compensar_inasistencia.js",
      "frontend/js/config_ficha.js",
@@ -77,6 +78,28 @@
     ]
    },
    {
+    "nombre": "ddmm",
+    "archivos": [
+     "dashboard_build/src/DashboardApp.jsx",
+     "frontend/js/ayudantes.js",
+     "frontend/js/calendario_ui.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/tarjeta_dia.js",
+     "frontend/js/velocidades_ui.js"
+    ]
+   },
+   {
+    "nombre": "iniciales",
+    "archivos": [
+     "frontend/js/ayudantes.js",
+     "frontend/js/buscador.js",
+     "frontend/js/cuadre_ui.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/tarjeta_dia.js"
+    ]
+   },
+   {
     "nombre": "puede",
     "archivos": [
      "frontend/js/articulo22_ui.js",
@@ -98,16 +121,6 @@
     ]
    },
    {
-    "nombre": "ddmm",
-    "archivos": [
-     "dashboard_build/src/DashboardApp.jsx",
-     "frontend/js/calendario_ui.js",
-     "frontend/js/ficha_persona.js",
-     "frontend/js/tarjeta_dia.js",
-     "frontend/js/velocidades_ui.js"
-    ]
-   },
-   {
     "nombre": "fmt",
     "archivos": [
      "dashboard_build/src/ui.jsx",
@@ -115,16 +128,6 @@
      "frontend/js/cuadre_ui.js",
      "frontend/js/horarios.js",
      "frontend/js/marcaciones_ui.js"
-    ]
-   },
-   {
-    "nombre": "hhmm",
-    "archivos": [
-     "dashboard_build/src/DashboardApp.jsx",
-     "frontend/js/articulo22_ui.js",
-     "frontend/js/ficha_persona.js",
-     "frontend/js/porteria_panel.js",
-     "frontend/js/tarjeta_dia.js"
     ]
    }
   ]
@@ -191,7 +194,7 @@
   },
   {
    "archivo": "frontend/js/marcaciones_manuales.js",
-   "lineas": 5217
+   "lineas": 5215
   },
   {
    "archivo": "backend/routers/asistencia.py",
@@ -215,7 +218,7 @@
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",
-   "lineas": 2606
+   "lineas": 2600
   },
   {
    "archivo": "frontend/js/productos_4.js",

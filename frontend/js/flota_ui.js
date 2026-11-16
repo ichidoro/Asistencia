@@ -678,7 +678,7 @@ const FlotaModule = (() => {
     function _fechaDe(x) { return new Date(x + 'T12:00:00'); }
     function _sumar(x, n) { const d = _fechaDe(x); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
     function _dmy(x) { return x ? String(x).slice(0, 10).split('-').reverse().join('-') : ''; }
-    function _esc(t) { return window.FichaCfg ? FichaCfg.esc(t) : String(t == null ? '' : t); }
+    function _esc(t) { return window.Ayuda.esc(t); }
     function _min(h) { if (!h) return null; const p = String(h).split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); }
     function _hhmm(m) { m = Math.floor(m) % 1440; return _pad(Math.floor(m / 60)) + ':' + _pad(m % 60); }
     function _ahora() { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }

@@ -11,10 +11,7 @@ window.nombrePersona = window.nombrePersona || function (s) {
 };
 window.nombreTitulo = window.nombrePersona;
 // Iniciales de una persona («APELLIDO APELLIDO NOMBRE …» → nombre + apellido), las mismas del encabezado de las ventanas
-window.inicialesDe = window.inicialesDe || function (s) {
-    const p = String(s || '').trim().split(/\s+/).filter(t => t && t !== '.');
-    return (p.length >= 3 ? p[2][0] + p[0][0] : p.length === 2 ? p[1][0] + p[0][0] : (p[0] || '—').slice(0, 2)).toUpperCase();
-};
+window.inicialesDe = window.inicialesDe || window.Ayuda.iniciales;
 // Nombre visible de un estado (Configuración › Estados) en minúsculas con mayúscula inicial; las siglas cortas quedan igual
 window.textoEstado = function (codigo) {
     const e = (window._estadosAsistencia || {})[codigo] || {};

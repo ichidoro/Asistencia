@@ -121,7 +121,7 @@ function mxComboRefrescar(sel) {
 }
 function mxComboLista(sel) {
     const wrap = sel.closest('.mx-combo'), pop = wrap.querySelector('.mx-combo-pop');
-    const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const esc = x => window.Ayuda.esc(x);
     const opciones = [...sel.querySelectorAll('option')];
     const conBuscador = opciones.length > 7;
     let k = 0; // posición para la cascada de entrada (solo las primeras filas se animan)
@@ -1031,7 +1031,7 @@ window.actualizarPorRevisar = async function () {
 };
 
 window.abrirPanelPorRevisar = function () {
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const esc = (s) => window.Ayuda.esc(s);
     let m = document.getElementById('por-revisar-modal');
     if (!m) {
         m = document.createElement('div');
@@ -3979,7 +3979,7 @@ function openRegularizacionModal(anomalias, fecha) {
     }
 
     const tbody = document.getElementById('lista-regularizacion-cuerpo');
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const esc = (s) => window.Ayuda.esc(s);
     const nombreDe = (a) => `${a.apellido_paterno} ${a.apellido_materno || ''} ${a.nombre}`.trim().replace(/  +/g, ' ');
     // a.fecha es la fecha MÍNIMA encontrada por el backend (agrupada por empleado)
     tbody.innerHTML = anomalias.length ? anomalias.map((a, k) => '<tr>'
@@ -5456,7 +5456,7 @@ function nextWizardStep() {
 // período que se está cerrando. Aprobar o rechazar un día suelto queda como excepción, dentro de la fila de la persona.
 // Bolsa Flexible no tiene cuadre (su meta va en la columna de la bolsa) y un rango que no es un período no tiene política:
 // en esos casos solo están los días.
-function cierreEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function cierreEsc(t) { return window.Ayuda.esc(t); }
 
 window.cierrePaso3 = async function (content, btnNext, ev) {
     const s = window.cierreWizardState;
@@ -5780,7 +5780,7 @@ window.descargarPreinformeGrilla = function (btn) {
 window.cargarResumenCierre = async function (st, idCaja) {
     const caja = document.getElementById(idCaja || 'cz-resumen');
     if (!caja || !st) return;
-    const e = window.escHtml || (x => String(x == null ? '' : x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+    const e = window.Ayuda.esc;
     try {
         const resp = await fetch('/api/cierre/resumen?fecha_inicio=' + st.fIni + '&fecha_fin=' + st.fFin + '&area=' + encodeURIComponent(st.area), {
             headers: { 'Authorization': 'Bearer ' + AuthService.getToken() }
@@ -5934,7 +5934,7 @@ async function openHistorialCierresModal() {
 
         const user = AuthService.getUser();
         const isSuperAdmin = user && (user.alcance_global === true || user.alcance_global === 1);
-        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        const esc = (s) => window.Ayuda.esc(s);
         const p2 = (n) => String(n).padStart(2, '0');
         const anioHoy = new Date().getFullYear();
         // «26-09 al 25-10», con el año solo si no es el de hoy
@@ -6326,9 +6326,7 @@ window.mxDiasEnRevision = function (emp, dates) {
     const dias = (emp && emp.dias) || {};
     return (dates || Object.keys(dias).sort()).filter(d => d !== 'info' && dias[d] && dias[d].revision_marcas);
 };
-window._rvEsc = function (x) {
-    return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-};
+window._rvEsc = function (x) { return window.Ayuda.esc(x); };
 window.mxAvisoBloqueHtml = function (n) {
     return '<button type="button" class="gh-hoja rv-grupo" onclick="window.mxIrARevisar(this)" title="' + window.MX_TXT_CIERRE_BLOQUEADO + '">'
         + '<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>' + n + (n === 1 ? ' día por revisar' : ' días por revisar') + '</button>';
@@ -7218,7 +7216,7 @@ window.mxSemanasBolsa = function (empId) {
 
     const fmt = (min) => { const a = Math.round(Math.abs(min)); return String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0'); };
     const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
-    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const esc = (t) => window.Ayuda.esc(t);
     const semanas = [];
     for (let i = 0; i < dates.length; i += 7) semanas.push(dates.slice(i, i + 7));
     const filas = semanas.map((ds, k) => {
@@ -7955,7 +7953,7 @@ window._loadEstadosAsistencia = async function() {
         const lista = await resp.json();
         window._estadosAsistencia = {};
         // Estos textos se pintan dentro de HTML (badges, leyenda, tooltips): se escapan una sola vez al cargar
-        const _esc = v => (typeof v === 'string') ? v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') : v;
+        const _esc = v => (typeof v === 'string') ? window.Ayuda.esc(v) : v;
         lista.forEach(e => {
             ['nombre_display', 'short_label', 'descripcion', 'icono_bi', 'color_clase'].forEach(k => { if (k in e) e[k] = _esc(e[k]); });
             window._estadosAsistencia[e.codigo] = e;
@@ -8938,7 +8936,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
         </div>
     </div>`;
 
-    return _escAttr(html);
+    return _escComillas(html);
 }
 
 // ─── TOOLTIP DASHBOARD PREMIUM (LIGHT THEME) ────────────────────
@@ -8988,7 +8986,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 }
             }
         }
-        return _escAttr(`<div class="tp ${isFer ? 'tp-warn' : 'tp-neutral'} tp-sm">
+        return _escComillas(`<div class="tp ${isFer ? 'tp-warn' : 'tp-neutral'} tp-sm">
             <div class="tp-hd">
                 <div class="tp-top"><span><i class="bi bi-calendar3 me-1"></i>${dateFormatted}</span>${_tpPill(isFer ? 'warn' : 'neutral', isFer ? 'FERIADO' : 'SIN DATOS', isFer ? 'bi-star-fill' : '')}</div>
                 <div class="tp-v">${isFer ? 'Feriado' : 'Sin datos'}<small>${isFer ? feriadoDesc : 'No hay registro de asistencia para este día'}</small></div>
@@ -9725,7 +9723,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         <div class="tp-ft"><span class="tp-kb"><kbd>Clic</kbd> acciones</span><span class="tp-kb"><kbd>2 clics</kbd> justificar</span><span class="tp-touch"><kbd>Toque</kbd> acciones · <kbd>2 toques</kbd> justificar</span><span class="tp-kb"><kbd>Shift</kbd> fijar</span><span class="tp-touch">Mantén pulsado: detalle completo</span></div>
     </div>`;
 
-    return _escAttr(html);
+    return _escComillas(html);
 }
 
 // Arma el HTML del tooltip de una celda bajo demanda (hover). Cachea el último por celda.
@@ -9742,7 +9740,9 @@ function _getCellTipHtml(td) {
     return td._tipHtml;
 }
 
-function _escAttr(html) {
+// Solo las comillas: el HTML del tooltip va dentro de un atributo y se muestra como HTML (auditoría 15-11-2026: se llamaba
+// _escAttr, igual que la de Configuración → Estados, y la reemplazaba en silencio)
+function _escComillas(html) {
     return html.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
@@ -9891,7 +9891,7 @@ function cargoIconoHtml(cargo) {
     const cat = categoriaCargo(cargo);
     const def = CARGO_ICONOS[cat];
     const etiqueta = String(cargo || '').trim() || 'Sin cargo';
-    const esc = etiqueta.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const esc = window.Ayuda.esc(etiqueta);
     return `<span class="emp-cargo-ico cg-${cat}" role="img" aria-label="Cargo: ${esc}" title="${esc}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${def.svg}</svg></span>`;
 }
 window.cargoIconoHtml = cargoIconoHtml;

@@ -202,9 +202,7 @@ const _ACCIONES_AUDITORIA = {
     RESTAURAR_EMPLEADO: 'Restauró a una persona', ELIMINAR_EMPLEADO_PERMANENTE: 'Eliminó a una persona para siempre', DEVOLVER_DIAS_CERRADOS: 'Devolvió días cerrados al respaldo'
 };
 const _MODULOS_AUDITORIA = { PORTERIA: 'Portería', CONFIGURACION: 'Configuración', REGLAS_MARCAS: 'Reglas de marcas', EMPLEADOS: 'Empleados', MARCACIONES: 'Asistencia' };
-function _escAud(v) {
-    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+function _escAud(v) { return window.Ayuda.esc(v); }
 function _frase(t) {
     const s = String(t || '').replace(/_/g, ' ').trim().toLowerCase();
     return s.charAt(0).toUpperCase() + s.slice(1);
@@ -330,7 +328,7 @@ async function asegurarCatalogosUsuario() {
     return cacheSeguridad.roles.length > 0 && cacheSeguridad.areas.length > 0;
 }
 
-const escHtml = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const escHtml = (t) => window.Ayuda.esc(t);
 
 async function prepararModalUsuario(areasUsuario) {
     const ok = await asegurarCatalogosUsuario();
@@ -501,9 +499,7 @@ const RL_MODULOS = {
 const RL_CRITICOS = ['empleados.eliminar', 'configuracion.seguridad', 'marcaciones.bypass_cierre', 'configuracion.sistema', 'configuracion.editar'];
 const RL_CONTABLES = ['marcaciones.cierre_periodo', 'marcaciones.horas_extras', 'marcaciones.justificar', 'marcaciones.compensar'];
 
-function rlEsc(t) {
-    return String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+function rlEsc(t) { return window.Ayuda.esc(t); }
 
 // { 'MARCACIONES': ['marcaciones.ver', ...], ... } en el orden del catálogo
 function rlPorModulo() {

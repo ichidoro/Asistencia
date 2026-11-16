@@ -16,14 +16,14 @@
     'use strict';
 
     const esMovil = () => window.matchMedia('(max-width: 768px)').matches;
-    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const esc = (s) => window.Ayuda.esc(s);
     const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const DIAS_SEM = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
     // ── Utilidades de formato ────────────────────────────────────────────────────────────────────────────
     const fechaObj = (f) => new Date(String(f).slice(0, 10) + 'T00:00:00');
-    const ddmm = (f) => { const p = String(f).slice(0, 10).split('-'); return p[2] + '-' + p[1]; };
+    const ddmm = (f) => window.Ayuda.ddmm(f);
     const hhmm = (h) => (h ? String(h).slice(0, 5) : '--:--');
     const segDe = (h) => { const p = String(h || '0:0:0').split(':').map(n => parseInt(n, 10) || 0); return p[0] * 3600 + (p[1] || 0) * 60 + (p[2] || 0); };
     const absSeg = (m) => (m.fecha ? fechaObj(m.fecha).getTime() / 1000 : 0) + segDe(m.hora);
@@ -51,12 +51,7 @@
         return h + ' h' + (m ? ' ' + String(m).padStart(2, '0') : '');
     }
     function frase(txt) { const s = String(txt || '').replace(/_/g, ' ').toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); }
-    function iniciales(nombre) {
-        const p = String(nombre || '').trim().split(/\s+/).filter(Boolean);
-        if (p.length >= 3) return (p[2][0] + p[0][0]).toUpperCase();
-        if (p.length === 2) return (p[1][0] + p[0][0]).toUpperCase();
-        return (p[0] || '—').slice(0, 2).toUpperCase();
-    }
+    function iniciales(nombre) { return window.Ayuda.iniciales(nombre); }
     const tono = (id) => 'td-t' + ((Math.abs(parseInt(id, 10) || 0) % 6) + 1);
     const titulo = (n) => (typeof window.nombreTitulo === 'function' ? window.nombreTitulo(n) : n) || '—';
     const puede = (p) => (typeof AuthService !== 'undefined' ? AuthService.hasPermission(p) : true);

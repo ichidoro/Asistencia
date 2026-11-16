@@ -452,32 +452,5 @@ function _pollReprocesoPeriodo(inicio, fin, area, onDone) {
     tick(); // primer tick inmediato
 }
 
-function formatExactMinutesToTime(minutos) {
-    if (!minutos || isNaN(minutos)) return '00:00:00';
-    let isNeg = minutos < 0;
-    minutos = Math.abs(minutos);
-    const mTotalStr = minutos.toString();
-    const parts = mTotalStr.split('.');
-    const m = parseInt(parts[0], 10);
-    const sStr = parts.length > 1 ? '.' + parts[1] : '0';
-    const s = Math.round(parseFloat(sStr) * 60);
-
-    let finalH = Math.floor(m / 60);
-    let finalM = m % 60;
-    let finalS = s;
-
-    if (finalS === 60) {
-        finalS = 0;
-        finalM += 1;
-    }
-    if (finalM === 60) {
-        finalM = 0;
-        finalH += 1;
-    }
-
-    const hh = String(finalH).padStart(2, '0');
-    const mm = String(finalM).padStart(2, '0');
-    const ss = String(finalS).padStart(2, '0');
-
-    return (isNeg ? '-' : '') + `${hh}:${mm}:${ss}`;
-}
+// formatExactMinutesToTime vive en marcaciones_ui.js (auditoría 15-11-2026: esta copia la reemplazaba la de
+// Marcaciones, que carga después, así que nunca se usaba)

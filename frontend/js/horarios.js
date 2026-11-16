@@ -670,10 +670,12 @@ window.sortBulkEmployees = function (key) {
     });
 
     filterBulkEmployees();
-    updateSortIcons();
+    updateBulkSortIcons();
 }
 
-function updateSortIcons() {
+// Íconos de orden de la tabla de asignación masiva (auditoría 15-11-2026: se llamaba updateSortIcons, igual que la de
+// la lista de personas en main.js, que la reemplazaba: estos íconos nunca cambiaban)
+function updateBulkSortIcons() {
     ['empleado', 'area', 'cargo'].forEach(k => {
         const icon = document.getElementById(`sort-icon-${k}`);
         if (icon) icon.className = 'bi bi-arrow-down-up small text-muted';
@@ -1437,9 +1439,7 @@ function twActualizarTotal() {
     pill.classList.toggle('tw-dif', !isNaN(meta) && Math.abs(total - meta) >= 0.01);
 }
 
-function twEsc(s) {
-    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+function twEsc(s) { return window.Ayuda.esc(s); }
 
 // Paso 6: lo que se va a guardar, en datos legibles, con un botón para volver a cada paso
 function twResumen() {

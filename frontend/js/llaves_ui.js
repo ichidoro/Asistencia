@@ -14,7 +14,7 @@ const LlavesModule = (function () {
     function pad(n) { return (n < 10 ? '0' : '') + n; }
     function hoyISO() { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
     function dmy(f) { return f ? String(f).slice(0, 10).split('-').reverse().join('-') : ''; }
-    function esc(s) { return window.FichaCfg ? FichaCfg.esc(s) : String(s == null ? '' : s); }
+    function esc(s) { return window.Ayuda.esc(s); }
     function nombre(s) { return window.nombrePersona ? window.nombrePersona(String(s || '').replace(/\bNone\b/g, '')) : String(s || '').toUpperCase(); }
     function aviso(msg, tipo) { if (typeof showToast === 'function') showToast(msg, tipo || 'success'); }
     function token() { return localStorage.getItem('access_token') || localStorage.getItem('auth_token'); }

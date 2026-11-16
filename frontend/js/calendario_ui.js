@@ -43,7 +43,7 @@ function renderCalendario() {
     if (!container || !window.FichaCfg) return;
     const F = window.FichaCfg;
     const canEdit = F.puede('configuracion.editar');
-    const ddmm = function (iso) { return String(iso || '').slice(8, 10) + '-' + String(iso || '').slice(5, 7); };
+    const ddmm = function (iso) { return window.Ayuda.ddmm(iso); };
     const largo = function (iso) {
         const d = new Date(iso + 'T00:00:00');
         const t = d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });

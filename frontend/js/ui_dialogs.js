@@ -18,7 +18,7 @@
     const nativeConfirm = window.confirm.bind(window);
     const hasSwal = () => typeof window.Swal !== 'undefined';
 
-    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = (s) => window.Ayuda.esc(s);
     const stripLead = (s) => s.replace(/^[\s\p{Extended_Pictographic}️]+/u, '').trim();
 
     const DANGER_RE = /elimin|borrar|permanente|desvincul|baja\b|reabrir|revert|cr[ií]tic/i;

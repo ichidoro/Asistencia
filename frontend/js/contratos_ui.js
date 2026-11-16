@@ -92,7 +92,7 @@ async function loadContratosUI() {
 function renderContratosTable(empleados) {
     const cont = document.getElementById('contratos-list-container');
     if (!cont) return;
-    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = (t) => window.Ayuda.esc(t);
     const nombre = (e) => window.nombreTitulo ? window.nombreTitulo(e.nombre_completo) : e.nombre_completo;
     const dos = (n) => String(n).padStart(2, '0');
     const corta = (f) => { const p = String(f || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] : f; };

@@ -16,7 +16,7 @@
     // Lo que mostraría la vista normal en cada celda ("id|fecha"): es lo que se ve cuando el día no tiene velocidad del GPS
     const NORMAL = new Map();
 
-    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = s => window.Ayuda.esc(s);
     const esChofer = emp => typeof window.categoriaCargo === 'function' && window.categoriaCargo(emp && emp.cargo) === 'chofer';
     // Solo los de Bolsa Flexible (pedido del dueño, 30-10-2026): la lámina muestra cifras en la pestaña «Bolsa flexible»; el servidor además solo entrega a esos choferes.
     const enBolsa = () => !!(window._gridFlags && window._gridFlags.esBolsa);
@@ -24,7 +24,7 @@
     const nivel = v => (excede(v) ? 'x' : 'ok');
     const FLECHA = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 10V2M2.8 5.2 6 2l3.2 3.2"/></svg>';
     const dmy = f => String(f).split('-').reverse().join('-');
-    const ddmm = f => { const p = String(f).split('-'); return p.length === 3 ? `${p[2]}-${p[1]}` : f; };
+    const ddmm = f => window.Ayuda.ddmm(f);
     const authHead = () => ({ 'Authorization': `Bearer ${localStorage.getItem('access_token')}` });
 
     // ── Fechas (aritmética en UTC al mediodía: inmune al cambio de hora) ──

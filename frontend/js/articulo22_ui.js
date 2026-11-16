@@ -27,7 +27,7 @@ const Articulo22Module = (function () {
     function dur(m) { m = Math.max(0, Math.floor(m || 0)); return Math.floor(m / 60) + 'h ' + pad(m % 60) + 'm'; }
     // Jornada y tiempo fuera se redondean al minuto y el tiempo en planta se trunca, igual que el servidor
     function durR(m) { return dur(Math.round(m || 0)); }
-    function esc(s) { return window.FichaCfg ? FichaCfg.esc(s) : String(s == null ? '' : s); }
+    function esc(s) { return window.Ayuda.esc(s); }
     function nombre(s) { return window.nombrePersona ? window.nombrePersona(s) : String(s || '').toUpperCase(); }
     function puede(p) { return typeof AuthService === 'undefined' || AuthService.hasPermission(p); }
     function aviso(msg, tipo) { if (typeof showToast === 'function') showToast(msg, tipo || 'success'); }

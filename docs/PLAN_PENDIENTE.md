@@ -71,8 +71,10 @@ No arregla errores visibles: da orden para cambiar el código con menos riesgo.
 
 ### 2.7 Auditoría del código del 15-11-2026
 
-Plan en cinco etapas en `docs/AUDITORIA_CODIGO_2026-11-15.md`. La etapa 1 está probada en una copia aparte y espera el sí para subirla: corrige cuatro fallas (la hora de Visitas, el selector de inasistencias, el Excel por rango de Reportes y la purga del registro de auditoría) y quita 18 funciones sin uso. Queda decidir qué hacer con las 81 visitas pasadas que tienen la hora corrida.
+Plan en cinco etapas en `docs/AUDITORIA_CODIGO_2026-11-15.md`. La etapa 1 está en producción desde el 15-11-2026 (commit 2af619f): corrige cuatro fallas (la hora de Visitas, el selector de inasistencias, el Excel por rango de Reportes y la purga del registro de auditoría) y quita 18 funciones sin uso. Las 81 visitas pasadas con la hora corrida se dejan como están (decisión de la persona dueña, 15-11-2026); las nuevas ya se guardan con la hora correcta.
+
+La etapa 2 quedó hecha el 15-11-2026: un solo ayudante de pantalla por tarea (`frontend/js/ayudantes.js`), cuatro choques de nombres entre archivos resueltos y una prueba guardiana. Siguen la etapa 3 (arañas como pruebas permanentes), la 4 (SQL a los repositorios) y la 5 (partir las funciones grandes del cálculo).
 
 ### 2.8 Mapa del código (graphify)
 
-El grafo de `graphify-out/` es del 7-11 (commit `48c4485`) y desde entonces hubo más de 50 commits: está desactualizado. Solo existe en el PC donde se genera. Ver la propuesta de mostrarlo en Configuración.
+Se ve en Configuración → Mapa del código (solo el súper administrador) y se vuelve a publicar con cada cambio de código (`scripts/publicar_mapa.py`).

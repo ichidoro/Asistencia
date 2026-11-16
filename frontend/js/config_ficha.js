@@ -9,7 +9,7 @@ window.FichaCfg = (function () {
     const opciones = {};      // clave de pestaña → opciones con que se montó
     const buscado = {};       // clave de pestaña → texto escrito en el buscador de la lista
 
-    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function esc(s) { return window.Ayuda.esc(s); }
     function puede(p) { return typeof AuthService === 'undefined' || !p || AuthService.hasPermission(p); }
     function plano(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 

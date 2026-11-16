@@ -2705,9 +2705,7 @@ let m180_enlazados = [];       // quienes andan con esta persona ese día (para 
 let m180_revision_ctx = null;  // límites de Configuración y cómo terminó el día anterior (para «cosas por revisar»)
 let m180_patente_origen = null; // de dónde salió el camión elegido: PLAN, MANUAL, CHOFER o SIN_CAMION
 
-function m180Esc(t) {
-    return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+function m180Esc(t) { return window.Ayuda.esc(t); }
 
 function m180AcompNombre(id) {
     const emps = (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.data && stateMarcacionesApp.data.empleados) || [];
@@ -4199,7 +4197,7 @@ async function m180GpsVer() {
 
 function m180GpsHora(i) { return String(Math.floor(i / 4)).padStart(2, '0') + ':' + String((i % 4) * 15).padStart(2, '0'); }
 function m180GpsSeg(hms) { const p = String(hms || '').split(':').map(Number); return (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0); }
-function m180GpsEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function m180GpsEsc(t) { return window.Ayuda.esc(t); }
 
 // Comparación tramo a tramo de la libreta con el GPS: la usan el detalle de paradas y «cosas por revisar».
 // Tramos: 0 sin dato / en planta, 1 en movimiento, 2 detenido. Las tareas auxiliares no se juzgan (el camión puede estar andando o detenido).

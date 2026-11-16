@@ -81,9 +81,9 @@ Cada etapa se ensaya primero en una copia aparte, con todas las pruebas y con la
 - Araña de SQL: antes 4 consultas rechazadas, después 2, y esas 2 no son fallas (tablas que el código crea justo antes de usarlas).
 - El selector de inasistencias sigue la misma regla que el servicio de compensación (una justificación registrada excluye el día), así que hay un solo criterio. Con la condición corregida, un día con un permiso registrado tampoco aparece como inasistencia para compensar.
 
-**Decisión de la persona dueña:** qué hacer con las 81 visitas pasadas con la hora corrida. Corregirlas es escribir en la base de producción y la aplicación no tiene una pantalla para eso; dejarlas como están también es posible. No se hace sin su sí.
+**Decisión de la persona dueña (15-11-2026):** las 81 visitas pasadas con la hora corrida se dejan como están. La etapa 1 está en producción desde el 15-11-2026 (commit 2af619f).
 
-### Etapa 2: un solo ayudante por tarea
+### Etapa 2: un solo ayudante por tarea (**hecha**)
 
 1. Un archivo común de ayudantes de pantalla (escapar HTML, fecha corta, iniciales, minutos a HH:MM:SS) con el comportamiento de la mayoría y sin «null».
 2. Cada pantalla deja su copia y usa el común, un archivo por vez.
@@ -93,6 +93,38 @@ Cada etapa se ensaya primero en una copia aparte, con todas las pruebas y con la
 - La simulación de copias se corre antes y después: el común tiene que dar lo mismo que la mayoría de las copias para todas las entradas.
 - Las diferencias se anotan una por una: son las correcciones.
 - Pruebas de pantallas en teléfono, tablet y escritorio, y araña.
+
+**Resultado (15-11-2026, hecha):**
+- Nuevo `frontend/js/ayudantes.js` con `window.Ayuda.esc`, `window.Ayuda.ddmm` y `window.Ayuda.iniciales`. Carga antes que todo en `index.html` y `login.html`.
+- 43 copias en 24 archivos (escapar HTML, fecha corta e iniciales) pasan a llamar al común.
+  - Diferencias que quedan corregidas: ya no se muestra «null», se escapa la comilla simple, y las dos copias que no escapaban nada ahora escapan.
+  - Las iniciales salen igual en todas las pantallas.
+  - Reincorporación escapaba solo «<» en el mensaje de error de BioAlba.
+- Se dejan aparte, a propósito:
+  - `_esc` de Marcaciones devuelve tal cual lo que no es texto; así lo usa esa pantalla.
+  - `m180AcompIniciales` recibe «Nombre Apellido», que es otra tarea.
+  - Las iniciales de la Ficha se arman desde los campos nombre y apellido paterno. No adivinan por la posición de las palabras, que fallaría sin apellido materno o con apellidos de varias palabras.
+  - La fecha corta del Dashboard (React) se dejó como estaba.
+  - Las funciones `fmt` de minutos son tareas distintas con el mismo nombre (sección 4): no se juntan.
+- **Choques de nombres entre archivos** (el archivo que carga último reemplaza al otro sin aviso): se buscaron con un lector de JavaScript y aparecieron 5.
+  - `_escAttr` (Configuración y Marcaciones): la de Marcaciones solo escapaba comillas y reemplazaba a la de Configuración. Ahora se llama `_escComillas`.
+  - `updateSortIcons` (Horarios y main.js): la de Horarios ahora se llama `updateBulkSortIcons`.
+  - `formatExactMinutesToTime`: se quitó la copia de `asistencia.js`, que nunca se usaba porque la de Marcaciones carga después. No cambia lo que se ve.
+  - `showToast`: se quitó la copia de Configuración, que nunca se usaba (main.js la reponía al terminar la carga).
+  - `nombreTitulo` queda: `auth.js` la define solo si falta, como respaldo para la pantalla de ingreso.
+- Arreglo de paso: en Mapa del código, en teléfono, la etiqueta «Desactualizado: …» se salía 25 px del borde. Ahora se parte en dos líneas.
+- **Prueba guardiana** `backend/tests/test_ayudantes_unicos.py` (5 pruebas). Falla si:
+  - vuelve un escape HTML fuera de `ayudantes.js`;
+  - aparece una copia propia de fecha corta o de iniciales;
+  - `ayudantes.js` deja de cargar primero;
+  - aparece un nombre global repetido entre archivos.
+  Se comprobó contra el código anterior: las 5 fallan.
+- **Cómo se probó:**
+  - 560 pruebas pasan, incluidas las 5 de pantallas contra la copia de práctica.
+  - Se recorrieron la pantalla de ingreso, todas las pantallas y las 20 pestañas de Configuración, anotando cada error de JavaScript. La aplicación no dio ninguno.
+    - Se vio un solo aviso, en la pestaña Mapa del código: venía de la propia prueba. El navegador automático escribe la sesión en cada marco de la página, también en el marco cerrado del grafo, que no lo permite. No es de la aplicación.
+  - La araña no encontró nada nuevo: solo los dos avisos de Nexacol, que no está configurado en el PC.
+  - La simulación da un solo comportamiento por ayudante, salvo los que se dejaron aparte.
 
 ### Etapa 3: red de seguridad permanente
 

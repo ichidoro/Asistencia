@@ -60,7 +60,7 @@ window.openReincorporarWizard = async function(id) {
     } catch (error) {
         console.error("Error inicializando wizard:", error);
         document.getElementById('reinc-sync-diff').innerHTML =
-            '<div class="vn-ban a"><i class="bi bi-wifi-off" aria-hidden="true"></i><div><b>No se pudo consultar BioAlba</b>' + String(error.message || '').replace(/</g, '&lt;') + '</div></div>'
+            '<div class="vn-ban a"><i class="bi bi-wifi-off" aria-hidden="true"></i><div><b>No se pudo consultar BioAlba</b>' + window.Ayuda.esc(error.message) + '</div></div>'
             + '<div><button type="button" class="btn btn-light btn-sm" onclick="reincFetchBioAlbaDiff()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Reintentar</button></div>';
     }
 };
@@ -68,7 +68,7 @@ window.openReincorporarWizard = async function(id) {
 // 2. Sincronización BioAlba (Paso 1)
 async function reincFetchBioAlbaDiff() {
     const container = document.getElementById('reinc-sync-diff');
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const esc = (s) => window.Ayuda.esc(s);
     container.innerHTML = '<div class="vn-nota"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Buscando a la persona en BioAlba (RUT ' + esc(reincState.empleadoData.rut) + ')…</div>';
 
     try {

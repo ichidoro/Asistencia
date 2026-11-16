@@ -26,7 +26,7 @@ const PorteriaPanel = (function () {
     // ── utilidades ─────────────────────────────────────────────
     function puede(p) { return typeof AuthService === 'undefined' || AuthService.hasPermission(p); }
     function token() { return localStorage.getItem('access_token'); }
-    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function esc(s) { return window.Ayuda.esc(s); }
     function nombre(s) { return window.nombrePersona ? window.nombrePersona(s) : String(s || '').toUpperCase(); }
     function iniciales(s) { return window.inicialesDe ? window.inicialesDe(s) : String(s || '').slice(0, 2).toUpperCase(); }
     function frase(s) { const t = String(s || '').trim().toLowerCase(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
