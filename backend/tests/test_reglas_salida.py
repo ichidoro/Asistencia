@@ -691,16 +691,20 @@ def test_ventana_ingreso_manual_en_dos_columnas_conserva_todo():
     modal = html[i:html.index('<!-- Modal de Decisión', i)]
     for ident in ("manual-empleado-display", "manual-area-display", "manual-cargo-display", "manual-turno-display",
                   "manual-fecha-display", "manual-alert-faltante", "manual-alert-huerfana", "manual-hora-entrada",
-                  "manual-hora-salida", "divTramosBolsa", "manual-minutos-conduccion", "manual-minutos-espera",
+                  "manual-hora-salida",
                   "manual-observaciones", "btn-unlock-manual", "mm-col-marcas", "mm-h-jornada", "mm-h-colacion", "mm-h-sale",
                   "mm-c-horas", "mm-c-atraso", "mm-c-sal", "mm-c-deuda"):
         assert f'id="{ident}"' in modal, ident
     assert "modal-xl" in modal and 'class="mm-grid"' in modal
+    # Las casillas antiguas de conducción y espera de Bolsa se quitaron (16-11-2026): esos minutos van en la libreta del
+    # Art. 25 bis; las casillas guardaban en columnas que la base nunca tuvo
+    assert "manual-minutos-conduccion" not in modal and "divTramosBolsa" not in modal
     assert 'onclick="saveManualEntry()"' in modal and 'onclick="closeManualEntryModal()"' in modal
     css = open(os.path.join(base, "css", "ventanas.css"), encoding="utf-8").read()
     assert "#modal-marcacion-manual .mm-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr)" in css
     router = open(os.path.join(base, "..", "backend", "routers", "asistencia.py"), encoding="utf-8").read()
     assert '"calculo": ({"estado": hd.get("estado")' in router and '"colacion_tipica": tipica' in router
+    assert '"/tramos/"' not in router
 
 
 def test_no_se_usa_es_una_salida_de_la_revision():

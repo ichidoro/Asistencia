@@ -2327,52 +2327,6 @@ async def agregar_marcaciones_masivas(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/tramos/")
-async def actualizar_tramos(
-    empleado_id: int = Body(...),
-    fecha: str = Body(...),
-    minutos_conduccion_b: Optional[int] = Body(None),
-    minutos_espera_b: Optional[int] = Body(None),
-    service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
-):
-    """
-    Permite registrar/modificar manualmente los tramos con RLS.
-    """
-    # RLS
-    emp_repo = EmpleadoRepository(service.repository.db)
-    emp = await emp_repo.get_by_id(empleado_id)
-    if not emp:
-         raise HTTPException(status_code=404, detail="Empleado no encontrado")
-    
-    current_user.verificar_acceso_area(emp.area, "este empleado")
-
-    # Blindaje de Cierre
-    if await service.is_fecha_cerrada_empleado(empleado_id, fecha):
-         raise HTTPException(status_code=403, detail="El periodo correspondiente a esta fecha se encuentra cerrado y no admite modificaciones.")
-
-    try:
-        # Verificar que exista la asistencia
-        actual = await service.repository.get_asistencia(empleado_id, fecha)
-        if not actual:
-            raise HTTPException(status_code=404, detail="No existe registro de asistencia para esta fecha. El empleado debe tener al menos una marca o turno proyectado.")
-            
-        # Actualizar en DB
-        await AsistenciaRepository(service.repository.db).set_tramos(empleado_id, fecha, minutos_conduccion_b, minutos_espera_b)
-        
-        # Opcionalmente recalcular la asistencia si hubo otros cambios. Por ahora solo guardamos.
-        
-        updated = await service.repository.get_asistencia(empleado_id, fecha)
-        return {
-            "success": True,
-            "mensaje": f"Tramos actualizados correctamente para el {fecha}.",
-            "asistencia": updated
-        }
-    except Exception as e:
-        from loguru import logger
-        logger.error(f"Error actualizando tramos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @router.post("/recalcular-bolsa/")
 async def recalcular_bolsa_endpoint(
     empleado_id: int = Body(...),

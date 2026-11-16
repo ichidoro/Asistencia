@@ -1199,12 +1199,3 @@ class AsistenciaRepository:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """
         await self.db.executemany(q_insert, filas)
-
-    async def set_tramos(self, empleado_id: int, fecha: str, minutos_conduccion_b, minutos_espera_b) -> None:
-        """Guarda los minutos de conducción y de espera escritos a mano para ese día."""
-        query = """
-            UPDATE asistencias
-            SET minutos_conduccion_b = ?, minutos_espera_b = ?
-            WHERE empleado_id = ? AND fecha = ?
-        """
-        await self.db.execute(query, (minutos_conduccion_b, minutos_espera_b, empleado_id, fecha))

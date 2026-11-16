@@ -135,7 +135,7 @@ FUNCIONES_SIN_SQL = {
                       "delete_intercambio", "create_compensacion", "delete_compensacion", "reasignar_turno_endpoint",
                       "_hora_de_entrada_sin_cerrar", "agregar_marcacion_manual", "_marcas_del_dia", "reclasificar_marcaciones",
                       "quitar_marcacion_manual", "eliminar_jornada_especial_manual",
-                      "agregar_marcaciones_masivas", "actualizar_tramos"],
+                      "agregar_marcaciones_masivas"],
 }
 
 

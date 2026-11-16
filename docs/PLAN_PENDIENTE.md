@@ -99,7 +99,7 @@ Etapa 4, parte 10 (16-11-2026): las marcas manuales (agregar, quitar, borrar las
 
 Etapa 4, parte 11 (16-11-2026): el relleno masivo y los tramos (6 consultas). En Asistencia quedan 22.
 
-**Para decidir (visto en el ensayo de la parte 11, sin cambiar nada):** guardar los tramos de Bolsa (minutos de conducción y de espera, en la ventana de marcas manuales) siempre da error 500, porque esas dos columnas no existen en la base. ¿Se crean las columnas, se quita el campo de la ventana o se deja como está?
+**Hecho el 16-11-2026 (decisión de la persona dueña):** se quitaron de la ventana de marcas manuales las casillas antiguas de conducción y espera de Bolsa, y su ruta `/tramos/`. Siempre daban error 500, porque la base nunca tuvo esas columnas. Esos minutos se registran en la libreta del Art. 25 bis, que no se tocó.
 
 **Fallas que ya existían, vistas en el ensayo de la parte 5: arregladas el 16-11-2026** (decisión de la persona dueña):
 - Confirmar un cambio de área pendiente daba error 500 (buscaba un dato «area» que la tabla no tiene). Ahora usa el número del área y anota solo la ficha del empleado: el historial queda con la fecha efectiva, sin un registro de más. En producción no había cambios pendientes (0) y nadie la había usado en 30 días.

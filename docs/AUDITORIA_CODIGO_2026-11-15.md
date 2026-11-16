@@ -384,7 +384,12 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
   - Compara también las marcas guardadas (con su huella) y los días recalculados.
   - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. También el ensayo de la parte 10.
   - Pasan las 578 pruebas.
-- **Falla que ya existía, vista en el ensayo (sin cambiar nada):** guardar los tramos (minutos de conducción y de espera de Bolsa) siempre da error 500. Las columnas `minutos_conduccion_b` y `minutos_espera_b` no existen en la tabla de asistencias, ni en la copia de práctica ni en producción. Queda para que la persona dueña decida.
+- **Falla que ya existía, vista en el ensayo:** guardar los tramos (minutos de conducción y de espera de Bolsa) siempre daba error 500. Las columnas `minutos_conduccion_b` y `minutos_espera_b` no existen en la tabla de asistencias, ni en la copia de práctica ni en producción.
+- **Resuelto el 16-11-2026 (decisión de la persona dueña):** se quitaron esas dos casillas de la ventana de marcas manuales, su envío y la ruta `/api/asistencia/tramos/`.
+  - Venían de la primera versión del sistema (07-05-2026), de cuando el Art. 25 bis se llevaba con el reloj.
+  - Desde el 01-10-2026 esos minutos se registran en la libreta del Art. 25 bis, que tiene su propia tabla. La libreta no se tocó.
+  - Nada del cálculo leía esas casillas.
+  - La prueba de la ventana revisa que no vuelvan.
 
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 

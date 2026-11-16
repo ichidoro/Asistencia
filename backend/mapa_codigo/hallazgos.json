@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1413,
+  "total": 1411,
   "top": [
    {
     "funcion": "_solve_core",
@@ -192,11 +192,11 @@
   },
   {
    "archivo": "frontend/js/marcaciones_manuales.js",
-   "lineas": 5215
+   "lineas": 5169
   },
   {
    "archivo": "backend/routers/asistencia.py",
-   "lineas": 3905
+   "lineas": 3859
   },
   {
    "archivo": "backend/services/asistencia_service.py",

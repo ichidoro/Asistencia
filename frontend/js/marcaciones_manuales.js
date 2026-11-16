@@ -766,9 +766,6 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     // Manejo de Inputs de Hora
     const inputEntrada = document.getElementById('manual-hora-entrada');
     const inputSalida = document.getElementById('manual-hora-salida');
-    const divTramos = document.getElementById('divTramosBolsa');
-    const inputCond = document.getElementById('manual-minutos-conduccion');
-    const inputEsp = document.getElementById('manual-minutos-espera');
     const btnUnlock = document.getElementById('btn-unlock-manual');
 
     // Elementos de visualización adicionales
@@ -783,8 +780,6 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     inputSalida.value = '';
     inputSalida.disabled = false;
     inputSalida.dataset.teorico = '';
-    if (inputCond) inputCond.value = '';
-    if (inputEsp) inputEsp.value = '';
     if (btnUnlock) btnUnlock.style.display = 'none';
 
     if (lblArea) lblArea.value = '';
@@ -806,16 +801,6 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
             if (lblArea) lblArea.value = eData.area || '';
             if (lblCargo) lblCargo.value = eData.cargo || '';
             if (lblTurno) lblTurno.value = eData.nombre_turno || eData.turno || (asist ? asist.turno_nombre : '') || '';
-        }
-    }
-
-    marcacionesManualesState.isBolsaFija = (asist && (asist.tipo_programacion === 'BOLSA_FLEXIBLE' || asist.tipo_programacion === 'FLEXIBLE_BOLSA'));
-
-    if (divTramos) {
-        divTramos.style.display = marcacionesManualesState.isBolsaFija ? 'flex' : 'none';
-        if (marcacionesManualesState.isBolsaFija && asist) {
-            if (inputCond && asist.minutos_conduccion_b !== undefined && asist.minutos_conduccion_b !== null) inputCond.value = asist.minutos_conduccion_b;
-            if (inputEsp && asist.minutos_espera_b !== undefined && asist.minutos_espera_b !== null) inputEsp.value = asist.minutos_espera_b;
         }
     }
 
@@ -1788,8 +1773,6 @@ async function saveManualEntry() {
 
     const inputEntrada = document.getElementById('manual-hora-entrada');
     const inputSalida = document.getElementById('manual-hora-salida');
-    const inputCond = document.getElementById('manual-minutos-conduccion');
-    const inputEsp = document.getElementById('manual-minutos-espera');
 
     let nuevaEntrada = (!inputEntrada.disabled && inputEntrada.value) ? inputEntrada.value.trim() : null;
     let nuevaSalida = (!inputSalida.disabled && inputSalida.value) ? inputSalida.value.trim() : null;
@@ -1799,22 +1782,9 @@ async function saveManualEntry() {
         nuevaSalida = null;
     }
 
-    let tramosConduccion = null;
-    let tramosEspera = null;
-    let enviaTramos = false;
-
-    if (marcacionesManualesState.isBolsaFija) {
-        tramosConduccion = inputCond && inputCond.value !== "" ? parseInt(inputCond.value) : null;
-        tramosEspera = inputEsp && inputEsp.value !== "" ? parseInt(inputEsp.value) : null;
-        if (tramosConduccion !== null || tramosEspera !== null) enviaTramos = true;
-    }
-
-    if (!nuevaEntrada && !nuevaSalida && !enviaTramos) {
-        const msg = marcacionesManualesState.isBolsaFija
-            ? "Falta la hora. Escriba la ENTRADA, la SALIDA o un tramo de conducción."
-            : "Falta la hora. Escriba la ENTRADA, la SALIDA o las dos antes de guardar.";
+    if (!nuevaEntrada && !nuevaSalida) {
+        const msg = "Falta la hora. Escriba la ENTRADA, la SALIDA o las dos antes de guardar.";
         const campos = [inputEntrada, inputSalida].filter(el => el && !el.disabled);
-        if (marcacionesManualesState.isBolsaFija && inputCond) campos.push(inputCond);
         if (window.Avisos) window.Avisos.falta(msg, { campos });
         else alert(msg);
         return;
@@ -1835,22 +1805,6 @@ async function saveManualEntry() {
         let urlSal = `/api/asistencia/marcaciones/manual/?empleado_id=${empId}&fecha=${encodeURIComponent(dateStr)}&hora=${encodeURIComponent(nuevaSalida)}&tipo=Salida`;
         if (obs) urlSal += `&observaciones=${encodeURIComponent(obs)}`;
         promises.push(fetch(urlSal, { method: 'POST' }).then(r => r.json().then(data => ({ status: r.status, body: data, type: 'Salida' }))));
-    }
-
-    // Preparar Request Tramos (Bolsa Flexible)
-    if (enviaTramos) {
-        promises.push(
-            fetch('/api/asistencia/tramos/', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    empleado_id: parseInt(empId),
-                    fecha: dateStr,
-                    minutos_conduccion_b: tramosConduccion,
-                    minutos_espera_b: tramosEspera
-                })
-            }).then(r => r.json().then(data => ({ status: r.status, body: data, type: 'Tramos Bolsa' })))
-        );
     }
 
     try {
