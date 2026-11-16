@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1430,
+  "total": 1431,
   "top": [
    {
     "funcion": "_solve_core",
@@ -169,11 +169,6 @@
     "lineas": 451
    },
    {
-    "funcion": "reprocesar_periodo_empleado",
-    "archivo": "backend/services/asistencia_service.py",
-    "lineas": 359
-   },
-   {
     "funcion": "_calcular_filas",
     "archivo": "backend/services/report_service.py",
     "lineas": 316
@@ -182,6 +177,11 @@
     "funcion": "get_bulk_context",
     "archivo": "backend/services/asistencia_service.py",
     "lineas": 312
+   },
+   {
+    "funcion": "lifespan",
+    "archivo": "backend/core/events.py",
+    "lineas": 280
    }
   ]
  },
@@ -200,7 +200,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3332
+   "lineas": 3354
   },
   {
    "archivo": "frontend/js/sync_wizard.js",

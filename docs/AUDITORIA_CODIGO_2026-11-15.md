@@ -488,6 +488,11 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - **Ensayo:** el mismo de 114 personas, 16.756 días y 2.586 días sueltos: **idéntico** a la primera pasada.
 - Pasan las 577 pruebas.
 
+**Avance (16-11-2026): paso 1c hecho.** El cálculo de un día dentro del recorrido (90 líneas: armar el contexto del día, calcularlo sin guardar y anotar qué guardar o borrar de asistencia, horas extra y jornada especial) pasó a `_calcular_dia_del_periodo`, con el mismo texto (cuatro espacios menos de sangría; comparado línea por línea). Recibe por nombre las listas, el mapa de días y las estadísticas, y los llena igual que antes. El salto de los días cerrados y el guardado parcial cada 50 días quedan en el recorrido, porque el guardado parcial vacía esas listas. `reprocesar_periodo_empleado` quedó en 279 líneas.
+- **Ensayo con el respaldo:** **idéntico** (114 personas, 16.756 días y 2.586 días sueltos).
+- **El guardado:** el ensayo con el respaldo calcula sin guardar, así que no pasa por el guardado. Por eso se repitieron en la copia de práctica los ensayos de las partes 13 y 14, que recalculan guardando de verdad y comparan los días guardados: **idénticos**. En el de la parte 14, los empleados y el área de ensayo ahora se crean con números fijos, porque los números nuevos chocaban con el tapado de números (cambiaban fechas y horas del resultado). Ese ajuste es del ensayo, no del código.
+- Pasan las 577 pruebas.
+
 ---
 
 ## 7. Lo que no promete este plan

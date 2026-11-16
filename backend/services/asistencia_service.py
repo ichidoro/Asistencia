@@ -1083,6 +1083,108 @@ class AsistenciaService:
         return rotativo_last_sem_dict
 
 
+    async def _calcular_dia_del_periodo(self, *, empleado_id,
+            fecha_str, ayer_str, force, emp_row, all_asignaciones, all_logs, justs, turno_detalles,
+            turno_weeks_count, asistencias_map, he_map, feriados_dict, periodos, first_assignment,
+            rotativo_last_sem_dict, closed_dates, intercambios_por_fecha, compensaciones_por_fecha,
+            jornadas_especiales_por_fecha, marcas_consumidas, stats, results_to_save, results_to_delete, he_to_save,
+            he_to_delete, je_to_save, je_to_delete) -> None:
+        """Un día dentro del recorrido de reprocesar_periodo_empleado: arma su contexto, lo calcula sin guardar y anota
+        en las listas qué guardar o borrar (asistencia, horas extra, jornada especial). Llena las listas, el mapa de
+        días, la semana de rotación y las estadísticas que recibe, igual que cuando este código estaba en el recorrido.
+        Mismo código que estaba en reprocesar_periodo_empleado."""
+        # Asistencia de ayer (para seed de consumo nocturno)
+        prev_db = asistencias_map.get(ayer_str)
+
+        # Seleccionar la asignación vigente para ESTA fecha específica
+        # Misma lógica que get_bulk_context: fecha_inicio <= fecha AND (fecha_fin IS NULL OR fecha_fin >= fecha)
+        asigned_for_day = None
+        for a in all_asignaciones:  # orden desc → primer match = más reciente vigente
+            asig_inicio = a.get('asignacion_desde', '')
+            asig_fin = a.get('asig_fecha_fin')  # None = indefinido
+            if asig_inicio <= fecha_str and (asig_fin is None or asig_fin >= fecha_str):
+                asigned_for_day = a
+                break
+        asigs_map = {empleado_id: asigned_for_day} if asigned_for_day else {}
+
+        # Construir static_ctx para este día
+        static_ctx = {
+            'empleados': {empleado_id: dict(emp_row)},
+            'asignaciones': asigs_map,
+            'justificaciones': {empleado_id: justs},
+            'logs': {empleado_id: all_logs},  # El motor filtrará por consumo
+            'turnos': turno_detalles,
+            'turnos_weeks': turno_weeks_count,
+            'asistencias_ayer': {empleado_id: prev_db} if prev_db else {},
+            'asistencias_hoy': {empleado_id: asistencias_map.get(fecha_str)} if asistencias_map.get(fecha_str) else {},
+            'horas_extras': {empleado_id: he_map},  # Guardamos todo el mapa para buscar por fecha en procesar_empleado_dia
+            'feriados': feriados_dict,
+            'periodos_empleo': {empleado_id: periodos},
+            'first_assignments': {empleado_id: first_assignment},
+            'rotativo_last_sem_dict': rotativo_last_sem_dict,
+            'closed_dates': closed_dates,
+            'intercambios': {empleado_id: intercambios_por_fecha},
+            'compensaciones': {empleado_id: compensaciones_por_fecha},
+            'jornadas_especiales': {empleado_id: jornadas_especiales_por_fecha}
+        }
+
+        try:
+            # ⚡ OPTIMIZACIÓN: save=False → acumular en RAM, sin commit individual por día
+            result = await self.procesar_empleado_dia(
+                empleado_id, 
+                fecha_str, 
+                save=False, 
+                force=force, 
+                bulk_ctx=static_ctx,
+                marcas_consumidas_session=marcas_consumidas
+            )
+            
+            # Update offset for next iteration
+            # rotativo_offset_dict ya se mutó por referencia en static_ctx
+            if result:
+                # ⚡ DELTA: solo guardar si el resultado difiere del existente en DB
+                existing = asistencias_map.get(fecha_str)
+                if existing and self._asistencia_fingerprint(result) == self._asistencia_fingerprint(existing):
+                    stats['sin_cambio'] += 1
+                else:
+                    results_to_save.append(result)
+                # ── PERSISTENCIA DIFERIDA: horas_extras (decidido por el motor) ──
+                if float(result.get('minutos_extra_bruto') or 0) > 0:
+                    he_to_save.append({
+                        'empleado_id': empleado_id,
+                        'fecha': fecha_str,
+                        'minutos_bruto': result.get('minutos_extra_bruto', 0),
+                        'minutos_autorizados': result.get('_he_minutos_autorizados', 0),
+                        'estado': result.get('_he_estado') or 'PENDIENTE',
+                        'reabrir': bool(result.get('_he_reabrir')),
+                    })
+                elif not result.get('_he_conservar'):
+                    # (día sin calcular con horas extra ya decididas: su fila queda tal cual)
+                    he_to_delete.append((empleado_id, fecha_str))
+                # ── PERSISTENCIA DIFERIDA: jornadas_especiales (decidido por el motor) ──
+                if not result.get('_manual_override'):
+                    je_prev = jornadas_especiales_por_fecha.get(fecha_str)
+                    if result.get('_jornada_especial'):
+                        je_to_save.append(result['_jornada_especial'])
+                    elif je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                        je_to_delete.append((empleado_id, fecha_str))
+                asistencias_map[fecha_str] = result
+            else:
+                existing = asistencias_map.get(fecha_str)
+                if existing:
+                    results_to_delete.append((empleado_id, fecha_str))
+                he_to_delete.append((empleado_id, fecha_str))
+                je_prev = jornadas_especiales_por_fecha.get(fecha_str)
+                if je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                    je_to_delete.append((empleado_id, fecha_str))
+            stats['procesados'] += 1
+        except Exception as e:
+            import traceback
+            logger.error(f"Error calculando asistencia empleado {empleado_id} fecha {fecha_str}: {e}\n{traceback.format_exc()}")
+            stats['errores'] += 1
+            stats.setdefault('error_list', []).append(f"{fecha_str}: {str(e)}")
+
+
     async def reprocesar_periodo_empleado(
         self,
         empleado_id: int,
@@ -1237,96 +1339,16 @@ class AsistenciaService:
                     pct=round(day_index / total_days * 100),
                 )
 
-            # Asistencia de ayer (para seed de consumo nocturno)
-            prev_db = asistencias_map.get(ayer_str)
-
-            # Seleccionar la asignación vigente para ESTA fecha específica
-            # Misma lógica que get_bulk_context: fecha_inicio <= fecha AND (fecha_fin IS NULL OR fecha_fin >= fecha)
-            asigned_for_day = None
-            for a in all_asignaciones:  # orden desc → primer match = más reciente vigente
-                asig_inicio = a.get('asignacion_desde', '')
-                asig_fin = a.get('asig_fecha_fin')  # None = indefinido
-                if asig_inicio <= fecha_str and (asig_fin is None or asig_fin >= fecha_str):
-                    asigned_for_day = a
-                    break
-            asigs_map = {empleado_id: asigned_for_day} if asigned_for_day else {}
-
-            # Construir static_ctx para este día
-            static_ctx = {
-                'empleados': {empleado_id: dict(emp_row)},
-                'asignaciones': asigs_map,
-                'justificaciones': {empleado_id: justs},
-                'logs': {empleado_id: all_logs},  # El motor filtrará por consumo
-                'turnos': turno_detalles,
-                'turnos_weeks': turno_weeks_count,
-                'asistencias_ayer': {empleado_id: prev_db} if prev_db else {},
-                'asistencias_hoy': {empleado_id: asistencias_map.get(fecha_str)} if asistencias_map.get(fecha_str) else {},
-                'horas_extras': {empleado_id: he_map},  # Guardamos todo el mapa para buscar por fecha en procesar_empleado_dia
-                'feriados': feriados_dict,
-                'periodos_empleo': {empleado_id: periodos},
-                'first_assignments': {empleado_id: first_assignment},
-                'rotativo_last_sem_dict': rotativo_last_sem_dict,
-                'closed_dates': closed_dates,
-                'intercambios': {empleado_id: intercambios_por_fecha},
-                'compensaciones': {empleado_id: compensaciones_por_fecha},
-                'jornadas_especiales': {empleado_id: jornadas_especiales_por_fecha}
-            }
-
-            try:
-                # ⚡ OPTIMIZACIÓN: save=False → acumular en RAM, sin commit individual por día
-                result = await self.procesar_empleado_dia(
-                    empleado_id, 
-                    fecha_str, 
-                    save=False, 
-                    force=force, 
-                    bulk_ctx=static_ctx,
-                    marcas_consumidas_session=marcas_consumidas
-                )
-                
-                # Update offset for next iteration
-                # rotativo_offset_dict ya se mutó por referencia en static_ctx
-                if result:
-                    # ⚡ DELTA: solo guardar si el resultado difiere del existente en DB
-                    existing = asistencias_map.get(fecha_str)
-                    if existing and self._asistencia_fingerprint(result) == self._asistencia_fingerprint(existing):
-                        stats['sin_cambio'] += 1
-                    else:
-                        results_to_save.append(result)
-                    # ── PERSISTENCIA DIFERIDA: horas_extras (decidido por el motor) ──
-                    if float(result.get('minutos_extra_bruto') or 0) > 0:
-                        he_to_save.append({
-                            'empleado_id': empleado_id,
-                            'fecha': fecha_str,
-                            'minutos_bruto': result.get('minutos_extra_bruto', 0),
-                            'minutos_autorizados': result.get('_he_minutos_autorizados', 0),
-                            'estado': result.get('_he_estado') or 'PENDIENTE',
-                            'reabrir': bool(result.get('_he_reabrir')),
-                        })
-                    elif not result.get('_he_conservar'):
-                        # (día sin calcular con horas extra ya decididas: su fila queda tal cual)
-                        he_to_delete.append((empleado_id, fecha_str))
-                    # ── PERSISTENCIA DIFERIDA: jornadas_especiales (decidido por el motor) ──
-                    if not result.get('_manual_override'):
-                        je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                        if result.get('_jornada_especial'):
-                            je_to_save.append(result['_jornada_especial'])
-                        elif je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
-                            je_to_delete.append((empleado_id, fecha_str))
-                    asistencias_map[fecha_str] = result
-                else:
-                    existing = asistencias_map.get(fecha_str)
-                    if existing:
-                        results_to_delete.append((empleado_id, fecha_str))
-                    he_to_delete.append((empleado_id, fecha_str))
-                    je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                    if je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
-                        je_to_delete.append((empleado_id, fecha_str))
-                stats['procesados'] += 1
-            except Exception as e:
-                import traceback
-                logger.error(f"Error calculando asistencia empleado {empleado_id} fecha {fecha_str}: {e}\n{traceback.format_exc()}")
-                stats['errores'] += 1
-                stats.setdefault('error_list', []).append(f"{fecha_str}: {str(e)}")
+            await self._calcular_dia_del_periodo(
+                empleado_id=empleado_id, fecha_str=fecha_str, ayer_str=ayer_str, force=force, emp_row=emp_row,
+                all_asignaciones=all_asignaciones, all_logs=all_logs, justs=justs, turno_detalles=turno_detalles,
+                turno_weeks_count=turno_weeks_count, asistencias_map=asistencias_map, he_map=he_map,
+                feriados_dict=feriados_dict, periodos=periodos, first_assignment=first_assignment,
+                rotativo_last_sem_dict=rotativo_last_sem_dict, closed_dates=closed_dates,
+                intercambios_por_fecha=intercambios_por_fecha, compensaciones_por_fecha=compensaciones_por_fecha,
+                jornadas_especiales_por_fecha=jornadas_especiales_por_fecha, marcas_consumidas=marcas_consumidas,
+                stats=stats, results_to_save=results_to_save, results_to_delete=results_to_delete, he_to_save=he_to_save,
+                he_to_delete=he_to_delete, je_to_save=je_to_save, je_to_delete=je_to_delete)
 
             # ⚡ Checkpoint de seguridad: guardar batch parcial cada N días
             # Deshabilitado en collect_only (CHECKPOINT_INTERVAL=0 → modulo nunca es 0)
