@@ -70,7 +70,9 @@ def test_sin_politica_no_se_reparte_nada():
 
 def test_el_recalculo_de_una_persona_reparte_el_cuadre_despues_de_guardar():
     fuente = inspect.getsource(svc_mod.AsistenciaService.reprocesar_periodo_empleado)
-    guardar = fuente.index('BATCH FINAL')
+    # El guardado final está en su propia función desde el 16-11-2026 (etapa 5, paso 1d)
+    assert 'BATCH FINAL' in inspect.getsource(svc_mod.AsistenciaService._guardar_resultados_periodo)
+    guardar = fuente.index('self._guardar_resultados_periodo(')
     reparto = fuente.index('_reaplicar_cuadre_en_fechas(')
     recoleccion = fuente.index('if collect_only:\n            # ── Modo recolección')
     assert recoleccion < guardar < reparto            # en modo recolección no se reparte: lo hace quien guarda

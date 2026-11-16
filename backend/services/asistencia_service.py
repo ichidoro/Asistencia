@@ -1185,6 +1185,55 @@ class AsistenciaService:
             stats.setdefault('error_list', []).append(f"{fecha_str}: {str(e)}")
 
 
+    async def _guardar_resultados_periodo(self, *, empleado_id, collect_only, stats, results_to_save, results_to_delete,
+                                          he_to_save, he_to_delete, je_to_save, je_to_delete) -> None:
+        """Guardado final de reprocesar_periodo_empleado: lo calculado de una vez (asistencia, horas extra, jornadas
+        especiales) y, si eso falla, la asistencia día por día. En collect_only no guarda nada. Mismo código que estaba
+        en reprocesar_periodo_empleado (suma los errores del guardado día por día a las estadísticas que recibe)."""
+        import time
+        _time = time.time
+
+        # ⚡ BATCH FINAL: guardar todos los resultados restantes en UN SOLO commit
+        if not collect_only and (results_to_save or results_to_delete or je_to_save or je_to_delete):
+            try:
+                t_save_start = _time()
+                if results_to_save:
+                    await self.repository.batch_upsert_asistencia(results_to_save)
+                if results_to_delete:
+                    for eid_del, f_str in results_to_delete:
+                        await self.repository.delete_asistencia(eid_del, f_str)
+                if he_to_save:
+                    await self.he_repo.batch_upsert(he_to_save)
+                if he_to_delete:
+                    for eid_del, f_str in he_to_delete:
+                        await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
+                if je_to_save:
+                    for je_rec in je_to_save:
+                        await self.repository.upsert_jornada_especial(je_rec)
+                if je_to_delete:
+                    for eid_del, f_str in je_to_delete:
+                        await self.repository.db.execute(SQL_BORRAR_JE_SIN_DECISION, (eid_del, f_str))
+                t_save = int((_time() - t_save_start) * 1000)
+                logger.debug(f"💾 Batch final: {len(results_to_save)} upserts, {len(results_to_delete)} deletes en {t_save}ms (emp {empleado_id})")
+            except Exception as e:
+                logger.error(f"❌ Error en batch final (emp {empleado_id}): {e}")
+                # Fallback: guardar uno por uno si el batch falla
+                logger.warning(f"🔄 Fallback: guardando día por día...")
+                if results_to_save:
+                    for result in results_to_save:
+                        try:
+                            await self.repository.upsert_asistencia(result)
+                        except Exception as e2:
+                            logger.error(f"Error guardando {result.get('fecha')}: {e2}")
+                            stats['errores'] += 1
+                if results_to_delete:
+                    for eid_del, f_str in results_to_delete:
+                        try:
+                            await self.repository.delete_asistencia(eid_del, f_str)
+                        except Exception as e3:
+                            logger.error(f"Error eliminando {f_str}: {e3}")
+
+
     async def reprocesar_periodo_empleado(
         self,
         empleado_id: int,
@@ -1406,45 +1455,10 @@ class AsistenciaService:
                 **stats
             }
 
-        # ⚡ BATCH FINAL: guardar todos los resultados restantes en UN SOLO commit
-        if not collect_only and (results_to_save or results_to_delete or je_to_save or je_to_delete):
-            try:
-                t_save_start = _time()
-                if results_to_save:
-                    await self.repository.batch_upsert_asistencia(results_to_save)
-                if results_to_delete:
-                    for eid_del, f_str in results_to_delete:
-                        await self.repository.delete_asistencia(eid_del, f_str)
-                if he_to_save:
-                    await self.he_repo.batch_upsert(he_to_save)
-                if he_to_delete:
-                    for eid_del, f_str in he_to_delete:
-                        await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
-                if je_to_save:
-                    for je_rec in je_to_save:
-                        await self.repository.upsert_jornada_especial(je_rec)
-                if je_to_delete:
-                    for eid_del, f_str in je_to_delete:
-                        await self.repository.db.execute(SQL_BORRAR_JE_SIN_DECISION, (eid_del, f_str))
-                t_save = int((_time() - t_save_start) * 1000)
-                logger.debug(f"💾 Batch final: {len(results_to_save)} upserts, {len(results_to_delete)} deletes en {t_save}ms (emp {empleado_id})")
-            except Exception as e:
-                logger.error(f"❌ Error en batch final (emp {empleado_id}): {e}")
-                # Fallback: guardar uno por uno si el batch falla
-                logger.warning(f"🔄 Fallback: guardando día por día...")
-                if results_to_save:
-                    for result in results_to_save:
-                        try:
-                            await self.repository.upsert_asistencia(result)
-                        except Exception as e2:
-                            logger.error(f"Error guardando {result.get('fecha')}: {e2}")
-                            stats['errores'] += 1
-                if results_to_delete:
-                    for eid_del, f_str in results_to_delete:
-                        try:
-                            await self.repository.delete_asistencia(eid_del, f_str)
-                        except Exception as e3:
-                            logger.error(f"Error eliminando {f_str}: {e3}")
+        await self._guardar_resultados_periodo(
+            empleado_id=empleado_id, collect_only=collect_only, stats=stats, results_to_save=results_to_save,
+            results_to_delete=results_to_delete, he_to_save=he_to_save, he_to_delete=he_to_delete, je_to_save=je_to_save,
+            je_to_delete=je_to_delete)
 
         # Los hechos cambiaron: la política del cuadre de la persona se vuelve a repartir sola, como en procesar_dia.
         # Va aunque la asistencia no cambie: validar un +2 como horas extra solo cambia su fila de horas extra

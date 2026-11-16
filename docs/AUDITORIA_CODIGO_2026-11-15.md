@@ -493,6 +493,12 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - **El guardado:** el ensayo con el respaldo calcula sin guardar, así que no pasa por el guardado. Por eso se repitieron en la copia de práctica los ensayos de las partes 13 y 14, que recalculan guardando de verdad y comparan los días guardados: **idénticos**. En el de la parte 14, los empleados y el área de ensayo ahora se crean con números fijos, porque los números nuevos chocaban con el tapado de números (cambiaban fechas y horas del resultado). Ese ajuste es del ensayo, no del código.
 - Pasan las 577 pruebas.
 
+**Avance (16-11-2026): paso 1d hecho; con él, el paso 1 completo.** El guardado final (39 líneas: lo calculado de una vez y, si falla, día por día) pasó a `_guardar_resultados_periodo`, con el mismo texto. El reparto del cuadre es una sola línea y quedó en la función grande, después del guardado, como antes. `reprocesar_periodo_empleado` bajó de 646 a 244 líneas, repartidas en cuatro piezas con nombre.
+- **Ensayos:** con el respaldo, **idéntico**. Guardando de verdad en la copia de práctica, los de las partes 12, 13 y 14: **idénticos**. El camino de respaldo (guardar día por día cuando falla el guardado de una vez) no lo recorre ningún ensayo; se movió sin cambios.
+- Una revisión de nombres confirmó que a ninguna de las cinco funciones le falta una variable.
+- La prueba que revisa que el cuadre se reparta después de guardar buscaba la marca del guardado dentro de la función grande. Ahora busca la llamada a `_guardar_resultados_periodo` y revisa que esa función sea la que guarda.
+- Pasan las 577 pruebas.
+
 ---
 
 ## 7. Lo que no promete este plan

@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-16T16:45:09+00:00",
- "publicado": "2026-11-16T16:45:10+00:00",
- "commit": "3158e08",
+ "armado": "2026-11-16T17:42:28+00:00",
+ "publicado": "2026-11-16T17:42:29+00:00",
+ "commit": "e4e4a40",
  "archivos_leidos": 261,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -78,7 +78,7 @@
   "backend/scraper/easytime_scraper.py": "7c78fd444720503f17635ff2f061d8d3",
   "backend/scripts/construir_limites_comunas.py": "f063dde8093b8c12bbb210acdbdbf22b",
   "backend/services/__init__.py": "c013e476a045ace63f511c034cdcb9d9",
-  "backend/services/asistencia_service.py": "2b66d09ad1615309d2e69126d76cfa29",
+  "backend/services/asistencia_service.py": "fb6efbd71ceaca723086e2f49c27e922",
   "backend/services/bolsa_prorrateo.py": "2358999c2e56098b5bb82c6c1d865167",
   "backend/services/bono_service.py": "0939e64bf8788968b098a6ff6517cdc1",
   "backend/services/calendario_service.py": "3b2f97312fe56ddbcecd9225b0b41f7c",
@@ -133,7 +133,7 @@
   "backend/tests/test_cierre_paso3_cuadre.py": "fa60d2da3fc2b13d54c397a63b03db5e",
   "backend/tests/test_cierre_resumen.py": "21725b3431711b465b488fef7eed9419",
   "backend/tests/test_compensar_inasistencia.py": "7a5d8a359c7c26cdc1d4f8dc44168629",
-  "backend/tests/test_cuadre_al_validar_jornada.py": "19442d900074fc792bce5d5c6ca33798",
+  "backend/tests/test_cuadre_al_validar_jornada.py": "2ca3195efdc7504db6c7b9dd5ad40172",
   "backend/tests/test_cuadre_politica.py": "5340e898aca21ba91310cd00343ca177",
   "backend/tests/test_dashboard_detalle.py": "81a05a406621e16b55d2a9e20faa6652",
   "backend/tests/test_dashboard_indicadores.py": "9cd514ad039afc4edb80e62bb32c19bb",
