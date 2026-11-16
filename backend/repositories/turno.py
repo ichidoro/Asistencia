@@ -1121,8 +1121,12 @@ class TurnoRepository:
                 getattr(turno, 'libreta_desde', None),
                 turno_id
             )
-            await self.db.execute(sql_update, params)
-            
+            res = await self.db.execute(sql_update, params)
+            # Si no existe ese turno, no se tocan sus días ni sus áreas y el router responde «Turno no encontrado»
+            # (antes respondía «Turno actualizado correctamente»; 16-11-2026)
+            if res is not None and getattr(res, 'rowcount', 1) == 0:
+                return False
+
             # 1.5 Update turno_areas
             await self.db.execute("DELETE FROM turno_areas WHERE turno_id = ?", (turno_id,))
             if turno.areas:

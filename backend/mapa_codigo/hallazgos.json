@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1345,
+  "total": 1346,
   "top": [
    {
     "funcion": "_solve_core",

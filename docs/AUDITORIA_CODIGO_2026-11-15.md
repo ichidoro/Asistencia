@@ -260,7 +260,7 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
   - Se repitieron los cuatro ensayos anteriores: siguen idénticos.
   - Pasan las 573 pruebas.
 - **Prueba nueva** `test_nombres_definidos.py`: revisa todo el servidor con el analizador de Python y falla si se usa un nombre que no existe. Se comprobó que habría atrapado el error de Turnos.
-- **Fallas que ya existían, sin cambiar nada** (vistas en el ensayo; quedan en el plan para decidir):
+- **Fallas que ya existían** (vistas en el ensayo; **arregladas aparte el 16-11-2026**, con `test_fallas_16_11.py`; ver el plan):
   - **Confirmar un cambio de área pendiente da error 500.** El código lee `pendiente['area']`, pero esa tabla no tiene esa columna, solo `area_id` (`KeyError: 'area'`).
   - **Crear o editar un empleado con un área que no existe da error 500** en vez de un aviso: la base rechaza el área y nadie lo maneja.
   - **Cambiar un turno que no existe responde «Turno actualizado correctamente».**

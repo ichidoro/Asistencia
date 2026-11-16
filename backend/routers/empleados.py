@@ -220,9 +220,12 @@ async def crear_empleado(
     current_user: SecurityContext = Depends(RequirePermission("empleados.crear"))
 ):
     # RLS: Resolver área a partir de ID si es necesario para validación de permisos
-    if empleado.area_id and not empleado.area:
+    if empleado.area_id:
         res = await AreaRepository(service.repository.db).get_area_by_id(empleado.area_id)
-        if res:
+        if not res:
+            # Antes la base rechazaba el área y la app respondía error 500 (16-11-2026)
+            raise HTTPException(status_code=400, detail="El área seleccionada no existe.")
+        if not empleado.area:
             empleado.area = res["nombre"]
 
     # RLS: Validar que el área elegida sea permitida para el usuario
@@ -465,7 +468,9 @@ async def confirmar_cambio_area(
         raise HTTPException(status_code=404, detail="No se encontró el registro histórico")
     
     empleado_id = pendiente['empleado_id']
-    nueva_area = pendiente['area']
+    # El historial guarda el número del área (area_id), no su nombre (antes se leía pendiente['area'], que no existe,
+    # y confirmar daba error 500; arreglado el 16-11-2026)
+    nueva_area_id = pendiente['area_id']
 
     # RLS: Verificar pertenencia
     emp = await service.get_empleado(empleado_id)
@@ -504,9 +509,10 @@ async def confirmar_cambio_area(
             validado=True
         )
         
-        # 2.4 Sincronizar campo 'area' en tabla principal de empleados
-        from backend.schemas.empleado import EmpleadoUpdate
-        await service.update_empleado(empleado_id, EmpleadoUpdate(area=nueva_area))
+        # 2.4 Sincronizar el área en la ficha del empleado. Solo la ficha: el historial ya quedó cerrado y validado en
+        # 2.2 y 2.3 con la fecha efectiva. (update_empleado abriría otro registro desde hoy y cerraría este con fecha
+        # de ayer, perdiendo la fecha efectiva.)
+        await service.repository.set_area_actual(empleado_id, nueva_area_id)
 
         # 2.5 Asignación inmediata de Turno (Flujo Unificado)
         if request.turno_id:
@@ -600,9 +606,12 @@ async def actualizar_empleado(
          raise HTTPException(status_code=403, detail="No tiene permisos para editar este empleado")
 
     # RLS: Resolver área a partir de ID si es necesario para validación de permisos
-    if empleado_data.area_id and not empleado_data.area:
+    if empleado_data.area_id:
         res = await AreaRepository(service.repository.db).get_area_by_id(empleado_data.area_id)
-        if res:
+        if not res:
+            # Antes la base rechazaba el área y la app respondía error 500 (16-11-2026)
+            raise HTTPException(status_code=400, detail="El área seleccionada no existe.")
+        if not empleado_data.area:
             empleado_data.area = res["nombre"]
 
     # RLS: Si está cambiando de área, la nueva área también debe ser permitida

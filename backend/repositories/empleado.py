@@ -1149,6 +1149,14 @@ class EmpleadoRepository:
     # HISTORIAL DE ÁREAS (TEMPORAL VISIBILITY)
     # ============================================
 
+    async def set_area_actual(self, empleado_id: int, area_id: int) -> None:
+        """Anota el área actual en la ficha del empleado, sin tocar el historial (lo usa «confirmar cambio de área»,
+        que ya cerró y validó el historial con la fecha efectiva)."""
+        await self.db.execute(
+            "UPDATE empleados SET area_id = ?, updated_at = datetime('now') WHERE id = ?",
+            (area_id, empleado_id)
+        )
+
     async def get_historial_area_by_id(self, historial_id: int) -> Optional[dict]:
         """Un registro del historial de áreas por su id, tal como está en la tabla (SELECT *)."""
         return await self.db.fetch_one(
