@@ -514,7 +514,11 @@ async def system_health() -> Dict[str, Any]:
     summary="Probar conexión",
     description="Prueba la conexión con BioAlba"
 )
-async def test_connection() -> Dict[str, Any]:
+async def test_connection(
+    # Antes respondía sin sesión y cualquiera podía hacer que el servidor probara la conexión con BioAlba
+    # (16-11-2026). Mismo permiso que las demás rutas de sincronización.
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.wizard", "marcaciones.sincronizar", "reportes.sincronizar"]))
+) -> Dict[str, Any]:
     """
     Probar conexión con BioAlba.
     

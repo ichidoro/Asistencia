@@ -31,8 +31,6 @@ PUBLICAS = {
     # Con su propia protección
     "POST /api/sync/cron/": "lo llama el cron del servidor con una clave secreta",
     "GET /api/porteria/fotos/{nombre}": "nombre aleatorio no adivinable, como un enlace de Drive",
-    # Pendiente de decidir (16-11-2026): sin sesión hace que el servidor pruebe la conexión con BioAlba
-    "GET /api/sync/test/": "pendiente: ¿pedir sesión?",
 }
 DEPENDENCIAS_DE_SESION = {"get_current_user", "RequirePermission", "RequireAnyPermission"}
 
@@ -53,8 +51,10 @@ def rutas_sin_sesion():
     return sin
 
 
-def test_el_historial_de_sincronizaciones_pide_sesion():
-    assert "GET /api/sync/logs/" not in rutas_sin_sesion()
+def test_el_historial_y_la_prueba_de_conexion_piden_sesion():
+    abiertas = rutas_sin_sesion()
+    assert "GET /api/sync/logs/" not in abiertas
+    assert "GET /api/sync/test/" not in abiertas
 
 
 def test_no_hay_rutas_nuevas_sin_sesion():
