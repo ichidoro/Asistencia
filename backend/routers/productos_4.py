@@ -6,6 +6,8 @@ from backend.core.security import SecurityContext, RequirePermission, RequireAny
 from backend.core.database import get_db, Database
 from backend.services.productos_4_service import Productos4Service
 from backend.repositories.productos_4 import Productos4Repository
+from backend.repositories.empleado import EmpleadoRepository
+from backend.repositories.seguridad import SeguridadRepository
 
 router = APIRouter(
     prefix="/productos-4",
@@ -37,6 +39,11 @@ class EntregaGuardarRequest(BaseModel):
     entregado: bool
 
 # --- Endpoints de Catálogo de Productos ---
+
+async def _auditar(db: Database, current_user: SecurityContext, accion: str, detalle: str) -> None:
+    """Deja el cambio en el registro de auditoría (módulo «4 Productos»)."""
+    await SeguridadRepository(db).log_auditoria(current_user.user_id, current_user.username, accion, "4 Productos", detalle)
+
 
 @router.get(
     "/productos",
@@ -85,16 +92,7 @@ async def crear_producto(
             raise HTTPException(status_code=500, detail="Fallo al insertar el producto en la base de datos.")
             
         # Registrar en auditoría
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (
-                current_user.user_id,
-                current_user.username,
-                "CREATE_PRODUCTO_PROPIO",
-                "4 Productos",
-                f"Creado producto '{prod.descripcion}' (Código: {prod.codigo}) con límite de {prod.max_cantidad} unidades."
-            )
-        )
+        await _auditar(db, current_user, "CREATE_PRODUCTO_PROPIO", f"Creado producto '{prod.descripcion}' (Código: {prod.codigo}) con límite de {prod.max_cantidad} unidades.")
         return {"success": True, "message": "Producto creado exitosamente."}
     except HTTPException:
         raise
@@ -133,16 +131,7 @@ async def editar_producto(
             raise HTTPException(status_code=500, detail="Fallo al actualizar el producto en la base de datos.")
             
         # Registrar en auditoría
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (
-                current_user.user_id,
-                current_user.username,
-                "UPDATE_PRODUCTO_PROPIO",
-                "4 Productos",
-                f"Modificado producto '{prod.descripcion}' (Código: {codigo}). Activo: {prod.activo}. Máximo: {prod.max_cantidad}."
-            )
-        )
+        await _auditar(db, current_user, "UPDATE_PRODUCTO_PROPIO", f"Modificado producto '{prod.descripcion}' (Código: {codigo}). Activo: {prod.activo}. Máximo: {prod.max_cantidad}.")
         return {"success": True, "message": "Producto modificado exitosamente."}
     except HTTPException:
         raise
@@ -191,13 +180,7 @@ async def guardar_asignacion(
 ):
     try:
         # RLS: Verificar pertenencia del empleado a un área accesible por el usuario
-        emp_row = await db.fetch_one("""
-            SELECT a.nombre as area_nombre 
-            FROM empleados e
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1
-            LEFT JOIN areas a ON ha.area_id = a.id
-            WHERE e.id = ?
-        """, (req.empleado_id,))
+        emp_row = await EmpleadoRepository(db).get_area_actual_para_permisos(req.empleado_id)
         
         if not emp_row:
             raise HTTPException(status_code=404, detail="Empleado no encontrado")
@@ -218,16 +201,7 @@ async def guardar_asignacion(
             raise HTTPException(status_code=400, detail=message)
             
         # Registrar en auditoría
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (
-                current_user.user_id,
-                current_user.username,
-                "ASSIGN_PRODUCTOS_PROPIOS",
-                "4 Productos",
-                f"Asignados productos {req.codigos} al empleado ID: {req.empleado_id} para el periodo {req.anio}-{req.mes:02d}."
-            )
-        )
+        await _auditar(db, current_user, "ASSIGN_PRODUCTOS_PROPIOS", f"Asignados productos {req.codigos} al empleado ID: {req.empleado_id} para el periodo {req.anio}-{req.mes:02d}.")
         return {"success": True, "message": message}
     except HTTPException:
         raise
@@ -308,16 +282,7 @@ async def registrar_entrega(
         accion = "DELIVER_PRODUCTOS_PROPIOS" if req.entregado else "REVERT_DELIVER_PRODUCTOS_PROPIOS"
         detalle = f"Marcada como entregada la asignación del empleado ID: {req.empleado_id} para {req.anio}-{req.mes:02d}." if req.entregado else f"Revertida a pendiente la entrega del empleado ID: {req.empleado_id} para {req.anio}-{req.mes:02d}."
         
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (
-                current_user.user_id,
-                current_user.username,
-                accion,
-                "4 Productos",
-                detalle
-            )
-        )
+        await _auditar(db, current_user, accion, detalle)
         return {"success": True, "message": message}
     except HTTPException:
         raise
@@ -369,16 +334,7 @@ async def api_cerrar_periodo(
             raise HTTPException(status_code=400, detail=message)
             
         # Registrar en auditoría
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (
-                current_user.user_id,
-                current_user.username,
-                "CLOSE_PERIOD_PRODUCTOS_4",
-                "4 Productos",
-                f"Cerrado período de asignación de productos propios para {req.anio}-{req.mes:02d}."
-            )
-        )
+        await _auditar(db, current_user, "CLOSE_PERIOD_PRODUCTOS_4", f"Cerrado período de asignación de productos propios para {req.anio}-{req.mes:02d}.")
         return {"success": True, "message": message}
     except HTTPException:
         raise
@@ -404,16 +360,7 @@ async def api_reabrir_periodo(
             raise HTTPException(status_code=400, detail=message)
             
         # Registrar en auditoría
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (
-                current_user.user_id,
-                current_user.username,
-                "REOPEN_PERIOD_PRODUCTOS_4",
-                "4 Productos",
-                f"Reabierto período de asignación de productos propios para {req.anio}-{req.mes:02d}."
-            )
-        )
+        await _auditar(db, current_user, "REOPEN_PERIOD_PRODUCTOS_4", f"Reabierto período de asignación de productos propios para {req.anio}-{req.mes:02d}.")
         return {"success": True, "message": message}
     except HTTPException:
         raise

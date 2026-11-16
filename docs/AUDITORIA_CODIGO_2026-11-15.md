@@ -183,6 +183,28 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
 - **Guardián:** `test_routers_ordenados_sin_consultas_propias` falla si uno de estos routers vuelve a consultar la base directo. Se comprobó contra el código anterior. Cada router que se ordene se suma a su lista.
 - **Siguen:** Portería (13), Productos 4, Cierre y Sync (7 cada uno), los chicos (Empleados, Auth y Turnos), Artículo 22 (15), Configuración (33) y, al final, Asistencia (57).
 
+**Avance (15-11-2026): parte 2 hecha.** Portería y Productos 4 ya no tienen consultas en sus routers: eran 20, y en los routers quedan 126 de 177.
+- **Auditoría:** los 13 registros de auditoría de los dos módulos ahora pasan por `SeguridadRepository.log_auditoria`, el mismo INSERT de antes.
+- **Portería:** las revisiones de nombre o código repetido quedan en `PorteriaRepository`: `get_hallazgo_con_nombre`, `get_ubicacion_con_nombre` y `get_ubicacion_con_codigo`.
+- **Productos 4:** el área del empleado al asignar productos queda en `EmpleadoRepository.get_area_actual_para_permisos`.
+  - Se dejó **aparte y tal cual**: a diferencia de las otras consultas de ese archivo, no exige que el área esté validada. Juntarla con ellas habría cambiado qué empleados se pueden asignar.
+- **Cómo se probó:**
+  - Ensayo de 48 pasos. Antes de cada corrida, las tablas se reponen a su estado de fábrica (Portería trae 8 hallazgos y 5 ubicaciones). Recorre:
+    - el catálogo de hallazgos y las ubicaciones: altas, nombres y códigos repetidos, cambios y bajas;
+    - las rondas: sincronización, repetidas y recientes;
+    - los productos, las asignaciones y entregas, y el cierre y la reapertura del mes.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**, incluidos los 16 registros de auditoría.
+  - Se repitió el ensayo de la parte 1: sigue idéntico.
+  - Pasan las 569 pruebas.
+- **El guardián** ahora reconoce también las consultas hechas con `repo.db.…`, la forma que usaba Portería. Se comprobó contra el Portería anterior.
+- **Siguen:**
+  - Cierre (7): toca la reapertura de períodos, así que va con su propio ensayo.
+  - Sync (7).
+  - Los chicos: Empleados, Auth y Turnos.
+  - Artículo 22 (15).
+  - Configuración (33).
+  - Asistencia (57).
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

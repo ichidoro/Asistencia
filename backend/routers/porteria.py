@@ -11,6 +11,7 @@ from loguru import logger
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission, get_current_user
 from backend.repositories.porteria import PorteriaRepository
+from backend.repositories.seguridad import SeguridadRepository
 from backend.services.deshacer_porteria import REGISTROS, deshacer, segundos_para_deshacer
 from backend.services.google_drive import GoogleDriveService
 from backend.schemas.porteria import (
@@ -35,6 +36,11 @@ router = APIRouter(
 # ============================================
 async def get_porteria_repository(db: Database = Depends(get_db)) -> PorteriaRepository:
     return PorteriaRepository(db)
+
+
+async def _auditar(db: Database, current_user: SecurityContext, accion: str, detalle: str) -> None:
+    """Deja el cambio en el registro de auditoría (módulo «Porteria»)."""
+    await SeguridadRepository(db).log_auditoria(current_user.user_id, current_user.username, accion, "Porteria", detalle)
 
 
 # ============================================
@@ -63,26 +69,14 @@ async def create_catalogo_hallazgo(
         raise HTTPException(status_code=400, detail="El nombre del hallazgo no puede estar vacío.")
     
     # Verificar si ya existe
-    existente = await repo.db.fetch_one(
-        "SELECT id FROM porteria_catalogo_hallazgos WHERE LOWER(nombre) = LOWER(?)",
-        (nombre_normalizado,)
-    )
+    existente = await repo.get_hallazgo_con_nombre(nombre_normalizado)
     if existente:
         raise HTTPException(status_code=400, detail=f"El hallazgo '{nombre_normalizado}' ya existe en el catálogo.")
 
     new_id = await repo.create_hallazgo(nombre_normalizado)
     
     # Registrar auditoría
-    await repo.db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "CREATE_PORTERIA_HALLAZGO_CATALOGO",
-            "Porteria",
-            f"Creado hallazgo en catálogo: '{nombre_normalizado}' (ID: {new_id})."
-        )
-    )
+    await _auditar(repo.db, current_user, "CREATE_PORTERIA_HALLAZGO_CATALOGO", f"Creado hallazgo en catálogo: '{nombre_normalizado}' (ID: {new_id}).")
     return {"id": new_id, "nombre": nombre_normalizado, "message": "Hallazgo del catálogo creado exitosamente"}
 
 
@@ -104,10 +98,7 @@ async def update_catalogo_hallazgo(
         raise HTTPException(status_code=404, detail="Hallazgo del catálogo no encontrado")
 
     # Verificar si el nuevo nombre colisiona con otro registro
-    colision = await repo.db.fetch_one(
-        "SELECT id FROM porteria_catalogo_hallazgos WHERE LOWER(nombre) = LOWER(?) AND id != ?",
-        (nombre_normalizado, hallazgo_id)
-    )
+    colision = await repo.get_hallazgo_con_nombre(nombre_normalizado, excepto_id=hallazgo_id)
     if colision:
         raise HTTPException(status_code=400, detail=f"Ya existe otro hallazgo con el nombre '{nombre_normalizado}'.")
 
@@ -116,16 +107,7 @@ async def update_catalogo_hallazgo(
         raise HTTPException(status_code=500, detail="No se pudo actualizar el hallazgo en el catálogo")
 
     # Registrar auditoría
-    await repo.db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "UPDATE_PORTERIA_HALLAZGO_CATALOGO",
-            "Porteria",
-            f"Actualizado hallazgo #{hallazgo_id}: nombre='{nombre_normalizado}', activo={finding.activo}."
-        )
-    )
+    await _auditar(repo.db, current_user, "UPDATE_PORTERIA_HALLAZGO_CATALOGO", f"Actualizado hallazgo #{hallazgo_id}: nombre='{nombre_normalizado}', activo={finding.activo}.")
     return {"id": hallazgo_id, "message": "Hallazgo del catálogo actualizado correctamente"}
 
 
@@ -145,16 +127,7 @@ async def delete_catalogo_hallazgo(
          raise HTTPException(status_code=500, detail="Error al eliminar el hallazgo del catálogo")
 
     # Registrar auditoría
-    await repo.db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "DELETE_PORTERIA_HALLAZGO_CATALOGO",
-            "Porteria",
-            f"Eliminado/Desactivado hallazgo #{hallazgo_id} ('{db_finding['nombre']}')."
-        )
-    )
+    await _auditar(repo.db, current_user, "DELETE_PORTERIA_HALLAZGO_CATALOGO", f"Eliminado/Desactivado hallazgo #{hallazgo_id} ('{db_finding['nombre']}').")
     return
 
 
@@ -185,34 +158,19 @@ async def create_ubicacion(
         raise HTTPException(status_code=400, detail="El nombre y código de la ubicación no pueden estar vacíos.")
     
     # Verificar si ya existe por nombre
-    existente_nombre = await repo.db.fetch_one(
-        "SELECT id FROM porteria_ubicaciones WHERE LOWER(nombre) = LOWER(?)",
-        (nombre_normalizado,)
-    )
+    existente_nombre = await repo.get_ubicacion_con_nombre(nombre_normalizado)
     if existente_nombre:
         raise HTTPException(status_code=400, detail=f"La ubicación con el nombre '{nombre_normalizado}' ya existe.")
 
     # Verificar si ya existe por código
-    existente_codigo = await repo.db.fetch_one(
-        "SELECT id FROM porteria_ubicaciones WHERE LOWER(codigo) = LOWER(?)",
-        (codigo_normalizado.lower(),)
-    )
+    existente_codigo = await repo.get_ubicacion_con_codigo(codigo_normalizado.lower())
     if existente_codigo:
         raise HTTPException(status_code=400, detail=f"La ubicación con el código '{codigo_normalizado}' ya existe.")
 
     new_id = await repo.create_ubicacion(nombre_normalizado, codigo_normalizado)
     
     # Registrar auditoría
-    await repo.db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "CREATE_PORTERIA_UBICACION",
-            "Porteria",
-            f"Creada ubicación: '{nombre_normalizado}' - Código: '{codigo_normalizado}' (ID: {new_id})."
-        )
-    )
+    await _auditar(repo.db, current_user, "CREATE_PORTERIA_UBICACION", f"Creada ubicación: '{nombre_normalizado}' - Código: '{codigo_normalizado}' (ID: {new_id}).")
     return {"id": new_id, "nombre": nombre_normalizado, "codigo": codigo_normalizado, "message": "Ubicación creada exitosamente"}
 
 
@@ -235,18 +193,12 @@ async def update_ubicacion(
         raise HTTPException(status_code=404, detail="Ubicación no encontrada")
 
     # Verificar si el nuevo nombre colisiona con otro registro
-    colision_nombre = await repo.db.fetch_one(
-        "SELECT id FROM porteria_ubicaciones WHERE LOWER(nombre) = LOWER(?) AND id != ?",
-        (nombre_normalizado, ubicacion_id)
-    )
+    colision_nombre = await repo.get_ubicacion_con_nombre(nombre_normalizado, excepto_id=ubicacion_id)
     if colision_nombre:
         raise HTTPException(status_code=400, detail=f"Ya existe otra ubicación con el nombre '{nombre_normalizado}'.")
 
     # Verificar si el nuevo código colisiona con otro registro
-    colision_codigo = await repo.db.fetch_one(
-        "SELECT id FROM porteria_ubicaciones WHERE LOWER(codigo) = LOWER(?) AND id != ?",
-        (codigo_normalizado.lower(), ubicacion_id)
-    )
+    colision_codigo = await repo.get_ubicacion_con_codigo(codigo_normalizado.lower(), excepto_id=ubicacion_id)
     if colision_codigo:
         raise HTTPException(status_code=400, detail=f"Ya existe otra ubicación con el código '{codigo_normalizado}'.")
 
@@ -255,16 +207,7 @@ async def update_ubicacion(
         raise HTTPException(status_code=500, detail="No se pudo actualizar la ubicación")
 
     # Registrar auditoría
-    await repo.db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "UPDATE_PORTERIA_UBICACION",
-            "Porteria",
-            f"Actualizada ubicación #{ubicacion_id}: nombre='{nombre_normalizado}', código='{codigo_normalizado}', activo={ubicacion.activo}."
-        )
-    )
+    await _auditar(repo.db, current_user, "UPDATE_PORTERIA_UBICACION", f"Actualizada ubicación #{ubicacion_id}: nombre='{nombre_normalizado}', código='{codigo_normalizado}', activo={ubicacion.activo}.")
     return {"id": ubicacion_id, "message": "Ubicación actualizada correctamente"}
 
 
@@ -284,16 +227,7 @@ async def delete_ubicacion(
          raise HTTPException(status_code=500, detail="Error al eliminar la ubicación")
 
     # Registrar auditoría
-    await repo.db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "DELETE_PORTERIA_UBICACION",
-            "Porteria",
-            f"Eliminada/Desactivada ubicación #{ubicacion_id} ('{db_ubi['nombre']}')."
-        )
-    )
+    await _auditar(repo.db, current_user, "DELETE_PORTERIA_UBICACION", f"Eliminada/Desactivada ubicación #{ubicacion_id} ('{db_ubi['nombre']}').")
     return
 
 
@@ -383,16 +317,7 @@ async def sync_rondas(
     res = await repo.sync_rondas_batch(rondas_dict_list)
     
     # Registrar auditoría
-    await repo.db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "SYNC_PORTERIA_RONDAS",
-            "Porteria",
-            f"Sincronizado lote de rondas: {res['sincronizadas']} exitosas, {res['duplicadas']} duplicadas, {res['errores']} errores."
-        )
-    )
+    await _auditar(repo.db, current_user, "SYNC_PORTERIA_RONDAS", f"Sincronizado lote de rondas: {res['sincronizadas']} exitosas, {res['duplicadas']} duplicadas, {res['errores']} errores.")
 
     return res
 

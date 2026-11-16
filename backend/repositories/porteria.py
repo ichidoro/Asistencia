@@ -125,6 +125,18 @@ class PorteriaRepository:
         query += " ORDER BY id ASC"
         return await self.db.fetch_all(query)
 
+    async def get_hallazgo_con_nombre(self, nombre: str, excepto_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Un hallazgo del catálogo con ese nombre (sin distinguir mayúsculas); con `excepto_id`, otro distinto de ese."""
+        if excepto_id is None:
+            return await self.db.fetch_one(
+                "SELECT id FROM porteria_catalogo_hallazgos WHERE LOWER(nombre) = LOWER(?)",
+                (nombre,)
+            )
+        return await self.db.fetch_one(
+            "SELECT id FROM porteria_catalogo_hallazgos WHERE LOWER(nombre) = LOWER(?) AND id != ?",
+            (nombre, excepto_id)
+        )
+
     async def get_hallazgo_by_id(self, hallazgo_id: int) -> Optional[Dict[str, Any]]:
         return await self.db.fetch_one(
             "SELECT * FROM porteria_catalogo_hallazgos WHERE id = ?",
@@ -174,6 +186,30 @@ class PorteriaRepository:
             query += " WHERE activo = 1"
         query += " ORDER BY id ASC"
         return await self.db.fetch_all(query)
+
+    async def get_ubicacion_con_nombre(self, nombre: str, excepto_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Una ubicación con ese nombre (sin distinguir mayúsculas); con `excepto_id`, otra distinta de esa."""
+        if excepto_id is None:
+            return await self.db.fetch_one(
+                "SELECT id FROM porteria_ubicaciones WHERE LOWER(nombre) = LOWER(?)",
+                (nombre,)
+            )
+        return await self.db.fetch_one(
+            "SELECT id FROM porteria_ubicaciones WHERE LOWER(nombre) = LOWER(?) AND id != ?",
+            (nombre, excepto_id)
+        )
+
+    async def get_ubicacion_con_codigo(self, codigo: str, excepto_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Una ubicación con ese código (sin distinguir mayúsculas); con `excepto_id`, otra distinta de esa."""
+        if excepto_id is None:
+            return await self.db.fetch_one(
+                "SELECT id FROM porteria_ubicaciones WHERE LOWER(codigo) = LOWER(?)",
+                (codigo,)
+            )
+        return await self.db.fetch_one(
+            "SELECT id FROM porteria_ubicaciones WHERE LOWER(codigo) = LOWER(?) AND id != ?",
+            (codigo, excepto_id)
+        )
 
     async def get_ubicacion_by_id(self, ubicacion_id: int) -> Optional[Dict[str, Any]]:
         return await self.db.fetch_one(

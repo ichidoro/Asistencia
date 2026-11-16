@@ -939,6 +939,18 @@ class EmpleadoRepository:
         logger.warning(f"✅ Empleado {empleado_id} eliminado para siempre: {borradas}")
         return borradas
 
+    async def get_area_actual_para_permisos(self, empleado_id: int) -> Optional[dict]:
+        """Nombre del área actual de un empleado (área_nombre), para revisar si el usuario puede verlo.
+        A diferencia de las otras consultas de este archivo, no exige que el área esté validada: así la usaba
+        Productos 4 al guardar una asignación (se movió de su router sin cambios, etapa 4 de la auditoría)."""
+        return await self.db.fetch_one("""
+            SELECT a.nombre as area_nombre
+            FROM empleados e
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
+            WHERE e.id = ?
+        """, (empleado_id,))
+
     async def get_stats_by_area(self, areas: Optional[List[str]] = None) -> List[dict]:
         """Obtener conteo de empleados por área con RLS.
         Incluye áreas con 0 empleados para que aparezcan en los selectores de la interfaz.

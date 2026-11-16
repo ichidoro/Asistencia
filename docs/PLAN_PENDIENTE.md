@@ -79,6 +79,8 @@ La etapa 3 quedó hecha el 15-11-2026. Ahora son pruebas permanentes: funciones 
 
 Etapa 4, parte 1 (15-11-2026): Flota, Visitas y Llaves ya no consultan la base desde sus routers; sus 31 consultas pasaron a los repositorios sin cambios (un ensayo de 59 pasos dio idéntico antes y después). En los routers quedan 146 de 177; el orden que sigue está en docs/AUDITORIA_CODIGO_2026-11-15.md.
 
+Etapa 4, parte 2 (15-11-2026): Portería y Productos 4 también; sus 20 consultas pasaron a los repositorios sin cambios (ensayo de 48 pasos idéntico antes y después). En los routers quedan 126 de 177. Sigue Cierre, con su propio ensayo porque toca la reapertura de períodos.
+
 ### 2.7 bis Limpieza de restos del desarrollo (15-11-2026, hecha)
 
 - **Servidor:**
