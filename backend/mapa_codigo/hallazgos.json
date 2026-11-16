@@ -1,7 +1,7 @@
 {
  "archivos_revisados": 165,
  "repetidas": {
-  "total": 135,
+  "total": 136,
   "top": [
    {
     "nombre": "esc",
@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1296,
+  "total": 1300,
   "top": [
    {
     "funcion": "_solve_core",

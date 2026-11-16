@@ -73,7 +73,9 @@ No arregla errores visibles: da orden para cambiar el código con menos riesgo.
 
 Plan en cinco etapas en `docs/AUDITORIA_CODIGO_2026-11-15.md`. La etapa 1 está en producción desde el 15-11-2026 (commit 2af619f): corrige cuatro fallas (la hora de Visitas, el selector de inasistencias, el Excel por rango de Reportes y la purga del registro de auditoría) y quita 18 funciones sin uso. Las 81 visitas pasadas con la hora corrida se dejan como están (decisión de la persona dueña, 15-11-2026); las nuevas ya se guardan con la hora correcta.
 
-La etapa 2 quedó hecha el 15-11-2026: un solo ayudante de pantalla por tarea (`frontend/js/ayudantes.js`), cuatro choques de nombres entre archivos resueltos y una prueba guardiana. Siguen la etapa 3 (arañas como pruebas permanentes), la 4 (SQL a los repositorios) y la 5 (partir las funciones grandes del cálculo).
+La etapa 2 quedó hecha el 15-11-2026: un solo ayudante de pantalla por tarea (`frontend/js/ayudantes.js`), cuatro choques de nombres entre archivos resueltos y una prueba guardiana.
+
+La etapa 3 quedó hecha el 15-11-2026. Ahora son pruebas permanentes: funciones sin uso, dependencias circulares, consultas que se caen, SQL con tablas o columnas que no existen y errores de JavaScript en las pantallas. Cada una se comprobó con una falla puesta a propósito. Quedan la etapa 4 (SQL a los repositorios) y la 5 (partir las funciones grandes del cálculo).
 
 ### 2.7 bis Limpieza de restos del desarrollo (15-11-2026, hecha)
 

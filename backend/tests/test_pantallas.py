@@ -96,12 +96,19 @@ def navegador():
         contexto = browser.new_context()
         # La sesión de la app vive en localStorage (AuthService: 'access_token' y
         # 'auth_user_data'): se siembra antes de que cargue el código de la página.
-        contexto.add_init_script(
-            f"localStorage.setItem('access_token', {json.dumps(sesion['access_token'])});"
-            f"localStorage.setItem('auth_user_data', {json.dumps(json.dumps(usuario))});")
+        contexto.add_init_script(_sembrar_sesion(sesion, usuario))
         page = contexto.new_page()
         yield page
         browser.close()
+
+
+def _sembrar_sesion(sesion, usuario):
+    # Solo en la página principal: el grafo del Mapa del código va en un marco cerrado que no permite localStorage,
+    # y sembrar ahí daba un error que no era de la aplicación
+    return ("if (window.top === window) {"
+            f"localStorage.setItem('access_token', {json.dumps(sesion['access_token'])});"
+            f"localStorage.setItem('auth_user_data', {json.dumps(json.dumps(usuario))});"
+            "}")
 
 
 def _preparar(page, ancho, alto):
@@ -164,3 +171,54 @@ def test_el_detector_si_detecta(navegador):
     hallado = navegador.evaluate(DETECTOR)
     navegador.evaluate("() => document.getElementById('prueba-cortado').remove()")
     assert any("prueba-cortado" in h for h in hallado), f"El detector no vio el elemento de prueba: {hallado}"
+
+
+def test_pantallas_sin_errores_de_javascript(navegador):
+    """Abre la pantalla de ingreso, cada pantalla y cada pestaña de Configuración, y anota todo error de JavaScript
+    (auditoría del 15-11-2026, etapa 3). Un error así suele dejar una pantalla a medio cargar sin aviso.
+    Incluye su autocomprobación: un error lanzado a propósito tiene que quedar anotado."""
+    sesion = _sesion()
+    usuario = {"user_id": sesion.get("user_id"), "username": sesion.get("username", USUARIO),
+               "nombre_completo": sesion.get("nombre_completo", ""), "rol": sesion.get("rol", "")}
+    errores, donde = [], {"v": "ingreso"}
+
+    def anotar(pagina):
+        pagina.on("pageerror", lambda e: errores.append(f"{donde['v']}: {str(e)[:200]}"))
+        pagina.on("console", lambda m: m.type == "error" and errores.append(f"{donde['v']} (consola): {m.text[:200]}"))
+
+    browser = navegador.context.browser   # el mismo navegador de las otras pruebas (Playwright no permite dos)
+    ingreso = browser.new_context().new_page()
+    anotar(ingreso)
+    ingreso.goto(URL + "/login", wait_until="load")
+    ingreso.wait_for_timeout(2500)
+    contexto = browser.new_context()
+    contexto.add_init_script(_sembrar_sesion(sesion, usuario))
+    page = contexto.new_page()
+    anotar(page)
+    donde["v"] = "arranque"
+    page.set_viewport_size({"width": 1366, "height": 900})
+    page.goto(URL + "/#/dashboard", wait_until="domcontentloaded")
+    page.wait_for_timeout(6000)
+    page.evaluate(CERRAR_AVISOS)
+    for nombre in PAGINAS:
+        donde["v"] = nombre
+        _medir_pagina(page, nombre)
+    selector = "#configTabs [data-bs-toggle], #configTabs button"
+    pestanas = page.evaluate(f"() => [...document.querySelectorAll('{selector}')]"
+                             ".map(b => b.textContent.replace(/\\s+/g,' ').trim()).filter(Boolean)")
+    assert len(pestanas) >= 10, f"El menú de Configuración no cargó (vi {len(pestanas)} pestañas)"
+    for t in pestanas:
+        donde["v"] = "Configuración › " + t
+        page.evaluate(f"t => {{ const b = [...document.querySelectorAll('{selector}')]"
+                      ".find(x => x.textContent.replace(/\\s+/g,' ').trim() === t); if (b) b.click(); }", t)
+        page.wait_for_timeout(1500)
+        page.evaluate(CERRAR_AVISOS)
+    reales = list(errores)
+    donde["v"] = "autocomprobación"
+    page.evaluate("() => setTimeout(() => { throw new Error('error de prueba a propósito'); }, 0)")
+    page.wait_for_timeout(500)
+    ingreso.context.close()
+    contexto.close()
+    assert any("error de prueba a propósito" in e for e in errores[len(reales):]), "la prueba no anota los errores"
+    assert reales == [], "errores de JavaScript en las pantallas:\n" + "\n".join(reales)
+

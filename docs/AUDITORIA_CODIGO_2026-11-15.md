@@ -126,13 +126,35 @@ Cada etapa se ensaya primero en una copia aparte, con todas las pruebas y con la
   - La araña no encontró nada nuevo: solo los dos avisos de Nexacol, que no está configurado en el PC.
   - La simulación da un solo comportamiento por ayudante, salvo los que se dejaron aparte.
 
-### Etapa 3: red de seguridad permanente
+### Etapa 3: red de seguridad permanente (**hecha**)
 
 1. La araña de consultas como prueba automática contra la copia de práctica, junto a las de pantallas: ningún endpoint de consulta puede devolver 500.
 2. La araña de SQL como prueba automática: ninguna consulta fija puede nombrar tablas o columnas que no existen.
 3. Pruebas guardianas del mapa: sin funciones nuevas sin uso, sin copias nuevas de ayudantes y sin dependencias circulares.
 
 **Cómo se prueba:** se agrega a propósito una falla de cada tipo en la copia aparte y la prueba tiene que detectarla, como ya hace la autocomprobación de las pruebas de pantallas.
+
+**Resultado (15-11-2026, hecha):**
+- **Corren siempre**, sin la app encendida (`backend/tests/test_red_seguridad_codigo.py`). Se calculan desde el código y no desde el mapa publicado, así que avisan antes de subir:
+  - Ninguna función del servidor sin uso: una función cuyo nombre aparece una sola vez en todo el código no la llama nadie.
+  - Ningún módulo del servidor que se importe en círculo.
+  - Las copias de ayudantes ya las cuida `test_ayudantes_unicos.py`, de la etapa 2.
+- **Corren con la copia de práctica encendida**, junto a las de pantallas:
+  - `test_arana_consultas.py`, araña de consultas: llama los GET y ninguno puede devolver 500 ni quedarse sin responder. Un 503 «no está configurada» (Nexacol en este PC) no cuenta como falla.
+  - `test_arana_consultas.py`, araña de SQL: ninguna de las 527 consultas fijas puede nombrar tablas o columnas que no existen. Solo corre contra una base de este PC y en modo solo lectura.
+    - Al pasarla a prueba aparecieron 2 avisos que no eran fallas: tablas que el código crea justo antes de usarlas (`registros_anulados` y una tabla temporal de una migración vieja). La araña ahora las reconoce.
+  - `test_pantallas.py` ahora también recorre la pantalla de ingreso, cada pantalla y cada pestaña de Configuración, y falla ante cualquier error de JavaScript. Trae su propia autocomprobación: lanza un error a propósito.
+  - Ya no se siembra la sesión dentro del marco del grafo, que era lo que causaba el único aviso que aparecía.
+- **Autocomprobación.** En una copia aparte se pusieron a propósito 5 fallas:
+  - una consulta que se cae;
+  - una columna que no existe;
+  - una función sin uso;
+  - dos módulos en círculo;
+  - un error de JavaScript al cargar.
+
+  Las 5 pruebas fallaron, cada una mostrando exactamente la falla puesta, y nada más. Con el código real pasan las 568.
+
+**Cómo correr todo antes de una subida que toque el servidor o las pantallas:** encender la copia de práctica (base en el puerto 5433 y app en el 8001) y correr `PANTALLAS_URL=http://127.0.0.1:8001 PANTALLAS_USUARIO=… PANTALLAS_CLAVE=… .venv\Scripts\python.exe -m pytest backend\tests -q`. Usuario y clave son los de práctica del `.env`.
 
 ### Etapa 4: consultas SQL a su lugar
 
