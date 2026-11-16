@@ -35,8 +35,9 @@ class _DbSoloLee:
 def test_selector_de_inasistencias_no_pide_columnas_que_no_existen():
     """F2: la consulta pedía justificaciones.estado, columna que la tabla no tiene: la ventana siempre fallaba."""
     import inspect
-    from backend.routers import asistencia as r
-    src = inspect.getsource(r.get_inasistencias_disponibles)
+    from backend.repositories.asistencia import AsistenciaRepository
+    # La consulta vive en el repositorio desde la etapa 4 (16-11-2026); antes estaba en el router
+    src = inspect.getsource(AsistenciaRepository.get_justificacion_del_dia)
     consulta = src.split('FROM justificaciones', 1)[1].split('"""', 1)[0]
     assert 'estado' not in consulta
 

@@ -311,6 +311,29 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
   - Pasan las 577 pruebas.
 - **Sigue:** Asistencia (57). Es el más grande y el más delicado, porque toca el cálculo.
 
+**Avance (16-11-2026): parte 8 hecha, la primera de Asistencia.** Se movieron sin cambios 9 consultas de solo lectura; en el router de Asistencia quedan 48. Son estas:
+- El bloqueo por personas con marcas y sin turno: `AsistenciaRepository.get_anomalias_de_bloqueo`.
+- El aviso de «hay cambios» de la grilla: `get_ultimo_cambio` y `get_resumen_marcas_crudas`.
+- Las inasistencias que se pueden compensar y la justificación de un día: `get_inasistencias_sin_consumir` y `get_justificacion_del_dia`.
+- Los empleados de un turno en el filtro: `EmpleadoRepository.get_activos_del_turno`.
+- Los empleados sin turno: `get_activos_sin_turno`.
+- El diagnóstico por área: `contar_sin_turno_en_area`.
+- El RUT para la primera marcación: `get_rut`.
+
+Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlba (en la copia de práctica no hay conexión) y se prueban de otra forma: la patente propuesta de la libreta, las velocidades de los choferes y los nombres de la libreta.
+
+**Cómo se probó:**
+- El ensayo crea en la copia de práctica tres empleados de ensayo:
+  - uno sin turno y con marcas;
+  - uno con turno y con inasistencias, de las cuales una está cubierta por una licencia, una ya está compensada y una es una «FALTA»;
+  - uno sin turno y sin marcas.
+- Recorre 16 pasos: el bloqueo de este mes, de otro mes y con una fecha mala; el aviso de cambios con y sin área; el filtro por turno; los sin turno; el diagnóstico de dos meses; las inasistencias con y sin día de origen; y los «no encontrado».
+- Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. Pasan las 577 pruebas.
+
+**Ajustes en las pruebas:**
+- La prueba de la etapa 1 sobre las justificaciones ahora lee la consulta desde su nuevo lugar, el repositorio. La condición que revisa es la misma.
+- Un guardián nuevo, `test_funciones_ordenadas_sin_consultas_propias`, vigila función por función las que ya se ordenaron. Se comprobó contra el código anterior.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

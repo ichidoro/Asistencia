@@ -1157,6 +1157,81 @@ class EmpleadoRepository:
             (area_id, empleado_id)
         )
 
+    # ── Consultas que vivían en routers/asistencia.py (etapa 4 de la auditoría, sin cambios) ──
+
+    async def get_rut(self, empleado_id: int) -> Optional[dict]:
+        return await self.db.fetch_one("SELECT rut FROM empleados WHERE id = ?", [empleado_id])
+
+    async def get_activos_del_turno(self, turno_id: int, area: Optional[str],
+                                    areas_permitidas: Optional[List[str]]) -> List[dict]:
+        """Empleados activos con una asignación vigente a ese turno (filtro de la grilla)."""
+        extra_cond = ""
+        params_emp: list = [turno_id]
+        if area:
+            extra_cond += " AND a.nombre = ?"
+            params_emp.append(area)
+        if areas_permitidas:
+            ph = ",".join("?" * len(areas_permitidas))
+            extra_cond += f" AND a.nombre IN ({ph})"
+            params_emp.extend(areas_permitidas)
+        return await self.db.fetch_all(f"""
+            SELECT DISTINCT e.id,
+                   (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) as nombre_completo,
+                   e.rut, a.nombre as area, e.activo
+            FROM empleados e
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
+            INNER JOIN asignacion_turnos ast ON e.id = ast.empleado_id
+            WHERE e.activo = 1
+              AND ast.turno_id = ?
+              AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= date('now'))
+              {extra_cond}
+            ORDER BY e.apellido_paterno ASC, e.apellido_materno ASC, e.nombre ASC
+        """, tuple(params_emp))
+
+    async def get_activos_sin_turno(self, areas_permitidas: Optional[List[str]]) -> List[dict]:
+        """Empleados activos sin turno vigente (aviso en la pantalla). `areas_permitidas` None o vacía = todas."""
+        area_filter = ""
+        params = []
+        if areas_permitidas:
+            placeholders = ",".join("?" for _ in areas_permitidas)
+            area_filter = f" AND a.nombre IN ({placeholders})"
+            params = areas_permitidas
+        query = f"""
+            SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, a.nombre as area
+            FROM empleados e
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
+            WHERE e.activo = 1
+              {area_filter}
+              AND e.id NOT IN (
+                  SELECT DISTINCT empleado_id 
+                  FROM asignacion_turnos 
+                  WHERE fecha_fin IS NULL OR fecha_fin >= date('now')
+              )
+            ORDER BY e.apellido_paterno, e.apellido_materno, e.nombre
+        """
+        return await self.db.fetch_all(query, params)
+
+    async def contar_sin_turno_en_area(self, area: str, fecha_inicio: str, fecha_fin: str) -> Optional[dict]:
+        """Cuántos empleados estuvieron en el área en el rango sin turno asignado en ese rango."""
+        query = """
+            SELECT COUNT(DISTINCT e.id) as count
+            FROM empleados e
+            JOIN historial_areas h ON e.id = h.empleado_id
+            JOIN areas ar_d ON h.area_id = ar_d.id
+            WHERE ar_d.nombre = ?
+              AND h.fecha_desde <= ?
+              AND (h.fecha_hasta IS NULL OR h.fecha_hasta >= ?)
+              AND h.validado = 1
+              AND e.id NOT IN (
+                  SELECT DISTINCT empleado_id 
+                  FROM asignacion_turnos 
+                  WHERE (fecha_inicio <= ?) AND (fecha_fin IS NULL OR fecha_fin >= ?)
+              )
+        """
+        return await self.db.fetch_one(query, (area, fecha_fin, fecha_inicio, fecha_fin, fecha_inicio))
+
     async def get_generos(self) -> List[dict]:
         """El catálogo de géneros (la tabla cat_generos se crea en create_table de este archivo)."""
         return await self.db.fetch_all("SELECT id, nombre FROM cat_generos ORDER BY nombre ASC")

@@ -128,6 +128,29 @@ def test_routers_ordenados_sin_consultas_propias():
     assert con_sql == [], "estas consultas van en su repositorio (backend/repositories/):\n" + "\n".join(con_sql)
 
 
+# El router de Asistencia se ordena por partes: estas funciones ya no consultan la base directo (se suman en cada parte)
+FUNCIONES_SIN_SQL = {
+    "asistencia.py": ["get_auditoria_bloqueo", "get_primera_marcacion_empleado", "get_last_change", "get_filters_data",
+                      "get_empleados_sin_turno_activos", "diagnostic_no_shift", "get_inasistencias_disponibles"],
+}
+
+
+def test_funciones_ordenadas_sin_consultas_propias():
+    con_sql = []
+    for archivo, funciones in FUNCIONES_SIN_SQL.items():
+        arbol = ast.parse((BACKEND / "routers" / archivo).read_text(encoding="utf-8"))
+        por_nombre = {f.name: f for f in arbol.body if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        for nombre in funciones:
+            assert nombre in por_nombre, f"routers/{archivo}: la función {nombre} ya no existe (sacarla de la lista)"
+            for n in ast.walk(por_nombre[nombre]):
+                if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in LLAMADAS_A_LA_BASE):
+                    continue
+                base = n.func.value
+                if (isinstance(base, ast.Name) and base.id == "db") or (isinstance(base, ast.Attribute) and base.attr == "db"):
+                    con_sql.append(f"routers/{archivo}:{n.lineno} {nombre}: {ast.unparse(base)}.{n.func.attr}(…)")
+    assert con_sql == [], "estas consultas van en su repositorio (backend/repositories/):\n" + "\n".join(con_sql)
+
+
 def test_sin_funciones_sin_uso_en_el_servidor():
     sin_uso = funciones_sin_uso()
     assert sin_uso == [], "funciones que nadie llama (quitarlas o usarlas):\n" + "\n".join(sin_uso)

@@ -682,6 +682,165 @@ class AsistenciaRepository:
         query = "SELECT * FROM cierres_periodos WHERE tipo_cierre = ? ORDER BY fecha_fin DESC LIMIT 1"
         return await self.db.fetch_one(query, (tipo,))
 
+    # ── Consultas de solo lectura que vivían en routers/asistencia.py (etapa 4 de la auditoría, sin cambios) ──
+
+    async def get_anomalias_de_bloqueo(self, fecha: str, fecha_inicio_mes: str,
+                                       areas_permitidas: Optional[List[str]]) -> List[Dict[str, Any]]:
+        """Personas activas con marcas y sin turno vigente en el mes (bloquean la grilla). `areas_permitidas` None = todas."""
+        area_filter = ""
+        if areas_permitidas:
+            placeholders = ",".join("?" for _ in areas_permitidas)
+            area_filter = f"AND a_table.nombre IN ({placeholders})"
+
+        # Bloqueo solo por ausencia de turno asignado, no por marcaciones.
+        # Regla: Si tienes turno asignado -> apareces en la grilla. Las marcaciones no determinan acceso.
+        # Las marcaciones antes del turno no pueden existir (regla de negocio: se sincronizan desde la
+        # fecha de asignacion de turno). Solo se bloquea si el empleado activo carece de turno vigente,
+        # o si tiene marcas biometricas sin ningun turno registrado en el sistema (incorporacion anomala).
+        query = f"""
+            WITH anomalias AS (
+                -- CRITICA (v6): Empleado con marcas fisicas Y sin ningun turno en el sistema
+                -- (situacion imposible segun regla de negocio, pero auditable)
+                SELECT 
+                    e.id, 
+                    e.rut, 
+                    e.nombre, 
+                    e.apellido_paterno, 
+                    e.apellido_materno,
+                    e.cargo,
+                    a_table.nombre as area, 
+                    MIN(DATE(l.fecha_hora)) as fecha,
+                    'CRITICA' as tipo_anomalia
+                FROM logs_raw l
+                JOIN empleados e ON l.empleado_id = e.id
+                JOIN historial_areas h ON e.id = h.empleado_id
+                LEFT JOIN areas a_table ON h.area_id = a_table.id
+                WHERE h.es_actual = 1 AND e.activo = 1
+                  {area_filter}
+                  AND l.fecha_hora >= ? AND l.fecha_hora <= ?
+                  AND e.id NOT IN (
+                      SELECT empleado_id FROM asignacion_turnos
+                      WHERE fecha_fin IS NULL OR fecha_fin >= ?
+                  )
+                GROUP BY e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, a_table.nombre
+
+                UNION ALL
+
+                -- PREVENTIVA: Empleado activo sin turno vigente Y con marcaciones reales en DB.
+                -- FIX BATCH ONBOARDING: Se excluyen empleados sin marcaciones para evitar
+                -- falsos positivos cuando emp2/emp3 están en proceso de onboarding batch
+                -- y aún no han recibido su turno ni tienen marcaciones descargadas.
+                SELECT 
+                    e.id, 
+                    e.rut, 
+                    e.nombre, 
+                    e.apellido_paterno, 
+                    e.apellido_materno,
+                    e.cargo,
+                    a_table.nombre as area, 
+                    '{fecha_inicio_mes}' as fecha,
+                    'PREVENTIVA' as tipo_anomalia
+                FROM empleados e
+                JOIN historial_areas h ON e.id = h.empleado_id
+                LEFT JOIN areas a_table ON h.area_id = a_table.id
+                WHERE h.es_actual = 1 AND e.activo = 1
+                  {area_filter}
+                  AND e.id NOT IN (
+                      SELECT empleado_id FROM asignacion_turnos 
+                      WHERE (fecha_fin IS NULL OR fecha_fin >= ?)
+                  )
+                  AND EXISTS (
+                      -- Solo bloquear si el empleado ya tiene marcaciones en el sistema
+                      SELECT 1 FROM logs_raw lr
+                      WHERE lr.empleado_id = e.id
+                        AND lr.fecha_hora >= ? AND lr.fecha_hora <= ?
+                  )
+            )
+            SELECT 
+                id, rut, nombre, apellido_paterno, apellido_materno, cargo, area,
+                MIN(fecha) as fecha,
+                MIN(tipo_anomalia) as tipo_anomalia
+            FROM anomalias
+            GROUP BY id, rut, nombre, apellido_paterno, apellido_materno, cargo, area
+            ORDER BY MIN(fecha) ASC, apellido_paterno ASC, apellido_materno ASC, nombre ASC
+        """
+    
+        # Consolidación de parámetros para las 2 sub-queries (CRÍTICA y PREVENTIVA)
+        # Query CRITICA: areas + fecha_inicio_mes + fecha + fecha (NOT IN vigente)
+        # Query PREVENTIVA: areas + fecha (NOT IN vigente) + fecha_inicio_mes + fecha (EXISTS marcaciones)
+        final_params = []
+        # Parámetros Query CRITICA (Marcas sin turno en absoluto)
+        if areas_permitidas:
+            final_params.extend(areas_permitidas)
+        final_params.extend([f"{fecha_inicio_mes} 00:00:00", f"{fecha} 23:59:59", fecha])
+    
+        # Parámetros Query PREVENTIVA (Activos sin turno vigente Y con marcaciones reales)
+        if areas_permitidas:
+            final_params.extend(areas_permitidas)
+        final_params.extend([fecha, f"{fecha_inicio_mes} 00:00:00", f"{fecha} 23:59:59"])
+        return await self.db.fetch_all(query, final_params)
+
+    async def get_ultimo_cambio(self, fecha_inicio: str, fecha_fin: str, area: Optional[str],
+                                areas_permitidas: Optional[List[str]]) -> Optional[Dict[str, Any]]:
+        """Última actualización y cantidad de jornadas del rango (la grilla recarga si cambian)."""
+        # Build query with optional area filter
+        area_filter = ""
+        params: list = [fecha_inicio, fecha_fin]
+        if area:
+            area_filter = """
+                AND a.empleado_id IN (
+                    SELECT ha.empleado_id FROM historial_areas ha
+                    JOIN areas ar ON ar.id = ha.area_id
+                    WHERE ha.es_actual = 1 AND ar.nombre = ?
+                )
+            """
+            params.append(area)
+
+        # RLS: filter by user's allowed areas
+        rls_filter = ""
+        if areas_permitidas:
+            placeholders = ",".join("?" for _ in areas_permitidas)
+            rls_filter = f"""
+                AND a.empleado_id IN (
+                    SELECT ha2.empleado_id FROM historial_areas ha2
+                    JOIN areas ar2 ON ar2.id = ha2.area_id
+                    WHERE ha2.es_actual = 1 AND ar2.nombre IN ({placeholders})
+                )
+            """
+            params.extend(areas_permitidas)
+
+        return await self.db.fetch_one(f"""
+            SELECT
+                MAX(a.updated_at) as last_update,
+                COUNT(*) as total_records
+            FROM asistencias a
+            WHERE a.fecha BETWEEN ? AND ?
+            {area_filter}
+            {rls_filter}
+        """, params)
+
+    async def get_resumen_marcas_crudas(self) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one("SELECT MAX(id) as max_raw_id, COUNT(*) as count_raw FROM logs_raw")
+
+    async def get_inasistencias_sin_consumir(self, empleado_id: int, fecha_origen: Optional[str]) -> List[Dict[str, Any]]:
+        """Inasistencias (o faltas) de un empleado que no se han usado para compensar, salvo la del día de origen."""
+        return await self.db.fetch_all("""
+            SELECT a.fecha, a.estado, a.observaciones
+            FROM asistencias a
+            WHERE a.empleado_id = ?
+              AND a.estado IN ('INASISTENCIA', 'FALTA')
+              AND (a.marcas_consumidas_ids IS NULL OR a.marcas_consumidas_ids = '[]')
+              AND a.fecha != ?
+            ORDER BY a.fecha ASC
+        """, (empleado_id, fecha_origen or ''))
+
+    async def get_justificacion_del_dia(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """Una justificación (licencia, vacaciones…) del empleado que cubra ese día."""
+        return await self.db.fetch_one("""
+            SELECT id FROM justificaciones
+            WHERE empleado_id = ? AND ? BETWEEN fecha_inicio AND fecha_fin
+        """, (empleado_id, fecha))
+
     async def borrar_asistencias_y_horas_extras(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> None:
         """Borra las jornadas y horas extra de un empleado entre dos fechas (al marcar su cargo como Artículo 22)."""
         await self.db.execute("DELETE FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
