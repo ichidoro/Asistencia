@@ -484,6 +484,10 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - **Ensayo:** 114 personas, del 26-04 al 15-11-2026, con el reloj fijo. El cálculo devuelve 16.756 días y se probaron 2.586 días sueltos. Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**.
 - Pasan las 577 pruebas.
 
+**Avance (16-11-2026): paso 1b hecho.** La semana de partida de los horarios con rotación (93 líneas: la del último día guardado antes del período o, si no hay, la que mejor calza con la primera marca de Entrada) pasó a `_semana_de_partida_rotativo`, con el mismo texto (comparado línea por línea). `reprocesar_periodo_empleado` quedó en 359 líneas.
+- **Ensayo:** el mismo de 114 personas, 16.756 días y 2.586 días sueltos: **idéntico** a la primera pasada.
+- Pasan las 577 pruebas.
+
 ---
 
 ## 7. Lo que no promete este plan

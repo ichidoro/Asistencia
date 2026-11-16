@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1429,
+  "total": 1430,
   "top": [
    {
     "funcion": "_solve_core",
@@ -171,7 +171,7 @@
    {
     "funcion": "reprocesar_periodo_empleado",
     "archivo": "backend/services/asistencia_service.py",
-    "lineas": 450
+    "lineas": 359
    },
    {
     "funcion": "_calcular_filas",
@@ -200,7 +200,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3320
+   "lineas": 3332
   },
   {
    "archivo": "frontend/js/sync_wizard.js",

@@ -980,6 +980,109 @@ class AsistenciaService:
         }
 
 
+    async def _semana_de_partida_rotativo(self, db, empleado_id: int, start: datetime, first_assignment,
+                                          turno_weeks_count: Dict, turno_ids: List, turno_detalles: Dict,
+                                          all_logs: List[Dict]) -> Dict[int, Any]:
+        """En qué semana del ciclo parte la persona al recalcular un período, en los horarios de más de una semana:
+        la del último día guardado antes del período o, si no hay, la que mejor calza con su primera marca de Entrada.
+        Mismo código que estaba en reprocesar_periodo_empleado; devuelve {empleado_id: semana} o vacío."""
+        # Inicializar rotativo_offset histórico si es posible
+        rotativo_last_sem_dict = {}
+        last_asist = await db.fetch_one(
+            "SELECT fecha, num_semana_ganadora, turno_asignado_id FROM asistencias WHERE empleado_id = ? AND fecha < ? ORDER BY fecha DESC LIMIT 1",
+            (empleado_id, start.strftime("%Y-%m-%d"))
+        )
+        if last_asist and last_asist['num_semana_ganadora'] and last_asist['turno_asignado_id'] and first_assignment:
+            t_id = last_asist['turno_asignado_id']
+            tot_sems = turno_weeks_count.get(t_id, 1)
+            if tot_sems > 1:
+                last_dt = datetime.strptime(last_asist['fecha'], "%Y-%m-%d")
+                f_asig_dt = datetime.strptime(first_assignment, "%Y-%m-%d")
+                if f_asig_dt.weekday() == 6:
+                    f_asig_dt = f_asig_dt + timedelta(days=1)
+                else:
+                    f_asig_dt = f_asig_dt - timedelta(days=f_asig_dt.weekday())
+                d_diff = (last_dt - f_asig_dt).days
+                mat_sem = (d_diff // 7) % tot_sems + 1 if d_diff >= 0 else 1
+                rotativo_last_sem_dict[empleado_id] = last_asist['num_semana_ganadora']
+
+        # ── FALLBACK: Deducir offset desde los primeros logs cuando no hay asistencias previas ──
+        # Para DINAMICO_FLEXIBLE: cada empleado puede iniciar en una semana diferente
+        # del ciclo. Si no hay registro histórico, usamos el primer log de Entrada para
+        # determinar en qué semana real está el empleado (min_delta contra turno_dias).
+        if empleado_id not in rotativo_last_sem_dict and first_assignment and turno_ids:
+            _TIPOS_E_INIT = {'entrada', 'e', 'in', 'i', 'ingreso', 'in-entrada'}
+            for t_id_init in turno_ids:
+                tot_sems_init = turno_weeks_count.get(t_id_init, 1)
+                if tot_sems_init <= 1:
+                    continue
+                # ¿Es turno rotativo?
+                tipo_prog_init = None
+                for sems_init in turno_detalles.get(t_id_init, {}).values():
+                    for cfg_init in sems_init.values():
+                        tipo_prog_init = cfg_init.get('tipo_programacion')
+                        break
+                    if tipo_prog_init:
+                        break
+                if tipo_prog_init != 'CICLO_INTELIGENTE':
+                    continue
+
+                f_asig_dt_init = datetime.strptime(first_assignment, "%Y-%m-%d")
+                # Mismo ajuste: Domingo → siguiente Lunes
+                if f_asig_dt_init.weekday() == 6:
+                    f_asig_dt_init = f_asig_dt_init + timedelta(days=1)
+                else:
+                    f_asig_dt_init = f_asig_dt_init - timedelta(days=f_asig_dt_init.weekday())
+
+                # Buscar el primer log de Entrada disponible
+                for log_init in all_logs:
+                    tipo_log = str(log_init.get('tipo') or '').strip().lower()
+                    if tipo_log not in _TIPOS_E_INIT:
+                        continue
+                    try:
+                        first_log_dt_init = datetime.strptime(log_init['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        continue
+
+                    log_fecha_init = log_init['fecha_hora'][:10]
+                    try:
+                        log_dt_init = datetime.strptime(log_fecha_init, "%Y-%m-%d")
+                    except ValueError:
+                        continue
+                    dsem_init = log_dt_init.weekday()
+
+                    d_diff_init = (log_dt_init - f_asig_dt_init).days
+                    mat_sem_init = (d_diff_init // 7) % tot_sems_init + 1 if d_diff_init >= 0 else 1
+
+                    # Calcular winner_sem (min_delta) para este log de anclaje
+                    winner_init = mat_sem_init
+                    min_d_init = None
+                    for nsem_init in range(1, tot_sems_init + 1):
+                        cfg_init_d = turno_detalles.get(t_id_init, {}).get(nsem_init, {}).get(dsem_init)
+                        if not cfg_init_d or cfg_init_d.get('es_libre'):
+                            continue
+                        ent_str_init = cfg_init_d.get('hora_entrada')
+                        sal_str_init = cfg_init_d.get('hora_salida')
+                        if not ent_str_init or not sal_str_init:
+                            continue
+                        p_teo = QuantumPhaseTopology.time_to_phase(ent_str_init)
+                        p_log = QuantumPhaseTopology.time_to_phase(first_log_dt_init)
+                        diff_min = abs(QuantumPhaseTopology.circular_distance(p_teo, p_log))
+                        if min_d_init is None or diff_min < min_d_init:
+                            min_d_init = diff_min
+                            winner_init = nsem_init
+
+                    rotativo_last_sem_dict[empleado_id] = winner_init
+                    logger.debug(
+                        f"🔍 [ROTATIVO_INIT] Emp {empleado_id}: primer log={log_init['fecha_hora']} "
+                        f"winner_sem={winner_init}"
+                    )
+                    break  # Solo necesitamos el primer log
+                break  # Solo procesamos el primer turno rotativo
+
+        return rotativo_last_sem_dict
+
+
     async def reprocesar_periodo_empleado(
         self,
         empleado_id: int,
@@ -1101,99 +1204,8 @@ class AsistenciaService:
         CHECKPOINT_INTERVAL = 50 if not collect_only else 0
 
 
-        # Inicializar rotativo_offset histórico si es posible
-        rotativo_last_sem_dict = {}
-        last_asist = await db.fetch_one(
-            "SELECT fecha, num_semana_ganadora, turno_asignado_id FROM asistencias WHERE empleado_id = ? AND fecha < ? ORDER BY fecha DESC LIMIT 1",
-            (empleado_id, start.strftime("%Y-%m-%d"))
-        )
-        if last_asist and last_asist['num_semana_ganadora'] and last_asist['turno_asignado_id'] and first_assignment:
-            t_id = last_asist['turno_asignado_id']
-            tot_sems = turno_weeks_count.get(t_id, 1)
-            if tot_sems > 1:
-                last_dt = datetime.strptime(last_asist['fecha'], "%Y-%m-%d")
-                f_asig_dt = datetime.strptime(first_assignment, "%Y-%m-%d")
-                if f_asig_dt.weekday() == 6:
-                    f_asig_dt = f_asig_dt + timedelta(days=1)
-                else:
-                    f_asig_dt = f_asig_dt - timedelta(days=f_asig_dt.weekday())
-                d_diff = (last_dt - f_asig_dt).days
-                mat_sem = (d_diff // 7) % tot_sems + 1 if d_diff >= 0 else 1
-                rotativo_last_sem_dict[empleado_id] = last_asist['num_semana_ganadora']
-
-        # ── FALLBACK: Deducir offset desde los primeros logs cuando no hay asistencias previas ──
-        # Para DINAMICO_FLEXIBLE: cada empleado puede iniciar en una semana diferente
-        # del ciclo. Si no hay registro histórico, usamos el primer log de Entrada para
-        # determinar en qué semana real está el empleado (min_delta contra turno_dias).
-        if empleado_id not in rotativo_last_sem_dict and first_assignment and turno_ids:
-            _TIPOS_E_INIT = {'entrada', 'e', 'in', 'i', 'ingreso', 'in-entrada'}
-            for t_id_init in turno_ids:
-                tot_sems_init = turno_weeks_count.get(t_id_init, 1)
-                if tot_sems_init <= 1:
-                    continue
-                # ¿Es turno rotativo?
-                tipo_prog_init = None
-                for sems_init in turno_detalles.get(t_id_init, {}).values():
-                    for cfg_init in sems_init.values():
-                        tipo_prog_init = cfg_init.get('tipo_programacion')
-                        break
-                    if tipo_prog_init:
-                        break
-                if tipo_prog_init != 'CICLO_INTELIGENTE':
-                    continue
-
-                f_asig_dt_init = datetime.strptime(first_assignment, "%Y-%m-%d")
-                # Mismo ajuste: Domingo → siguiente Lunes
-                if f_asig_dt_init.weekday() == 6:
-                    f_asig_dt_init = f_asig_dt_init + timedelta(days=1)
-                else:
-                    f_asig_dt_init = f_asig_dt_init - timedelta(days=f_asig_dt_init.weekday())
-
-                # Buscar el primer log de Entrada disponible
-                for log_init in all_logs:
-                    tipo_log = str(log_init.get('tipo') or '').strip().lower()
-                    if tipo_log not in _TIPOS_E_INIT:
-                        continue
-                    try:
-                        first_log_dt_init = datetime.strptime(log_init['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        continue
-
-                    log_fecha_init = log_init['fecha_hora'][:10]
-                    try:
-                        log_dt_init = datetime.strptime(log_fecha_init, "%Y-%m-%d")
-                    except ValueError:
-                        continue
-                    dsem_init = log_dt_init.weekday()
-
-                    d_diff_init = (log_dt_init - f_asig_dt_init).days
-                    mat_sem_init = (d_diff_init // 7) % tot_sems_init + 1 if d_diff_init >= 0 else 1
-
-                    # Calcular winner_sem (min_delta) para este log de anclaje
-                    winner_init = mat_sem_init
-                    min_d_init = None
-                    for nsem_init in range(1, tot_sems_init + 1):
-                        cfg_init_d = turno_detalles.get(t_id_init, {}).get(nsem_init, {}).get(dsem_init)
-                        if not cfg_init_d or cfg_init_d.get('es_libre'):
-                            continue
-                        ent_str_init = cfg_init_d.get('hora_entrada')
-                        sal_str_init = cfg_init_d.get('hora_salida')
-                        if not ent_str_init or not sal_str_init:
-                            continue
-                        p_teo = QuantumPhaseTopology.time_to_phase(ent_str_init)
-                        p_log = QuantumPhaseTopology.time_to_phase(first_log_dt_init)
-                        diff_min = abs(QuantumPhaseTopology.circular_distance(p_teo, p_log))
-                        if min_d_init is None or diff_min < min_d_init:
-                            min_d_init = diff_min
-                            winner_init = nsem_init
-
-                    rotativo_last_sem_dict[empleado_id] = winner_init
-                    logger.debug(
-                        f"🔍 [ROTATIVO_INIT] Emp {empleado_id}: primer log={log_init['fecha_hora']} "
-                        f"winner_sem={winner_init}"
-                    )
-                    break  # Solo necesitamos el primer log
-                break  # Solo procesamos el primer turno rotativo
+        rotativo_last_sem_dict = await self._semana_de_partida_rotativo(db, empleado_id, start, first_assignment,
+                                                                       turno_weeks_count, turno_ids, turno_detalles, all_logs)
 
         while current <= end:
             fecha_str = current.strftime("%Y-%m-%d")
