@@ -391,6 +391,22 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
   - Nada del cálculo leía esas casillas.
   - La prueba de la ventana revisa que no vuelvan.
 
+**Avance (16-11-2026): parte 12 hecha.** Asignar un turno a una persona, sincronizar en grupo, condonar deuda y el reproceso masivo: 9 consultas en 4 funciones. En Asistencia quedan 14, según el mapa (el mapa no contaba la de condonar deuda, que usa `executemany`).
+- **Dónde quedaron, con el mismo texto de cada consulta:**
+  - cerrar la asignación anterior, buscar la que empieza ese día, cambiarle el turno, crear la nueva y borrar las posteriores, en `TurnoRepository`;
+  - el RUT de la persona (se usa la consulta que ya estaba, `get_rut`) y el RUT y nombre de varias personas, en `EmpleadoRepository`;
+  - marcar la condonación de deuda y el cierre que cubre el rango del reproceso, en `AsistenciaRepository`.
+- **Cómo se probó:**
+  - El ensayo crea un empleado de ensayo con un turno, una marca del reloj y un cierre de ensayo de cinco días.
+  - Recorre 13 pasos, sin descargar nada de BioAlba:
+    - asignar turno: uno nuevo, el mismo día con otro turno (se reemplaza), uno anterior (borra el posterior) y uno con recálculo en segundo plano;
+    - sincronizar en grupo: lista vacía y una persona;
+    - condonar deuda: empleado que no existe, rango cerrado, condonar tres días y revocar uno;
+    - reproceso masivo: dos rangos cerrados y uno abierto.
+  - Después de cada paso guarda las asignaciones de turno; al final, los días recalculados con su condonación. Espera a que terminen los trabajos en segundo plano.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. El relleno del ensayo de la parte 11 también.
+  - Pasan las 578 pruebas.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

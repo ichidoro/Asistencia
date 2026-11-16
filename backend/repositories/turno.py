@@ -1192,3 +1192,38 @@ class TurnoRepository:
             f"SELECT * FROM turno_dias WHERE turno_id IN ({ph}) ORDER BY num_semana, dia_semana",
             tuple(turno_ids)
         )
+
+    async def cerrar_asignacion_previa(self, empleado_id: int, fecha: str) -> None:
+        """Cierra el día anterior la asignación vigente que comenzó antes de esa fecha."""
+        await self.db.execute(
+            "UPDATE asignacion_turnos SET fecha_fin = date(?, '-1 day') WHERE empleado_id = ? AND (fecha_fin IS NULL OR fecha_fin >= ?) AND fecha_inicio < ?",
+            (fecha, empleado_id, fecha, fecha)
+        )
+
+    async def get_asignacion_que_inicia(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """La asignación del empleado que comienza justo en esa fecha (o nada)."""
+        return await self.db.fetch_one(
+            "SELECT id FROM asignacion_turnos WHERE empleado_id = ? AND fecha_inicio = ?",
+            (empleado_id, fecha)
+        )
+
+    async def set_turno_asignacion_abierta(self, asignacion_id: int, turno_id: int) -> None:
+        """Cambia el turno de una asignación y la deja sin fecha de fin."""
+        await self.db.execute(
+            "UPDATE asignacion_turnos SET turno_id = ?, fecha_fin = NULL WHERE id = ?",
+            (turno_id, asignacion_id)
+        )
+
+    async def insertar_asignacion_abierta(self, empleado_id: int, turno_id: int, fecha: str) -> None:
+        """Asigna el turno desde esa fecha, sin fecha de fin."""
+        await self.db.execute(
+            "INSERT INTO asignacion_turnos (empleado_id, turno_id, fecha_inicio, fecha_fin) VALUES (?, ?, ?, NULL)",
+            (empleado_id, turno_id, fecha)
+        )
+
+    async def borrar_asignaciones_posteriores(self, empleado_id: int, fecha: str) -> None:
+        """Borra las asignaciones del empleado que comienzan después de esa fecha."""
+        await self.db.execute(
+            "DELETE FROM asignacion_turnos WHERE empleado_id = ? AND fecha_inicio > ?",
+            (empleado_id, fecha)
+        )

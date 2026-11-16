@@ -1341,3 +1341,11 @@ class EmpleadoRepository:
           AND ha.fecha_desde <= ? AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ha.fecha_hasta >= ?)
     """
         return await self.db.fetch_all(q_areas, (empleado_id, fecha_fin, fecha_inicio))
+
+    async def get_rut_y_nombre_por_ids(self, ids_empleados: List[int]) -> List[Dict]:
+        """RUT, nombre y apellido paterno de varios empleados a la vez."""
+        placeholders = ",".join("?" * len(ids_empleados))
+        return await self.db.fetch_all(
+            f"SELECT id, rut, nombre, apellido_paterno FROM empleados WHERE id IN ({placeholders})",
+            ids_empleados
+        )

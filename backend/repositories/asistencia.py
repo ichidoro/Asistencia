@@ -1199,3 +1199,16 @@ class AsistenciaRepository:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """
         await self.db.executemany(q_insert, filas)
+
+    async def set_deuda_condonada(self, filas: list) -> None:
+        """Marca de una vez la condonación de deuda: cada fila es (tipo_condonacion, empleado_id, fecha)."""
+        query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
+        await self.db.executemany(query, filas)
+
+    async def get_cierre_que_cubre(self, area: str, fecha_inicio: str, fecha_fin: str) -> Optional[Dict[str, Any]]:
+        """Un cierre del área que cubra todo el rango (o nada)."""
+        q_closed = """
+            SELECT id FROM cierres_periodos
+            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+        """
+        return await self.db.fetch_one(q_closed, (area, fecha_inicio, fecha_fin))

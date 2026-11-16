@@ -225,40 +225,25 @@ async def post_asignacion_individual(
     Retorna `job_id` para que el frontend pueda sondear el progreso en /jobs/{job_id}/.
     """
     try:
-        db = service.repository.db
+        turno_repo = TurnoRepository(service.repository.db)
 
         # 1. Soft-Close: Cerrar asignación previa activa que comenzó antes de data.fecha
-        await db.execute(
-            "UPDATE asignacion_turnos SET fecha_fin = date(?, '-1 day') WHERE empleado_id = ? AND (fecha_fin IS NULL OR fecha_fin >= ?) AND fecha_inicio < ?",
-            (data.fecha, data.empleado_id, data.fecha, data.fecha)
-        )
+        await turno_repo.cerrar_asignacion_previa(data.empleado_id, data.fecha)
 
         # 2. Reemplazo in-place si ya existe una asignación que inicia exactamente en data.fecha
-        exact_asig = await db.fetch_one(
-            "SELECT id FROM asignacion_turnos WHERE empleado_id = ? AND fecha_inicio = ?",
-            (data.empleado_id, data.fecha)
-        )
+        exact_asig = await turno_repo.get_asignacion_que_inicia(data.empleado_id, data.fecha)
         if exact_asig:
-            await db.execute(
-                "UPDATE asignacion_turnos SET turno_id = ?, fecha_fin = NULL WHERE id = ?",
-                (data.turno_id, exact_asig['id'])
-            )
+            await turno_repo.set_turno_asignacion_abierta(exact_asig['id'], data.turno_id)
             logger.info(f"🔄 Turno #{exact_asig['id']} actualizado in-place a turno {data.turno_id} para emp {data.empleado_id} desde {data.fecha}")
         else:
-            await db.execute(
-                "INSERT INTO asignacion_turnos (empleado_id, turno_id, fecha_inicio, fecha_fin) VALUES (?, ?, ?, NULL)",
-                (data.empleado_id, data.turno_id, data.fecha)
-            )
+            await turno_repo.insertar_asignacion_abierta(data.empleado_id, data.turno_id, data.fecha)
             logger.info(f"✅ Turno {data.turno_id} asignado a empleado {data.empleado_id} desde {data.fecha}")
 
         # 3. Neutralizar cualquier asignación futura que quede eclipsada por el nuevo turno continuo
-        await db.execute(
-            "DELETE FROM asignacion_turnos WHERE empleado_id = ? AND fecha_inicio > ?",
-            (data.empleado_id, data.fecha)
-        )
+        await turno_repo.borrar_asignaciones_posteriores(data.empleado_id, data.fecha)
 
         # 4. Obtener RUT del empleado para el sync individual
-        emp_row = await db.fetch_one("SELECT rut FROM empleados WHERE id = ?", (data.empleado_id,))
+        emp_row = await EmpleadoRepository(service.repository.db).get_rut(data.empleado_id)
         empleado_rut = emp_row['rut'] if emp_row else None
 
         # 3. Generar job_id único para tracking de progreso
@@ -398,16 +383,10 @@ async def post_batch_sync(
 
     hoy = datetime.now().date().isoformat()
     batch_job_id = f"batch-{uuid.uuid4().hex[:8]}"
-    db = service.repository.db
-
     # ── 1. Recopilar RUTs para todos los empleados ────────────────────────
     # ── Fix #1: 1 sola query para todos los empleados en vez de N individuales ─
     ids_empleados = [item.empleado_id for item in data.items]
-    placeholders = ",".join("?" * len(ids_empleados))
-    emp_rows = await db.fetch_all(
-        f"SELECT id, rut, nombre, apellido_paterno FROM empleados WHERE id IN ({placeholders})",
-        ids_empleados
-    )
+    emp_rows = await EmpleadoRepository(service.repository.db).get_rut_y_nombre_por_ids(ids_empleados)
     emp_info = {r["id"]: {"rut": r["rut"], "nombre": f"{r['apellido_paterno']} {r['nombre']}"} for r in emp_rows}
 
     job_ids = {}
@@ -731,9 +710,8 @@ async def condonar_deuda(
 
     try:
         # 1. Marcar condonacion en la BD en un solo batch (N+1 optimization)
-        query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
         params = [(request.tipo_condonacion, emp_id, fecha_str) for emp_id in request.empleados_ids for fecha_str in fechas]
-        await service.repository.db.executemany(query, params)
+        await AsistenciaRepository(service.repository.db).set_deuda_condonada(params)
 
         # 2. Reprocesar los días de los empleados en bulk usando procesar_dia
         for fecha_str in fechas:
@@ -802,12 +780,7 @@ async def reproceso_masivo_async(
     
     # Si se especificó una área final, verificar si el rango completo está cerrado
     if area_final:
-        db = service.repository.db
-        q_closed = """
-            SELECT id FROM cierres_periodos
-            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
-        """
-        closed = await db.fetch_one(q_closed, (area_final, fecha_inicio, fecha_fin))
+        closed = await AsistenciaRepository(service.repository.db).get_cierre_que_cubre(area_final, fecha_inicio, fecha_fin)
         if closed:
             raise HTTPException(
                 status_code=403,
