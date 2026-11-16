@@ -2078,6 +2078,83 @@ class AsistenciaService:
         return False, None
 
 
+    async def _turno_del_dia(self, empleado_id: int, fecha: str, dt: datetime, dia_semana: int, asignacion: Optional[Dict],
+                             raw_logs: List[Dict], consumidas_emp: set, bulk_ctx: Optional[Dict]):
+        """El turno del día en procesar_empleado_dia: tipo de horario (Bolsa o Ciclo), la semana ganadora del ciclo y la
+        configuración de ese día. En el recálculo de un período deja la semana ganadora en el contexto para el día
+        siguiente. Devuelve (semana_ganadora, config_dia, días del turno; estos últimos vacíos sin asignación).
+        Mismo código que estaba en procesar_empleado_dia."""
+        # ── DETERMINACIÓN DEL TURNO Y CLASIFICACIÓN CUÁNTICA ──────────────────
+        tipo_prog = asignacion.get('tipo_programacion') if asignacion else 'CICLO_INTELIGENTE'
+        if tipo_prog != 'BOLSA_FLEXIBLE':
+            tipo_prog = 'CICLO_INTELIGENTE'
+
+        is_bolsa = (tipo_prog == 'BOLSA_FLEXIBLE')
+        # ── RESOLUCIÓN TOPOLÓGICA DE CONFIGURACIÓN DEL DÍA Y SEMANA ─────────
+        semana_ganadora = 1
+        config_dia = None
+
+        if asignacion:
+            tid = asignacion.get('turno_id') or asignacion.get('id')
+            turnos_src = bulk_ctx['turnos'].get(tid, {}) if bulk_ctx else await self.repository.get_turno_dias_map(tid)
+            total_sems = bulk_ctx['turnos_weeks'].get(tid, len(turnos_src)) if bulk_ctx else max(len(turnos_src), 1)
+
+            if is_bolsa:
+                semana_ganadora = 1
+                cfg_raw = turnos_src.get(1, {}).get(dia_semana) or {}
+                config_dia = {
+                    'horas_teoricas': 0.0,
+                    'es_libre': bool(cfg_raw.get('es_libre', False)),
+                    'hora_entrada': cfg_raw.get('hora_entrada'),
+                    'hora_salida': cfg_raw.get('hora_salida'),
+                    'cruza_medianoche': bool(cfg_raw.get('cruza_medianoche', False)),
+                }
+            else:
+                semana_inicio_cfg = asignacion.get('semana_inicio')
+                f_asig_ini = self._parse_date(asignacion.get('fecha_inicio'))
+                
+                is_rot_dinamica = bool(
+                    asignacion and (
+                        asignacion.get('rotacion_dinamica_diaria') == 1 or
+                        str(asignacion.get('rotacion_dinamica_diaria')) in ('1', 'true', 'True') or
+                        asignacion.get('rotacion_dinamica_diaria') is True
+                    )
+                )
+
+                if bulk_ctx:
+                    last_matched_sem = bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id)
+                else:
+                    last_rec = await self.repository.db.fetch_one(
+                        "SELECT num_semana_ganadora FROM asistencias WHERE empleado_id = ? AND fecha < ? ORDER BY fecha DESC LIMIT 1",
+                        (empleado_id, fecha)
+                    )
+                    last_matched_sem = last_rec['num_semana_ganadora'] if last_rec else None
+
+                marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
+
+                semana_ganadora = QuantumShiftWeekMatcher.resolve_winner_week(
+                    empleado_id=empleado_id,
+                    fecha_str=fecha,
+                    dt=dt,
+                    dia_semana=dia_semana,
+                    logs=marcas_disp_semana,
+                    turnos_dict=turnos_src,
+                    total_sems=total_sems,
+                    semana_inicio_cfg=semana_inicio_cfg,
+                    f_asig_ini=f_asig_ini,
+                    last_matched_sem=last_matched_sem,
+                    rotacion_dinamica=is_rot_dinamica,
+                    tipo_programacion=tipo_prog,
+                )
+
+                if bulk_ctx:
+                    bulk_ctx.setdefault('rotativo_last_sem_dict', {})[empleado_id] = semana_ganadora
+
+                config_dia = turnos_src.get(semana_ganadora, {}).get(dia_semana)
+
+        return semana_ganadora, config_dia, (turnos_src if asignacion else None)
+
+
     async def procesar_empleado_dia(
         self,
         empleado_id: int,
@@ -2225,73 +2302,8 @@ class AsistenciaService:
 
 
 
-        # ── DETERMINACIÓN DEL TURNO Y CLASIFICACIÓN CUÁNTICA ──────────────────
-        tipo_prog = asignacion.get('tipo_programacion') if asignacion else 'CICLO_INTELIGENTE'
-        if tipo_prog != 'BOLSA_FLEXIBLE':
-            tipo_prog = 'CICLO_INTELIGENTE'
-
-        is_bolsa = (tipo_prog == 'BOLSA_FLEXIBLE')
-        # ── RESOLUCIÓN TOPOLÓGICA DE CONFIGURACIÓN DEL DÍA Y SEMANA ─────────
-        semana_ganadora = 1
-        config_dia = None
-
-        if asignacion:
-            tid = asignacion.get('turno_id') or asignacion.get('id')
-            turnos_src = bulk_ctx['turnos'].get(tid, {}) if bulk_ctx else await self.repository.get_turno_dias_map(tid)
-            total_sems = bulk_ctx['turnos_weeks'].get(tid, len(turnos_src)) if bulk_ctx else max(len(turnos_src), 1)
-
-            if is_bolsa:
-                semana_ganadora = 1
-                cfg_raw = turnos_src.get(1, {}).get(dia_semana) or {}
-                config_dia = {
-                    'horas_teoricas': 0.0,
-                    'es_libre': bool(cfg_raw.get('es_libre', False)),
-                    'hora_entrada': cfg_raw.get('hora_entrada'),
-                    'hora_salida': cfg_raw.get('hora_salida'),
-                    'cruza_medianoche': bool(cfg_raw.get('cruza_medianoche', False)),
-                }
-            else:
-                semana_inicio_cfg = asignacion.get('semana_inicio')
-                f_asig_ini = self._parse_date(asignacion.get('fecha_inicio'))
-                
-                is_rot_dinamica = bool(
-                    asignacion and (
-                        asignacion.get('rotacion_dinamica_diaria') == 1 or
-                        str(asignacion.get('rotacion_dinamica_diaria')) in ('1', 'true', 'True') or
-                        asignacion.get('rotacion_dinamica_diaria') is True
-                    )
-                )
-
-                if bulk_ctx:
-                    last_matched_sem = bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id)
-                else:
-                    last_rec = await self.repository.db.fetch_one(
-                        "SELECT num_semana_ganadora FROM asistencias WHERE empleado_id = ? AND fecha < ? ORDER BY fecha DESC LIMIT 1",
-                        (empleado_id, fecha)
-                    )
-                    last_matched_sem = last_rec['num_semana_ganadora'] if last_rec else None
-
-                marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
-
-                semana_ganadora = QuantumShiftWeekMatcher.resolve_winner_week(
-                    empleado_id=empleado_id,
-                    fecha_str=fecha,
-                    dt=dt,
-                    dia_semana=dia_semana,
-                    logs=marcas_disp_semana,
-                    turnos_dict=turnos_src,
-                    total_sems=total_sems,
-                    semana_inicio_cfg=semana_inicio_cfg,
-                    f_asig_ini=f_asig_ini,
-                    last_matched_sem=last_matched_sem,
-                    rotacion_dinamica=is_rot_dinamica,
-                    tipo_programacion=tipo_prog,
-                )
-
-                if bulk_ctx:
-                    bulk_ctx.setdefault('rotativo_last_sem_dict', {})[empleado_id] = semana_ganadora
-
-                config_dia = turnos_src.get(semana_ganadora, {}).get(dia_semana)
+        semana_ganadora, config_dia, turnos_src = await self._turno_del_dia(empleado_id, fecha, dt, dia_semana, asignacion,
+                                                                            raw_logs, consumidas_emp, bulk_ctx)
 
         # Una jornada que cruza la medianoche es de feriado si la mayoría de sus horas cae en un feriado (orden del dueño, 27-10-2026)
         fecha_feriado = fecha_feriado_de_la_jornada(fecha, config_dia) if config_dia and not config_dia.get('es_libre') else fecha

@@ -508,6 +508,14 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - **Ensayos:** con el respaldo, **idéntico** (incluye 2.586 días calculados de a uno, que pasan por estos chequeos sin el contexto precargado). Guardando en la copia de práctica, los de las partes 12, 13 y 14: **idénticos**. En los de las partes 12 y 13, el empleado de ensayo ahora también se crea con un número fijo: un número nuevo chocó otra vez con el tapado (cambió el 999999 del empleado que no existe). Es un ajuste del ensayo, no del código.
 - Pasan las 577 pruebas.
 
+**Avance (16-11-2026): paso 2b hecho.** El turno del día (67 líneas: tipo de horario, semana ganadora del ciclo y configuración del día) pasó a `_turno_del_dia`, con el mismo texto (comparado línea por línea).
+- Devuelve los tres datos que se usan después: la semana ganadora, la configuración del día y los días del turno. Estos últimos solo se leen cuando hay asignación, así que sin asignación se devuelven vacíos.
+- El bloque de la reasignación manual de turno no se movió en este paso: cambia las marcas del día (agrega las que una persona fijó a mano), igual que el de las marcas heredadas del día anterior. Los dos van juntos en el paso 2c.
+- `procesar_empleado_dia` quedó en 327 líneas (antes 563).
+- **Ensayos:** con el respaldo, **idéntico**. Guardando en la copia de práctica, los de las partes 12, 13 y 14: **idénticos**.
+- Una revisión de nombres confirmó que no falta ninguna variable.
+- Pasan las 577 pruebas.
+
 ---
 
 ## 7. Lo que no promete este plan

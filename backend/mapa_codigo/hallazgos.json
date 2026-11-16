@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1434,
+  "total": 1435,
   "top": [
    {
     "funcion": "_solve_core",
@@ -166,7 +166,7 @@
    {
     "funcion": "procesar_empleado_dia",
     "archivo": "backend/services/asistencia_service.py",
-    "lineas": 392
+    "lineas": 327
    },
    {
     "funcion": "_calcular_filas",
@@ -200,7 +200,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3394
+   "lineas": 3406
   },
   {
    "archivo": "frontend/js/sync_wizard.js",
