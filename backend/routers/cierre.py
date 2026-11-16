@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from backend.core.security import SecurityContext, RequirePermission
 from backend.core.database import get_db, Database
 from backend.services.cierre_service import CierreService
+from backend.repositories.asistencia import AsistenciaRepository
+from backend.repositories.configuracion import ConfiguracionRepository
+from backend.repositories.seguridad import SeguridadRepository
 from pydantic import BaseModel
 from datetime import datetime
 from loguru import logger
@@ -105,40 +108,25 @@ async def reabrir_cierre(
             
         service = CierreService(db)
         # Verificar que el cierre exista
-        cierre = await db.fetch_one("SELECT * FROM cierres_periodos WHERE id = ?", (cierre_id,))
+        cierre = await AsistenciaRepository(db).get_cierre_by_id(cierre_id)
         if not cierre:
             raise HTTPException(status_code=404, detail="Registro de cierre no encontrado.")
             
         # Registrar en auditoría
-        await db.execute(
-            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-            (
-                current_user.user_id,
-                current_user.username,
-                "REAPERTURA_PERIODO",
-                "Cierre",
-                f"Período reabierto (eliminado cierre id {cierre_id}): {cierre['fecha_inicio']} a {cierre['fecha_fin']} para área '{cierre['area']}'."
-            )
+        await SeguridadRepository(db).log_auditoria(
+            current_user.user_id,
+            current_user.username,
+            "REAPERTURA_PERIODO",
+            "Cierre",
+            f"Período reabierto (eliminado cierre id {cierre_id}): {cierre['fecha_inicio']} a {cierre['fecha_fin']} para área '{cierre['area']}'."
         )
         
         # Eliminar el registro de cierre
-        await db.execute("DELETE FROM cierres_periodos WHERE id = ?", (cierre_id,))
+        await AsistenciaRepository(db).eliminar_cierre(cierre_id)
         
         # También actualizar el estado en periodos_rrhh de vuelta a 'abierto' y marcarlo como vigente
         try:
-            await db.execute(
-                "UPDATE periodos_rrhh SET estado = 'abierto' WHERE fecha_inicio = ? AND fecha_fin = ?",
-                (cierre['fecha_inicio'], cierre['fecha_fin'])
-            )
-            
-            # Desactivar solo el periodo específico que se está reabriendo y reactivarlo
-            periodo_row = await db.fetch_one(
-                "SELECT id FROM periodos_rrhh WHERE fecha_inicio = ? AND fecha_fin = ?",
-                (cierre['fecha_inicio'], cierre['fecha_fin'])
-            )
-            if periodo_row:
-                await db.execute("UPDATE periodos_rrhh SET activo = 0 WHERE id = ?", (periodo_row['id'],))
-                await db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (periodo_row['id'],))
+            await ConfiguracionRepository(db).reabrir_periodo_rrhh(cierre['fecha_inicio'], cierre['fecha_fin'])
             logger.info(f"✨ periodos_rrhh actualizado a 'abierto' y marcado como Vigente para el rango {cierre['fecha_inicio']} a {cierre['fecha_fin']} (Reapertura)")
         except Exception as e_open_rrhh:
             logger.warning(f"⚠️ No se pudo actualizar el estado/vigencia en periodos_rrhh tras reapertura: {e_open_rrhh}")

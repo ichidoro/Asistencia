@@ -1070,6 +1070,24 @@ class ConfiguracionRepository:
         res = await self.db.execute("DELETE FROM periodos_rrhh WHERE id = ?", (id,))
         return res.rowcount > 0
 
+    async def reabrir_periodo_rrhh(self, fecha_inicio: str, fecha_fin: str) -> None:
+        """Al reabrir un cierre: vuelve el período de esas fechas a «abierto» y lo marca vigente.
+        Se movió del router de Cierre sin cambios (etapa 4 de la auditoría): no desactiva los demás períodos,
+        a diferencia de set_periodo_rrhh_activo."""
+        await self.db.execute(
+            "UPDATE periodos_rrhh SET estado = 'abierto' WHERE fecha_inicio = ? AND fecha_fin = ?",
+            (fecha_inicio, fecha_fin)
+        )
+
+        # Desactivar solo el periodo específico que se está reabriendo y reactivarlo
+        periodo_row = await self.db.fetch_one(
+            "SELECT id FROM periodos_rrhh WHERE fecha_inicio = ? AND fecha_fin = ?",
+            (fecha_inicio, fecha_fin)
+        )
+        if periodo_row:
+            await self.db.execute("UPDATE periodos_rrhh SET activo = 0 WHERE id = ?", (periodo_row['id'],))
+            await self.db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (periodo_row['id'],))
+
     async def set_periodo_rrhh_activo(self, id: int) -> bool:
         ConfiguracionRepository._last_auto_heal_time = 0.0
         await self.db.execute("UPDATE periodos_rrhh SET activo = 0")

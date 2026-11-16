@@ -81,6 +81,10 @@ Etapa 4, parte 1 (15-11-2026): Flota, Visitas y Llaves ya no consultan la base d
 
 Etapa 4, parte 2 (15-11-2026): Portería y Productos 4 también; sus 20 consultas pasaron a los repositorios sin cambios (ensayo de 48 pasos idéntico antes y después). En los routers quedan 126 de 177. Sigue Cierre, con su propio ensayo porque toca la reapertura de períodos.
 
+Etapa 4, parte 3 (16-11-2026): Cierre también (7 consultas, todas de la reapertura); en los routers quedan 119 de 177.
+
+**Para decidir (visto en el ensayo de Cierre, sin cambiar nada):** al reabrir un período cerrado, la app lo marca vigente pero no desactiva los demás. En la copia de práctica, después de reabrir dos meses quedaron tres períodos vigentes a la vez. ¿Es lo que se quiere o al reabrir solo debería quedar vigente el período reabierto (o el mes en curso)?
+
 ### 2.7 bis Limpieza de restos del desarrollo (15-11-2026, hecha)
 
 - **Servidor:**

@@ -682,6 +682,14 @@ class AsistenciaRepository:
         query = "SELECT * FROM cierres_periodos WHERE tipo_cierre = ? ORDER BY fecha_fin DESC LIMIT 1"
         return await self.db.fetch_one(query, (tipo,))
 
+    async def get_cierre_by_id(self, cierre_id: int) -> Optional[Dict[str, Any]]:
+        """Un registro de cierre por su id (para reabrirlo)."""
+        return await self.db.fetch_one("SELECT * FROM cierres_periodos WHERE id = ?", (cierre_id,))
+
+    async def eliminar_cierre(self, cierre_id: int) -> None:
+        """Borra un registro de cierre: así se reabre el período de esa área."""
+        await self.db.execute("DELETE FROM cierres_periodos WHERE id = ?", (cierre_id,))
+
     async def get_cierres_historial(self, limit: int = 12) -> List[Dict[str, Any]]:
         """Obtiene al historial de cierres para la tabla de administraciÃ³n"""
         query = "SELECT * FROM cierres_periodos ORDER BY fecha_fin DESC LIMIT ?"

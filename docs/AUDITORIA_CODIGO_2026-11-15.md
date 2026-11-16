@@ -200,6 +200,19 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
 - **Siguen:**
   - Cierre (7): toca la reapertura de períodos, así que va con su propio ensayo.
   - Sync (7).
+
+**Avance (16-11-2026): parte 3 hecha.** Cierre ya no tiene consultas en su router. Eran 7, todas de la reapertura de un período, y en los routers quedan 119 de 177.
+- **Dónde quedó cada consulta:**
+  - buscar y borrar el cierre: `AsistenciaRepository` (`get_cierre_by_id` y `eliminar_cierre`), junto a las demás consultas de cierres;
+  - el registro de auditoría: `SeguridadRepository.log_auditoria`;
+  - volver el período a «abierto» y vigente: `ConfiguracionRepository.reabrir_periodo_rrhh`.
+- **La reapertura se movió tal cual.** No se reutilizó `set_periodo_rrhh_activo`, porque esa función desactiva todos los demás períodos y la reapertura no lo hace.
+- **Cómo se probó:**
+  - El ensayo crea en la copia de práctica sus propios casos, y antes de cada corrida deja las tablas como estaban. Los casos son: dos meses cerrados con su período, un cierre sin período que le corresponda, un cierre que no existe y uno ya reabierto.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**: respuestas, cierres, períodos y registro de auditoría.
+  - Se repitieron los ensayos de las partes 1 y 2. Como pasó la medianoche, solo cambian datos que dependen del día: la fecha de los pedidos, la hora de creación (la base la guarda en UTC) y el «desde» del historial de Visitas, que es hoy menos 7 días. Todo lo demás es idéntico.
+  - Pasan las 569 pruebas.
+- **Observación, sin cambiar nada:** al reabrir un período, el código no desactiva los demás. En el ensayo, después de reabrir dos meses quedaron **tres períodos vigentes a la vez**. Así funcionaba antes de este cambio; queda anotado en el plan para que la persona dueña decida si es lo que se quiere.
   - Los chicos: Empleados, Auth y Turnos.
   - Artículo 22 (15).
   - Configuración (33).
