@@ -132,7 +132,9 @@ def test_routers_ordenados_sin_consultas_propias():
 FUNCIONES_SIN_SQL = {
     "asistencia.py": ["get_auditoria_bloqueo", "get_primera_marcacion_empleado", "get_last_change", "get_filters_data",
                       "get_empleados_sin_turno_activos", "diagnostic_no_shift", "get_inasistencias_disponibles",
-                      "delete_intercambio", "create_compensacion", "delete_compensacion", "reasignar_turno_endpoint"],
+                      "delete_intercambio", "create_compensacion", "delete_compensacion", "reasignar_turno_endpoint",
+                      "_hora_de_entrada_sin_cerrar", "agregar_marcacion_manual", "_marcas_del_dia", "reclasificar_marcaciones",
+                      "quitar_marcacion_manual", "eliminar_jornada_especial_manual"],
 }
 
 

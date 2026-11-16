@@ -95,6 +95,8 @@ Etapa 4, parte 8 (16-11-2026): primeras 9 consultas de Asistencia, las de solo l
 
 Etapa 4, parte 9 (16-11-2026): compensaciones, intercambios de días y reasignar turno (7 consultas). En Asistencia quedan 42.
 
+Etapa 4, parte 10 (16-11-2026): las marcas manuales (agregar, quitar, borrar las del día y reclasificar; 14 consultas). En Asistencia quedan 28.
+
 **Fallas que ya existían, vistas en el ensayo de la parte 5: arregladas el 16-11-2026** (decisión de la persona dueña):
 - Confirmar un cambio de área pendiente daba error 500 (buscaba un dato «area» que la tabla no tiene). Ahora usa el número del área y anota solo la ficha del empleado: el historial queda con la fecha efectiva, sin un registro de más. En producción no había cambios pendientes (0) y nadie la había usado en 30 días.
 - Crear o editar un empleado con un área que no existe daba error 500: ahora avisa «El área seleccionada no existe».

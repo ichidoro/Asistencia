@@ -350,6 +350,26 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
   - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**, auditoría incluida.
   - Pasan las 578 pruebas.
 
+**Avance (16-11-2026): parte 10 hecha.** Las marcas manuales: 14 consultas en 6 funciones. Son agregar, quitar, borrar las del día, reclasificar (Entrada, Salida o «No se usa») y dos funciones de apoyo: las marcas del día y la entrada sin cerrar. En Asistencia quedan 28, según el mapa.
+- **Dónde quedaron:** `AsistenciaRepository`, con **el mismo texto de cada consulta**.
+- **Cómo se movieron:**
+  - En estas funciones el router crea el repositorio sobre la conexión del servicio (`AsistenciaRepository(db)`). Así las pruebas que usan una base falsa, y reconocen cada consulta por su texto, siguen funcionando sin cambios: son 68 y pasan todas.
+  - Quitar una marca y borrar las del día siguen dentro de la misma transacción que guarda su copia en la auditoría.
+- **Cómo se probó:**
+  - El ensayo crea un empleado de ensayo con marcas del reloj: un día completo, uno con solo la Entrada y uno con dos Entradas.
+  - Recorre 18 pasos:
+    - agregar: empleado que no existe, una Entrada, una Salida que cierra la del reloj, un par, una marca en el futuro y sin horas;
+    - reclasificar: sin marcas, una marca ajena, un tipo inválido, cambiar y deshacer;
+    - quitar: una que no existe, una del reloj, un motivo corto y una manual;
+    - borrar las del día: con marcas, sin marcas y con un empleado que no existe.
+  - Compara también las marcas, las correcciones de tipo, los días recalculados y las dos copias en la auditoría.
+  - Dos ajustes del propio ensayo:
+    - la lista de «marcas usadas» se compara ordenada, porque la app la guarda en un orden que depende del número de cada marca;
+    - se tapa la hora actual del aviso de «marca en el futuro».
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. También el ensayo de la parte 9.
+  - Pasan las 578 pruebas.
+- **Ajuste en una prueba:** la que vigila que la ventana muestre las marcas «No se usa» ahora revisa la consulta en el repositorio y que la ventana la use. La condición es la misma.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

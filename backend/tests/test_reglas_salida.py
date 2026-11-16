@@ -722,7 +722,12 @@ def test_el_calculo_no_lee_las_marcas_que_no_se_usan():
     assert "<> 'No se usa'" in LOGS_CON_TIPO_CORREGIDO
     assert "No se usa" not in LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO
     router = open(os.path.join(os.path.dirname(__file__), "..", "routers", "asistencia.py"), encoding="utf-8").read()
-    assert "FROM {LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO}" in router          # la ventana las muestra
+    # La ventana las muestra: la consulta vive en el repositorio desde la etapa 4 (16-11-2026) y _marcas_del_dia la usa
+    import inspect
+    from backend.repositories.asistencia import AsistenciaRepository
+    assert "FROM {LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO}" in inspect.getsource(AsistenciaRepository.get_marcas_entre)
+    from backend.routers import asistencia as R
+    assert ".get_marcas_entre(" in inspect.getsource(R._marcas_del_dia)
     assert "La regla de este día no permite dejar una marca sin usar." in router
     assert "Una marca manual no se marca como «No se usa»" in router
     js = open(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()

@@ -1382,10 +1382,7 @@ _TIPOS_ENTRADA = ('entrada', 'entry', 'e', 'in', '1')
 
 async def _hora_de_entrada_sin_cerrar(db, empleado_id: int, fecha: str) -> Optional[str]:
     """Hora (HH:MM:SS) de la última marca de `fecha` si es una Entrada (con el tipo ya corregido por una persona): una Entrada sin Salida."""
-    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO
-    ultima = await db.fetch_one(
-        f"SELECT fecha_hora, tipo FROM {LOGS_CON_TIPO_CORREGIDO} WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? "
-        "ORDER BY fecha_hora DESC LIMIT 1", (empleado_id, fecha))
+    ultima = await AsistenciaRepository(db).get_ultima_marca_del_dia(empleado_id, fecha)
     if ultima and str(ultima["tipo"] or "").strip().lower() in _TIPOS_ENTRADA:
         return str(ultima["fecha_hora"])[11:19]
     return None
@@ -1431,10 +1428,7 @@ async def agregar_marcacion_manual(
         obs_str = observaciones or "Marcación manual"
 
         # Blindaje: No permitir sobreescribir si ya existen ambas marcas biométricas en el reloj
-        bio_logs = await db.fetch_all(
-            "SELECT id, tipo FROM logs_raw WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? AND manual = 0",
-            (empleado_id, fecha)
-        )
+        bio_logs = await AsistenciaRepository(db).get_marcas_del_reloj_del_dia(empleado_id, fecha)
         has_bio_in = any(str(b.get('tipo', '')).strip().lower() in ('entrada', 'entry', 'e', 'in', '1') for b in bio_logs)
         has_bio_out = any(str(b.get('tipo', '')).strip().lower() in ('salida', 'exit', 's', 'out', '2') for b in bio_logs)
         # Una SALIDA sola que cierra la última ENTRADA del día (segunda jornada, u olvido tras la colación) no pisa al reloj:
@@ -1485,14 +1479,11 @@ async def agregar_marcacion_manual(
                 + f" (ahora son las {ahora.strftime('%H:%M')} del {ahora.strftime('%d-%m')}). "
                   "Una marca manual solo registra algo que ya pasó: ingrésela cuando ocurra."))
 
-        query = """
-            INSERT OR IGNORE INTO logs_raw (empleado_id, rut, fecha_hora, tipo, manual, observaciones, hash_original, usuario_id)
-            VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-        """
         for fh, t in marcas_a_insertar:
             raw_string = f"{rut}|{fh}|{t}"
             hash_val = hashlib.sha256(raw_string.encode()).hexdigest()
-            await db.execute(query, (empleado_id, rut, fh, t, obs_str, hash_val, getattr(current_user, "user_id", None)))
+            await AsistenciaRepository(db).insertar_marca_manual(empleado_id, rut, fh, t, obs_str, hash_val,
+                                                                 getattr(current_user, "user_id", None))
 
         # 2. Reprocesar asistencia del día UNA SOLA VEZ
         resultado = await service.procesar_empleado_dia(empleado_id, fecha, save=True)
@@ -1600,16 +1591,11 @@ def marcas_que_pertenecen_al_dia(fecha: str, marcas: List[Dict[str, Any]], ids_d
 async def _marcas_del_dia(db, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
     """Marcas (con el tipo ya corregido por una persona, si lo hubo) que pertenecen a la jornada de `fecha`. Incluye las que
     una persona dejó como «No se usa» (tipo 'No se usa'): el cálculo no las lee, pero la ventana las muestra para poder deshacerlo."""
-    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO
     f = datetime.strptime(fecha, "%Y-%m-%d")
     ayer, manana = (f - timedelta(days=1)).strftime("%Y-%m-%d"), (f + timedelta(days=1)).strftime("%Y-%m-%d")
-    rows = await db.fetch_all(
-        f"SELECT id, fecha_hora, tipo, tipo_original, manual, equipo FROM {LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO} "
-        "WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ? ORDER BY fecha_hora ASC",
-        (empleado_id, f"{ayer} 00:00:00", f"{manana} 23:59:59"))
-    asist = await db.fetch_all(
-        "SELECT fecha, marcas_consumidas_ids FROM asistencias WHERE empleado_id = ? AND fecha IN (?, ?, ?)",
-        (empleado_id, ayer, fecha, manana))
+    repo = AsistenciaRepository(db)
+    rows = await repo.get_marcas_entre(empleado_id, f"{ayer} 00:00:00", f"{manana} 23:59:59")
+    asist = await repo.get_marcas_usadas_por_dia(empleado_id, (ayer, fecha, manana))
     usadas = {str(a["fecha"])[:10]: _ids_de_json(a["marcas_consumidas_ids"]) for a in asist}
     return marcas_que_pertenecen_al_dia(fecha, [dict(r) for r in rows], usadas.get(fecha, set()),
                                         usadas.get(ayer, set()) | usadas.get(manana, set()))
@@ -1918,7 +1904,7 @@ async def reclasificar_marcaciones(
     # Solo marcas de ESTE empleado y de ESTA jornada (no se puede tocar una marca ajena por el id)
     del_dia = {m["id"]: m for m in await _marcas_del_dia(db, req.empleado_id, req.fecha)}
     permitidas = set(del_dia)
-    orig = await db.fetch_all(f"SELECT id, tipo FROM logs_raw WHERE id IN ({ph}) AND empleado_id = ?", tuple(ids) + (req.empleado_id,))
+    orig = await AsistenciaRepository(db).get_tipos_de_marcas(ids, req.empleado_id)
     orig = {r["id"]: r["tipo"] for r in orig}
     if len(orig) != len(ids) or not set(ids) <= permitidas:
         raise HTTPException(status_code=400, detail="Alguna marca no corresponde a este empleado y día.")
@@ -1932,11 +1918,11 @@ async def reclasificar_marcaciones(
         ev = await ReglasMarcasRepository(db).evaluar_dia(req.empleado_id, req.fecha)
         if not (ev.get("en_revision") and "NO_SE_USA" in ((ev.get("regla") or {}).get("opciones_efectivas") or [])):
             raise HTTPException(status_code=400, detail="La regla de este día no permite dejar una marca sin usar.")
+    repo_marcas = AsistenciaRepository(db)
     for log_id, t in nuevos.items():
-        await db.execute("DELETE FROM logs_tipo_override WHERE log_id = ?", (log_id,))
+        await repo_marcas.quitar_correccion_de_tipo(log_id)
         if str(orig[log_id] or "").strip().lower() != t.lower():
-            await db.execute("INSERT INTO logs_tipo_override (log_id, tipo, usuario_id) VALUES (?, ?, ?)",
-                             (log_id, t, getattr(current_user, "user_id", None)))
+            await repo_marcas.corregir_tipo(log_id, t, getattr(current_user, "user_id", None))
     resultado = await service.procesar_empleado_dia(req.empleado_id, req.fecha, save=True)
     # El día siguiente hereda las marcas que usó este día (turnos que cruzan la medianoche): si ya estaba calculado, se recalcula
     manana = (datetime.strptime(req.fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -1965,8 +1951,8 @@ async def quitar_marcacion_manual(
     motivo = (motivo or "").strip()
     if len(motivo) < _MOTIVO_MIN_LETRAS:
         raise HTTPException(status_code=400, detail=f"Indique el motivo (al menos {_MOTIVO_MIN_LETRAS} letras): queda registrado en la auditoría.")
-    marca = await db.fetch_one(
-        "SELECT id, empleado_id, fecha_hora, tipo, manual, observaciones, usuario_id, created_at FROM logs_raw WHERE id = ?", (log_id,))
+    repo_marcas = AsistenciaRepository(db)
+    marca = await repo_marcas.get_marca(log_id)
     if not marca:
         raise HTTPException(status_code=404, detail="Marcación no encontrada")
     if not marca["manual"]:
@@ -1979,8 +1965,7 @@ async def quitar_marcacion_manual(
     # Días que cuentan esta marca: el de su fecha y, si un turno de noche la usó como Salida, el día anterior
     dia = str(marca["fecha_hora"])[:10]
     ayer = (datetime.strptime(dia, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-    calculados = await db.fetch_all(
-        "SELECT fecha, marcas_consumidas_ids FROM asistencias WHERE empleado_id = ? AND fecha IN (?, ?)", (marca["empleado_id"], ayer, dia))
+    calculados = await repo_marcas.get_marcas_usadas_por_dia(marca["empleado_id"], (ayer, dia))
     dias = sorted({dia} | {str(a["fecha"])[:10] for a in calculados if log_id in _ids_de_json(a["marcas_consumidas_ids"])})
     for d in dias:
         if await service.repository.check_fecha_cerrada(d, marca["empleado_id"]):
@@ -1994,8 +1979,8 @@ async def quitar_marcacion_manual(
     }, ensure_ascii=False)
     async with db.transaction():  # sin copia en la auditoría no se quita nada
         await SeguridadRepository(db).log_auditoria(current_user.user_id, current_user.username, "ELIMINAR_MARCA_MANUAL", "MARCACIONES", detalle)
-        await db.execute("DELETE FROM logs_tipo_override WHERE log_id = ?", (log_id,))
-        await db.execute("DELETE FROM logs_raw WHERE id = ? AND manual = 1", (log_id,))
+        await repo_marcas.quitar_correccion_de_tipo(log_id)
+        await repo_marcas.borrar_marca_manual(log_id)
     logger.info(f"🗑️ Marca manual {log_id} ({marca['fecha_hora']}) de empleado {marca['empleado_id']} quitada por {current_user.username}: {motivo}")
 
     for d in dias:
@@ -2030,13 +2015,8 @@ async def eliminar_jornada_especial_manual(
         
         # Eliminar las marcaciones manuales de este día (la copia de lo que se borra queda en la auditoría, con quién y cuándo)
         fecha_like = f"{fecha} %"
-        query = """
-            DELETE FROM logs_raw
-            WHERE empleado_id = ? AND manual = 1 AND fecha_hora LIKE ?
-        """
-        a_borrar = await db.fetch_all(
-            "SELECT id, fecha_hora, tipo, observaciones, usuario_id, created_at FROM logs_raw WHERE empleado_id = ? AND manual = 1 AND fecha_hora LIKE ?",
-            (empleado_id, fecha_like))
+        repo_marcas = AsistenciaRepository(db)
+        a_borrar = await repo_marcas.get_marcas_manuales_del_dia(empleado_id, fecha_like)
         from backend.repositories.seguridad import SeguridadRepository
         async with db.transaction():
             if a_borrar:
@@ -2045,7 +2025,7 @@ async def eliminar_jornada_especial_manual(
                     json.dumps({"empleado_id": empleado_id, "fecha": fecha, "marcas": [
                         {"marca_id": m["id"], "fecha_hora": str(m["fecha_hora"]), "tipo": m["tipo"], "observaciones": m["observaciones"],
                          "ingresada_por_usuario_id": m["usuario_id"], "ingresada_el": str(m["created_at"])} for m in a_borrar]}, ensure_ascii=False))
-            await db.execute(query, (empleado_id, fecha_like))
+            await repo_marcas.borrar_marcas_manuales_del_dia(empleado_id, fecha_like)
         
         # Reprocesar la asistencia del día
         resultado = await service.procesar_empleado_dia(empleado_id, fecha, save=True)

@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1394,
+  "total": 1406,
   "top": [
    {
     "funcion": "_solve_core",
@@ -196,7 +196,7 @@
   },
   {
    "archivo": "backend/routers/asistencia.py",
-   "lineas": 3970
+   "lineas": 3950
   },
   {
    "archivo": "backend/services/asistencia_service.py",
@@ -228,11 +228,11 @@
   }
  ],
  "sql_en_routers": {
-  "total": 42,
+  "total": 28,
   "top": [
    {
     "archivo": "backend/routers/asistencia.py",
-    "consultas": 42
+    "consultas": 28
    }
   ]
  },

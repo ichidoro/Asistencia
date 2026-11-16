@@ -970,6 +970,77 @@ class AsistenciaRepository:
         cursor = await self.db.execute(query, params)
         return cursor.lastrowid
 
+    # ── Marcas manuales (vivían en routers/asistencia.py; etapa 4 de la auditoría, mismo texto de cada consulta) ──
+
+    async def get_ultima_marca_del_dia(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """La última marca de un día, con el tipo ya corregido por una persona (si lo hubo)."""
+        return await self.db.fetch_one(
+            f"SELECT fecha_hora, tipo FROM {LOGS_CON_TIPO_CORREGIDO} WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? "
+            "ORDER BY fecha_hora DESC LIMIT 1", (empleado_id, fecha))
+
+    async def get_marcas_del_reloj_del_dia(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
+        """Las marcas del reloj (no manuales) de un día."""
+        return await self.db.fetch_all(
+            "SELECT id, tipo FROM logs_raw WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? AND manual = 0",
+            (empleado_id, fecha)
+        )
+
+    async def insertar_marca_manual(self, empleado_id: int, rut: str, fecha_hora: str, tipo: str, observaciones: str,
+                                    hash_original: str, usuario_id: Optional[int]) -> None:
+        """Guarda una marca manual (si ya existe la misma, no hace nada)."""
+        query = """
+            INSERT OR IGNORE INTO logs_raw (empleado_id, rut, fecha_hora, tipo, manual, observaciones, hash_original, usuario_id)
+            VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+        """
+        await self.db.execute(query, (empleado_id, rut, fecha_hora, tipo, observaciones, hash_original, usuario_id))
+
+    async def get_marcas_entre(self, empleado_id: int, desde: str, hasta: str) -> List[Dict[str, Any]]:
+        """Marcas entre dos momentos, con el tipo corregido y también las que una persona dejó como «No se usa»."""
+        return await self.db.fetch_all(
+            f"SELECT id, fecha_hora, tipo, tipo_original, manual, equipo FROM {LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO} "
+            "WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ? ORDER BY fecha_hora ASC",
+            (empleado_id, desde, hasta))
+
+    async def get_marcas_usadas_por_dia(self, empleado_id: int, fechas: tuple) -> List[Dict[str, Any]]:
+        """Qué marcas usó el cálculo de cada uno de esos días."""
+        lugares = ", ".join("?" for _ in fechas)
+        return await self.db.fetch_all(
+            f"SELECT fecha, marcas_consumidas_ids FROM asistencias WHERE empleado_id = ? AND fecha IN ({lugares})",
+            (empleado_id,) + tuple(fechas))
+
+    async def get_tipos_de_marcas(self, ids: List[int], empleado_id: int) -> List[Dict[str, Any]]:
+        """El tipo original (del reloj o de quien la ingresó) de esas marcas, solo si son de ese empleado."""
+        ph = ",".join("?" * len(ids))
+        return await self.db.fetch_all(f"SELECT id, tipo FROM logs_raw WHERE id IN ({ph}) AND empleado_id = ?", tuple(ids) + (empleado_id,))
+
+    async def quitar_correccion_de_tipo(self, log_id: int) -> None:
+        await self.db.execute("DELETE FROM logs_tipo_override WHERE log_id = ?", (log_id,))
+
+    async def corregir_tipo(self, log_id: int, tipo: str, usuario_id: Optional[int]) -> None:
+        """Una persona fija si la marca es Entrada, Salida o «No se usa» (la marca del reloj no se toca)."""
+        await self.db.execute("INSERT INTO logs_tipo_override (log_id, tipo, usuario_id) VALUES (?, ?, ?)",
+                              (log_id, tipo, usuario_id))
+
+    async def get_marca(self, log_id: int) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one(
+            "SELECT id, empleado_id, fecha_hora, tipo, manual, observaciones, usuario_id, created_at FROM logs_raw WHERE id = ?", (log_id,))
+
+    async def borrar_marca_manual(self, log_id: int) -> None:
+        """Borra una marca solo si es manual (las del reloj nunca se borran)."""
+        await self.db.execute("DELETE FROM logs_raw WHERE id = ? AND manual = 1", (log_id,))
+
+    async def get_marcas_manuales_del_dia(self, empleado_id: int, fecha_like: str) -> List[Dict[str, Any]]:
+        return await self.db.fetch_all(
+            "SELECT id, fecha_hora, tipo, observaciones, usuario_id, created_at FROM logs_raw WHERE empleado_id = ? AND manual = 1 AND fecha_hora LIKE ?",
+            (empleado_id, fecha_like))
+
+    async def borrar_marcas_manuales_del_dia(self, empleado_id: int, fecha_like: str) -> None:
+        query = """
+            DELETE FROM logs_raw
+            WHERE empleado_id = ? AND manual = 1 AND fecha_hora LIKE ?
+        """
+        await self.db.execute(query, (empleado_id, fecha_like))
+
     async def get_intercambio_by_id(self, intercambio_id: int) -> Optional[Dict[str, Any]]:
         return await self.db.fetch_one("SELECT * FROM intercambios_dias WHERE id = ?", (intercambio_id,))
 
