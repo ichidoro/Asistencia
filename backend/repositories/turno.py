@@ -635,6 +635,29 @@ class TurnoRepository:
             # Idealmente deberíamos manejar transacción distribuida, pero por ahora logueamos.
             raise
 
+    async def get_turnos_para_asistente(self) -> List[Dict]:
+        """Todos los turnos con lo que muestra el asistente de alta (incluye cuántas semanas tiene cada ciclo)."""
+        return await self.db.fetch_all("""
+            SELECT t.id, t.nombre, t.tipo_programacion, t.meta_horas_semanales,
+                   MAX(td.num_semana) as num_semanas
+            FROM turnos t
+            LEFT JOIN turno_dias td ON td.turno_id = t.id
+            GROUP BY t.id
+            ORDER BY t.nombre ASC
+        """)
+
+    async def get_areas_de_los_turnos(self) -> List[Dict]:
+        """Pares turno → nombre de área asignada (para filtrar los turnos por área en el asistente)."""
+        return await self.db.fetch_all("""
+            SELECT ta.turno_id, a.nombre as area_nombre
+            FROM turno_areas ta
+            JOIN areas a ON a.id = ta.area_id
+        """)
+
+    async def get_turno_de_area(self, area_id: int) -> Optional[Dict]:
+        """El turno asignado a un área, si tiene."""
+        return await self.db.fetch_one("SELECT turno_id FROM turno_areas WHERE area_id = ?", (area_id,))
+
     async def get_all_turnos(self, include_details: bool = True, activo: Optional[bool] = None) -> List[Dict]:
         """Obtener todos los turnos, opcionalmente con sus días"""
         try:

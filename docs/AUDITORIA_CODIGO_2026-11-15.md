@@ -200,6 +200,10 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
 - **Siguen:**
   - Cierre (7): toca la reapertura de períodos, así que va con su propio ensayo.
   - Sync (7).
+  - Los chicos: Empleados, Auth y Turnos.
+  - Artículo 22 (15).
+  - Configuración (33).
+  - Asistencia (57).
 
 **Avance (16-11-2026): parte 3 hecha.** Cierre ya no tiene consultas en su router. Eran 7, todas de la reapertura de un período, y en los routers quedan 119 de 177.
 - **Dónde quedó cada consulta:**
@@ -212,8 +216,27 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
   - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**: respuestas, cierres, períodos y registro de auditoría.
   - Se repitieron los ensayos de las partes 1 y 2. Como pasó la medianoche, solo cambian datos que dependen del día: la fecha de los pedidos, la hora de creación (la base la guarda en UTC) y el «desde» del historial de Visitas, que es hoy menos 7 días. Todo lo demás es idéntico.
   - Pasan las 569 pruebas.
-- **Observación, sin cambiar nada:** al reabrir un período, el código no desactiva los demás. En el ensayo, después de reabrir dos meses quedaron **tres períodos vigentes a la vez**. Así funcionaba antes de este cambio; queda anotado en el plan para que la persona dueña decida si es lo que se quiere.
-  - Los chicos: Empleados, Auth y Turnos.
+- **Observación, sin cambiar nada (Cierre):** al reabrir un período, el código no desactiva los demás. En el ensayo, después de reabrir dos meses quedaron **tres períodos vigentes a la vez**. Así funcionaba antes de este cambio; queda anotado en el plan para que la persona dueña decida si es lo que se quiere.
+
+**Avance (16-11-2026): parte 4 hecha.** Sync ya no tiene consultas en su router: eran 7, y en los routers quedan 112 de 177.
+- **Dónde quedó cada consulta:**
+  - los turnos y sus áreas para el asistente de alta: `TurnoRepository` (`get_turnos_para_asistente`, `get_areas_de_los_turnos` y `get_turno_de_area`);
+  - los bonos y los de cada área: `ConfiguracionRepository` (`get_bonos_para_asistente` y `get_bonos_de_area`);
+  - el historial de sincronizaciones: `SeguridadRepository.get_sync_logs`, donde ya se creaba esa tabla;
+  - la prueba de salud de la base: `Database.responde()`.
+- **La prueba de salud** hace exactamente lo de antes. No se usó `health_check`, que ya existía, porque si la conexión figura como cerrada no lo intenta.
+- **Cómo se probó:**
+  - El ensayo crea en la copia de práctica una segunda área sin turno, dos bonos asignados y tres registros de sincronización: uno con detalle, uno con un detalle dañado y uno sin detalle.
+  - Llama al asistente de turnos y de bonos con áreas que existen y que no, al historial y a la salud.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**.
+  - Aparte se comprobó que la salud responde «no» cuando la consulta falla.
+  - Pasan las 569 pruebas.
+- **Un tropiezo del ensayo, ya corregido:**
+  - Qué pasó: la primera versión vació la tabla de áreas con `CASCADE`, y eso borró también, **en la copia de práctica**, sus 2 empleados de prueba, su historial de áreas y sus asignaciones de turno.
+  - Cómo se arregló: se repusieron con el guion original, con los mismos ids, y el ensayo ahora borra solo lo que él crea.
+  - Producción no se tocó: los ensayos solo se conectan al contenedor de práctica.
+- **Siguen:**
+  - Los chicos: Empleados (3), Auth (2) y Turnos (2).
   - Artículo 22 (15).
   - Configuración (33).
   - Asistencia (57).

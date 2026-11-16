@@ -565,6 +565,14 @@ class ConfiguracionRepository:
             logger.error(f"Error actualizando bono: {e}")
             raise
 
+    async def get_bonos_para_asistente(self) -> List[Dict]:
+        """Id, nombre y descripción de todos los bonos, por nombre (asistente de alta)."""
+        return await self.db.fetch_all("SELECT id, nombre, descripcion FROM bonos ORDER BY nombre ASC")
+
+    async def get_bonos_de_area(self, area_id: int) -> List[Dict]:
+        """Los bonos asignados a un área."""
+        return await self.db.fetch_all("SELECT bono_id FROM area_bonos WHERE area_id = ?", (area_id,))
+
     async def get_all_bonos(self) -> List[Dict]:
         """Obtener todos los bonos con sus reglas (con caché en memoria)"""
         if ConfiguracionRepository._bonos_cache is not None:

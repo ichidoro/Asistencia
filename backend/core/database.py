@@ -311,6 +311,15 @@ class PostgresDatabase:
         self._id_tables = None
 
 
+    async def responde(self) -> bool:
+        """¿La base contesta una consulta mínima? (la usa el estado de salud de Sincronización).
+        A diferencia de health_check, lo intenta aunque la conexión figure como cerrada."""
+        try:
+            await self.fetch_one("SELECT 1")
+            return True
+        except Exception:
+            return False
+
     async def health_check(self) -> Dict[str, Any]:
         try:
             if not self._connected:

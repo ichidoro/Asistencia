@@ -16,6 +16,9 @@ from pydantic import BaseModel
 from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.core.database import db
 from backend.services.sync_service import SyncService
+from backend.repositories.turno import TurnoRepository
+from backend.repositories.configuracion import ConfiguracionRepository
+from backend.repositories.seguridad import SeguridadRepository
 from backend.core.config import settings
 
 
@@ -112,21 +115,11 @@ async def wizard_provider_turnos(
     await db.connect()
     
     # 1. Obtener todos los turnos con campos necesarios para las radio cards del wizard
-    turnos_records = await db.fetch_all("""
-        SELECT t.id, t.nombre, t.tipo_programacion, t.meta_horas_semanales,
-               MAX(td.num_semana) as num_semanas
-        FROM turnos t
-        LEFT JOIN turno_dias td ON td.turno_id = t.id
-        GROUP BY t.id
-        ORDER BY t.nombre ASC
-    """)
+    turno_repo = TurnoRepository(db)
+    turnos_records = await turno_repo.get_turnos_para_asistente()
 
     # 1b. Obtener las áreas asignadas a cada turno (para poder filtrar en el frontend)
-    turno_areas_records = await db.fetch_all("""
-        SELECT ta.turno_id, a.nombre as area_nombre
-        FROM turno_areas ta
-        JOIN areas a ON a.id = ta.area_id
-    """)
+    turno_areas_records = await turno_repo.get_areas_de_los_turnos()
     # Construir dict turno_id -> [area_nombres]
     turno_areas_map = {}
     for row in turno_areas_records:
@@ -157,7 +150,7 @@ async def wizard_provider_turnos(
         area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
         if area_id:
             # Buscar turno asociado al área
-            asignacion = await db.fetch_one("SELECT turno_id FROM turno_areas WHERE area_id = ?", (area_id,))
+            asignacion = await turno_repo.get_turno_de_area(area_id)
             if asignacion:
                 pre_asignaciones[area_name] = asignacion['turno_id']
                 
@@ -178,7 +171,8 @@ async def wizard_provider_bonos(
     await db.connect()
     
     # 1. Obtener todos los bonos
-    bonos = await db.fetch_all("SELECT id, nombre, descripcion FROM bonos ORDER BY nombre ASC")
+    config_repo = ConfiguracionRepository(db)
+    bonos = await config_repo.get_bonos_para_asistente()
     
     # 2. Buscar asignaciones existentes
     from backend.repositories.area import AreaRepository
@@ -188,7 +182,7 @@ async def wizard_provider_bonos(
     for area_name in request.areas:
         area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
         if area_id:
-            asignaciones = await db.fetch_all("SELECT bono_id FROM area_bonos WHERE area_id = ?", (area_id,))
+            asignaciones = await config_repo.get_bonos_de_area(area_id)
             if asignaciones:
                 pre_asignaciones[area_name] = [a['bono_id'] for a in asignaciones]
                 
@@ -488,11 +482,7 @@ async def system_health() -> Dict[str, Any]:
     # ── Cache miss: hacer los pings reales ───────────────────────────────
     local_ok = False
 
-    try:
-        await db.fetch_one("SELECT 1")
-        local_ok = True
-    except Exception:
-        local_ok = False
+    local_ok = await db.responde()
 
     try:
         from backend.services import sync_monitor
@@ -810,8 +800,7 @@ async def get_sync_logs(
 ) -> List[Dict[str, Any]]:
     """Obtiene el historial de ejecuciones técnicas de BioAlba."""
     try:
-        query = "SELECT * FROM sync_logs ORDER BY id DESC LIMIT ?"
-        rows = await db.fetch_all(query, (limit,))
+        rows = await SeguridadRepository(db).get_sync_logs(limit)
 
         results = []
         for r in rows:

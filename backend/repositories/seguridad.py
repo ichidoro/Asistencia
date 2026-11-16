@@ -474,6 +474,10 @@ class SeguridadRepository:
         
         await self.db.execute(query, tuple(params))
 
+    async def get_sync_logs(self, limit: int) -> List[Dict]:
+        """Las últimas sincronizaciones con BioAlba (la tabla sync_logs se crea en init_tables de este archivo)."""
+        return await self.db.fetch_all("SELECT * FROM sync_logs ORDER BY id DESC LIMIT ?", (limit,))
+
     async def get_auditoria(self, limit: int = 100, skip: int = 0) -> List[Dict]:
         query = """
             SELECT * FROM logs_auditoria 
