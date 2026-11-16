@@ -1167,3 +1167,44 @@ class AsistenciaRepository:
         """Elimina una compensación por ID."""
         query = "DELETE FROM compensaciones_he_inasistencia WHERE id = ?"
         await self.db.execute(query, (compensacion_id,))
+
+    async def get_cierre_que_se_cruza(self, areas: List[str], fecha_inicio: str, fecha_fin: str) -> Optional[Dict[str, Any]]:
+        """Un cierre de alguna de esas áreas que se cruce con el rango (o nada)."""
+        placeholders = ",".join(["?"] * len(areas))
+        q_closure_check = f"""
+            SELECT area, fecha_inicio, fecha_fin
+            FROM cierres_periodos
+            WHERE area IN ({placeholders})
+              AND fecha_inicio <= ?
+              AND fecha_fin >= ?
+            LIMIT 1
+        """
+        params = tuple(areas) + (fecha_fin, fecha_inicio)
+        return await self.db.fetch_one(q_closure_check, params)
+
+    async def get_fechas_hora_marcas_entre(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        """Fecha y hora de las marcas del empleado entre dos días (ambos incluidos)."""
+        return await self.db.fetch_all("""
+                SELECT fecha_hora
+                FROM logs_raw
+                WHERE empleado_id = ?
+                  AND fecha_hora >= ? AND fecha_hora <= ?
+            """, (empleado_id, f"{fecha_inicio} 00:00:00", f"{fecha_fin} 23:59:59"))
+
+    async def insertar_marcas_relleno(self, filas: list) -> None:
+        """Inserta de una vez las marcas del relleno masivo (las repetidas se ignoran)."""
+        q_insert = """
+                INSERT OR IGNORE INTO logs_raw
+                    (empleado_id, fecha_hora, tipo, manual, observaciones, hash_original, usuario_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+        await self.db.executemany(q_insert, filas)
+
+    async def set_tramos(self, empleado_id: int, fecha: str, minutos_conduccion_b, minutos_espera_b) -> None:
+        """Guarda los minutos de conducción y de espera escritos a mano para ese día."""
+        query = """
+            UPDATE asistencias
+            SET minutos_conduccion_b = ?, minutos_espera_b = ?
+            WHERE empleado_id = ? AND fecha = ?
+        """
+        await self.db.execute(query, (minutos_conduccion_b, minutos_espera_b, empleado_id, fecha))

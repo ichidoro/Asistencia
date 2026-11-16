@@ -370,6 +370,22 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
   - Pasan las 578 pruebas.
 - **Ajuste en una prueba:** la que vigila que la ventana muestre las marcas «No se usa» ahora revisa la consulta en el repositorio y que la ventana la use. La condición es la misma.
 
+**Avance (16-11-2026): parte 11 hecha.** El relleno masivo y los tramos: 6 consultas en 2 funciones. En Asistencia quedan 22, según el mapa.
+- **Dónde quedaron, con el mismo texto de cada consulta:**
+  - las áreas del empleado en el rango, en `EmpleadoRepository`;
+  - las asignaciones de turno del rango y los días de esos turnos, en `TurnoRepository`;
+  - el cierre que se cruza con el rango, las marcas ya guardadas, la inserción de las marcas del relleno y los tramos, en `AsistenciaRepository`.
+- **El guardián ahora reconoce también `executemany`** (insertar muchas filas de una vez), que antes no revisaba.
+- **Cómo se probó:**
+  - El ensayo crea un empleado de ensayo con una marca del reloj y un cierre de ensayo de cinco días.
+  - Recorre 13 pasos:
+    - relleno: empleado que no existe, un rango con días cerrados, un rango sin turno, una semana sin sobrescribir (salta el día que ya tenía marca y el fin de semana), la misma semana sobrescribiendo, otra semana y un rango con días futuros;
+    - tramos: empleado que no existe, fecha cerrada, fecha sin asistencia y tres guardados.
+  - Compara también las marcas guardadas (con su huella) y los días recalculados.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. También el ensayo de la parte 10.
+  - Pasan las 578 pruebas.
+- **Falla que ya existía, vista en el ensayo (sin cambiar nada):** guardar los tramos (minutos de conducción y de espera de Bolsa) siempre da error 500. Las columnas `minutos_conduccion_b` y `minutos_espera_b` no existen en la tabla de asistencias, ni en la copia de práctica ni en producción. Queda para que la persona dueña decida.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

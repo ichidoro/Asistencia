@@ -1330,3 +1330,14 @@ class EmpleadoRepository:
             excluido_asistencia=bool(data.get("excluido_asistencia", 0)),
             autorizado_llaves=int(data.get("autorizado_llaves", 0))
         )
+
+    async def get_nombres_areas_validadas_entre(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict]:
+        """Nombres de las áreas validadas en que estuvo el empleado en algún momento del rango."""
+        q_areas = """
+        SELECT DISTINCT a.nombre as area_nombre
+        FROM historial_areas ha
+        JOIN areas a ON ha.area_id = a.id
+        WHERE ha.empleado_id = ? AND ha.validado = 1
+          AND ha.fecha_desde <= ? AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ha.fecha_hasta >= ?)
+    """
+        return await self.db.fetch_all(q_areas, (empleado_id, fecha_fin, fecha_inicio))

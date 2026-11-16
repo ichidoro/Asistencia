@@ -2174,33 +2174,17 @@ async def agregar_marcaciones_masivas(
 
     current_user.verificar_acceso_area(emp.area, "este empleado")
 
-    db = service.repository.db
+    repo = AsistenciaRepository(service.repository.db)
+    turno_repo = TurnoRepository(service.repository.db)
     # ── Blindaje de Cierre ──
-    q_areas = """
-        SELECT DISTINCT a.nombre as area_nombre
-        FROM historial_areas ha
-        JOIN areas a ON ha.area_id = a.id
-        WHERE ha.empleado_id = ? AND ha.validado = 1
-          AND ha.fecha_desde <= ? AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ha.fecha_hasta >= ?)
-    """
-    areas_rows = await db.fetch_all(q_areas, (empleado_id, fecha_fin, fecha_inicio))
+    areas_rows = await emp_repo.get_nombres_areas_validadas_entre(empleado_id, fecha_inicio, fecha_fin)
     emp_areas = [r['area_nombre'] for r in areas_rows]
     
     if emp.area and emp.area not in emp_areas:
         emp_areas.append(emp.area)
         
     if emp_areas:
-        placeholders = ",".join(["?"] * len(emp_areas))
-        q_closure_check = f"""
-            SELECT area, fecha_inicio, fecha_fin 
-            FROM cierres_periodos
-            WHERE area IN ({placeholders})
-              AND fecha_inicio <= ?
-              AND fecha_fin >= ?
-            LIMIT 1
-        """
-        params = tuple(emp_areas) + (fecha_fin, fecha_inicio)
-        closed_overlap = await db.fetch_one(q_closure_check, params)
+        closed_overlap = await repo.get_cierre_que_se_cruza(emp_areas, fecha_inicio, fecha_fin)
         if closed_overlap:
             raise HTTPException(
                 status_code=403, 
@@ -2213,15 +2197,7 @@ async def agregar_marcaciones_masivas(
         end_date   = datetime.strptime(fecha_fin,   "%Y-%m-%d")
 
         # ── 1. Pre-carga: asignación de turno vigente en el período ──────────
-        asigs = await db.fetch_all("""
-            SELECT a.id as asig_id, a.turno_id, a.fecha_inicio as asig_desde,
-                   a.fecha_fin as asig_hasta
-            FROM asignacion_turnos a
-            WHERE a.empleado_id = ?
-              AND a.fecha_inicio <= ?
-              AND (a.fecha_fin IS NULL OR a.fecha_fin >= ?)
-            ORDER BY a.fecha_inicio DESC
-        """, (empleado_id, fecha_fin, fecha_inicio))
+        asigs = await turno_repo.get_asignaciones_entre(empleado_id, fecha_inicio, fecha_fin)
 
         if not asigs:
             return {
@@ -2232,11 +2208,7 @@ async def agregar_marcaciones_masivas(
 
         # ── 2. Pre-carga: detalle de días de TODOS los turnos involucrados ───
         turno_ids = list({a["turno_id"] for a in asigs})
-        ph = ",".join("?" for _ in turno_ids)
-        dias_turno_rows = await db.fetch_all(
-            f"SELECT * FROM turno_dias WHERE turno_id IN ({ph}) ORDER BY num_semana, dia_semana",
-            tuple(turno_ids)
-        )
+        dias_turno_rows = await turno_repo.get_dias_de_turnos(turno_ids)
         # Mapa: turno_id → {dia_semana → config_dia}
         dias_map: Dict[int, Dict[int, Any]] = {}
         for d in dias_turno_rows:
@@ -2249,12 +2221,7 @@ async def agregar_marcaciones_masivas(
             fecha_like_start = fecha_inicio[:7]   # "YYYY-MM"
             fecha_like_end   = fecha_fin[:7]
             # Cargamos todos los logs_raw del empleado en el rango de meses
-            logs_existentes = await db.fetch_all("""
-                SELECT fecha_hora
-                FROM logs_raw
-                WHERE empleado_id = ?
-                  AND fecha_hora >= ? AND fecha_hora <= ?
-            """, (empleado_id, f"{fecha_inicio} 00:00:00", f"{fecha_fin} 23:59:59"))
+            logs_existentes = await repo.get_fechas_hora_marcas_entre(empleado_id, fecha_inicio, fecha_fin)
             # Extraer solo las fechas (YYYY-MM-DD) que tienen log
             fechas_con_log: set = {row["fecha_hora"][:10] for row in logs_existentes}
         else:
@@ -2332,12 +2299,7 @@ async def agregar_marcaciones_masivas(
 
         # ── 6. Insert batch (1 round-trip para TODOS los días) ────────────────
         if batch_logs:
-            q_insert = """
-                INSERT OR IGNORE INTO logs_raw
-                    (empleado_id, fecha_hora, tipo, manual, observaciones, hash_original, usuario_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """
-            await db.executemany(q_insert, batch_logs)
+            await repo.insertar_marcas_relleno(batch_logs)
             logger.info(f"📥 [Relleno Masivo] {len(batch_logs)} marcas teóricas insertadas para empleado {empleado_id}")
 
             # ── 7. Un solo reproceso para todo el período ─────────────────────
@@ -2390,20 +2352,13 @@ async def actualizar_tramos(
          raise HTTPException(status_code=403, detail="El periodo correspondiente a esta fecha se encuentra cerrado y no admite modificaciones.")
 
     try:
-        db = service.repository.db
-        
         # Verificar que exista la asistencia
         actual = await service.repository.get_asistencia(empleado_id, fecha)
         if not actual:
             raise HTTPException(status_code=404, detail="No existe registro de asistencia para esta fecha. El empleado debe tener al menos una marca o turno proyectado.")
             
         # Actualizar en DB
-        query = """
-            UPDATE asistencias 
-            SET minutos_conduccion_b = ?, minutos_espera_b = ?
-            WHERE empleado_id = ? AND fecha = ?
-        """
-        await db.execute(query, (minutos_conduccion_b, minutos_espera_b, empleado_id, fecha))
+        await AsistenciaRepository(service.repository.db).set_tramos(empleado_id, fecha, minutos_conduccion_b, minutos_espera_b)
         
         # Opcionalmente recalcular la asistencia si hubo otros cambios. Por ahora solo guardamos.
         

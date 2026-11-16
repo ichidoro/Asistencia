@@ -111,7 +111,7 @@ def ciclos_de_importacion():
 # Etapa 4 (consultas a los repositorios): routers que ya no hablan directo con la base. Se agrega uno cada vez que se
 # ordena; desde entonces sus consultas van en backend/repositories/.
 ROUTERS_SIN_SQL = ["flota.py", "llaves.py", "visitas.py", "porteria.py", "productos_4.py", "cierre.py", "sync.py", "empleados.py", "auth.py", "turnos.py", "articulo22.py", "configuracion.py"]
-LLAMADAS_A_LA_BASE = ("fetch_all", "fetch_one", "execute", "execute_batch", "fetchval", "fetchrow", "fetch")
+LLAMADAS_A_LA_BASE = ("fetch_all", "fetch_one", "execute", "execute_batch", "executemany", "fetchval", "fetchrow", "fetch")
 
 
 def test_routers_ordenados_sin_consultas_propias():
@@ -134,7 +134,8 @@ FUNCIONES_SIN_SQL = {
                       "get_empleados_sin_turno_activos", "diagnostic_no_shift", "get_inasistencias_disponibles",
                       "delete_intercambio", "create_compensacion", "delete_compensacion", "reasignar_turno_endpoint",
                       "_hora_de_entrada_sin_cerrar", "agregar_marcacion_manual", "_marcas_del_dia", "reclasificar_marcaciones",
-                      "quitar_marcacion_manual", "eliminar_jornada_especial_manual"],
+                      "quitar_marcacion_manual", "eliminar_jornada_especial_manual",
+                      "agregar_marcaciones_masivas", "actualizar_tramos"],
 }
 
 

@@ -1172,3 +1172,23 @@ class TurnoRepository:
         except Exception as e:
             logger.error(f"Error actualizando turno {turno_id}: {e}")
             raise
+
+    async def get_asignaciones_entre(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        """Asignaciones de turno del empleado que tocan el rango, la más reciente primero."""
+        return await self.db.fetch_all("""
+            SELECT a.id as asig_id, a.turno_id, a.fecha_inicio as asig_desde,
+                   a.fecha_fin as asig_hasta
+            FROM asignacion_turnos a
+            WHERE a.empleado_id = ?
+              AND a.fecha_inicio <= ?
+              AND (a.fecha_fin IS NULL OR a.fecha_fin >= ?)
+            ORDER BY a.fecha_inicio DESC
+        """, (empleado_id, fecha_fin, fecha_inicio))
+
+    async def get_dias_de_turnos(self, turno_ids: List[int]) -> List[Dict[str, Any]]:
+        """Detalle de días de varios turnos a la vez."""
+        ph = ",".join("?" for _ in turno_ids)
+        return await self.db.fetch_all(
+            f"SELECT * FROM turno_dias WHERE turno_id IN ({ph}) ORDER BY num_semana, dia_semana",
+            tuple(turno_ids)
+        )
