@@ -58,16 +58,18 @@ def configure_logging():
             enqueue=True  # Thread-safe/Async-safe
         )
 
-    # File handler (Simplificado para evitar WinError 32 en Windows/Reload)
-    # rotation/compression DESACTIVADOS: causan conflictos de bloqueo de archivos
-    # retention también desactivado: sin rotation no tiene efecto
+    # Archivo de registro. En el servidor (Linux) se corta cada día y se borran los viejos (LOG_ROTATION y
+    # LOG_RETENTION). En Windows no se corta: con la recarga automática el archivo queda tomado (WinError 32).
+    # diagnose=False: ante un error no se escriben los valores de las variables, que pueden traer datos de personas.
+    corte = {} if sys.platform == "win32" else {"rotation": settings.LOG_ROTATION, "retention": settings.LOG_RETENTION}
     logger.add(
         settings.log_file_path,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         level=settings.LOG_LEVEL,
         enqueue=True,
         backtrace=True,
-        diagnose=True
+        diagnose=False,
+        **corte
     )
 
 configure_logging()

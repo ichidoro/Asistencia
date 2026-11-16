@@ -7,7 +7,7 @@ export default defineConfig({
   build: {
     // Output directly to the existing frontend/js directory
     outDir: path.resolve(__dirname, '../frontend/js'),
-    sourcemap: true, // Lighthouse pide source map para JS propio grande
+    sourcemap: false, // sin mapa fuente: en producción dejaba ver el código del Dashboard a cualquiera (15-11-2026)
     emptyOutDir: false, // CRITICAL: do not delete other JS files in frontend/js
     rollupOptions: {
       input: path.resolve(__dirname, 'src/main.jsx'),

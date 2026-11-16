@@ -765,7 +765,7 @@ class AsistenciaService:
         _time = time.time
         t0 = _time()
 
-        logger.info(f"📊 Calculando asistencia empleado {empleado_id}: {fecha_inicio} a {fecha_fin} (Force: {force})")
+        logger.debug(f"📊 Calculando asistencia empleado {empleado_id}: {fecha_inicio} a {fecha_fin} (Force: {force})")
 
         start = datetime.strptime(fecha_inicio, "%Y-%m-%d")
         end = datetime.strptime(fecha_fin, "%Y-%m-%d")
@@ -1021,7 +1021,7 @@ class AsistenciaService:
 
         t_precarga = int((_time() - t0) * 1000)
         total_days = (end - start).days + 1
-        logger.info(f"⚡ Pre-carga contexto lista en {t_precarga}ms — iniciando loop de {total_days} días")
+        logger.debug(f"⚡ Pre-carga contexto lista en {t_precarga}ms — iniciando loop de {total_days} días")
 
         # Inicializar job en registry si fue indicado
         if job_id:
@@ -1142,7 +1142,7 @@ class AsistenciaService:
                             winner_init = nsem_init
 
                     rotativo_last_sem_dict[empleado_id] = winner_init
-                    logger.info(
+                    logger.debug(
                         f"🔍 [ROTATIVO_INIT] Emp {empleado_id}: primer log={log_init['fecha_hora']} "
                         f"winner_sem={winner_init}"
                     )
@@ -1308,7 +1308,7 @@ class AsistenciaService:
             # El caller (_batch_bg) acumula los resultados de todos los empleados
             # y hace UN SOLO execute_batch masivo al final.
             t_total = int((_time() - t0) * 1000)
-            logger.info(
+            logger.debug(
                 f"📦 Recolectado empleado {empleado_id}: {stats['procesados']} días calculados "
                 f"en {t_total}ms ({len(results_to_save)} a guardar, {stats['sin_cambio']} sin cambio)"
             )
@@ -1347,7 +1347,7 @@ class AsistenciaService:
                     for eid_del, f_str in je_to_delete:
                         await self.repository.db.execute(SQL_BORRAR_JE_SIN_DECISION, (eid_del, f_str))
                 t_save = int((_time() - t_save_start) * 1000)
-                logger.info(f"💾 Batch final: {len(results_to_save)} upserts, {len(results_to_delete)} deletes en {t_save}ms (emp {empleado_id})")
+                logger.debug(f"💾 Batch final: {len(results_to_save)} upserts, {len(results_to_delete)} deletes en {t_save}ms (emp {empleado_id})")
             except Exception as e:
                 logger.error(f"❌ Error en batch final (emp {empleado_id}): {e}")
                 # Fallback: guardar uno por uno si el batch falla

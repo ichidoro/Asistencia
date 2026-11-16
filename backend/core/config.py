@@ -157,8 +157,10 @@ class Settings(BaseSettings):
     # LOGGING
     # ============================================
     LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-    LOG_ROTATION: str = "10 MB"
-    LOG_RETENTION: str = "30 days"
+    # El archivo de registro se corta cada medianoche y se guardan los últimos días (15-11-2026: había llegado a
+    # 614 MB sin cortarse). Se puede cambiar en .env sin tocar el código.
+    LOG_ROTATION: str = "00:00"
+    LOG_RETENTION: str = "14 days"
     LOG_FILE: str = "app.log"
     
     @property

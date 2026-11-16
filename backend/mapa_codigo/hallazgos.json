@@ -1,7 +1,7 @@
 {
- "archivos_revisados": 169,
+ "archivos_revisados": 165,
  "repetidas": {
-  "total": 138,
+  "total": 135,
   "top": [
    {
     "nombre": "esc",
@@ -66,18 +66,6 @@
     ]
    },
    {
-    "nombre": "main",
-    "archivos": [
-     "scripts/comparar_marcas_fuente.py",
-     "scripts/diagnostico_turno_noche.py",
-     "scripts/exportar_ciclos_periodo.py",
-     "scripts/exportar_turnos_ciclo.py",
-     "scripts/horas_art22_empleado.py",
-     "scripts/publicar_mapa.py",
-     "scripts/revisar_sql.py"
-    ]
-   },
-   {
     "nombre": "ddmm",
     "archivos": [
      "dashboard_build/src/DashboardApp.jsx",
@@ -129,11 +117,21 @@
      "frontend/js/horarios.js",
      "frontend/js/marcaciones_ui.js"
     ]
+   },
+   {
+    "nombre": "hhmm",
+    "archivos": [
+     "dashboard_build/src/DashboardApp.jsx",
+     "frontend/js/articulo22_ui.js",
+     "frontend/js/ficha_persona.js",
+     "frontend/js/porteria_panel.js",
+     "frontend/js/tarjeta_dia.js"
+    ]
    }
   ]
  },
  "funciones_largas": {
-  "total": 1305,
+  "total": 1296,
   "top": [
    {
     "funcion": "_solve_core",

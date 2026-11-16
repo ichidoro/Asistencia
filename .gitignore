@@ -336,3 +336,6 @@ graphify-out/
 
 # Copia del plan con nombres reales de trabajadores: queda solo en este PC
 docs/PLAN_PENDIENTE_local.md
+
+# Mapa fuente del Dashboard: no se publica (15-11-2026)
+frontend/js/*.map

@@ -75,6 +75,18 @@ Plan en cinco etapas en `docs/AUDITORIA_CODIGO_2026-11-15.md`. La etapa 1 está 
 
 La etapa 2 quedó hecha el 15-11-2026: un solo ayudante de pantalla por tarea (`frontend/js/ayudantes.js`), cuatro choques de nombres entre archivos resueltos y una prueba guardiana. Siguen la etapa 3 (arañas como pruebas permanentes), la 4 (SQL a los repositorios) y la 5 (partir las funciones grandes del cálculo).
 
+### 2.7 bis Limpieza de restos del desarrollo (15-11-2026, hecha)
+
+- **Servidor:**
+  - El registro de la app se corta cada medianoche y guarda 14 días. Antes no se cortaba y había llegado a 614 MB.
+  - Se escriben menos avisos de rutina del recálculo, y ante un error ya no se anotan los valores de las variables.
+  - Se borraron las copias viejas del archivo de configuración.
+  - Los restos de compilación de Docker (18 GB, compartidos con otros proyectos) no se tocaron.
+- **GitHub:**
+  - Se quitaron una página de prueba que producción mostraba a cualquiera y el mapa fuente del Dashboard.
+  - También se quitaron 4 scripts de un solo uso que llevaban nombres de trabajadores.
+  - Una prueba (`test_limpieza_entornos.py`) avisa si algo de esto vuelve.
+
 ### 2.8 Mapa del código (graphify)
 
 Se ve en Configuración → Mapa del código (solo el súper administrador) y se vuelve a publicar con cada cambio de código (`scripts/publicar_mapa.py`).
