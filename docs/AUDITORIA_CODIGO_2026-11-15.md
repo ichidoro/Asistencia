@@ -530,6 +530,18 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - Una revisión de nombres confirmó que no falta ninguna variable.
 - Pasan las 577 pruebas.
 
+**Cambio en el orden del paso 3 (16-11-2026), visto al medir cada sección de `_solve_core`:**
+- Las secciones 1 y 2 (ajustes y configuración del turno y del día) se quedan en la función: solo leen valores, y separarlas obligaría a devolver 29 datos sin ordenar nada.
+- Se separan primero las secciones que entregan pocos datos: la ventana de observación (3.1), varias marcas (7) y colación (8 y 9). También una marca (6) y atrasos y salidas adelantadas (11).
+- La sección 4 (bloques y reglas de marcaciones: 230 líneas, 21 datos de entrada y 11 salidas) va al final.
+- Bolsa y turnos ordinarios (12) es el final de la función y la separación de la jornada especial (10) no se toca.
+
+**Avance (16-11-2026): paso 3a hecho.** La ventana de observación (sección 3.1, 83 líneas: qué marcas son de esta jornada) pasó a `_ventana_de_observacion`, con el mismo texto (comparado línea por línea). Devuelve la fecha, si el turno es de noche y las marcas disponibles.
+- Un comentario nombraba a una persona; ahora dice «una persona».
+- `_solve_core` bajó de 820 a 740 líneas.
+- **Ensayos:** con el respaldo, **idéntico**. Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**.
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan

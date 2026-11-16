@@ -131,12 +131,12 @@
   ]
  },
  "funciones_largas": {
-  "total": 1437,
+  "total": 1438,
   "top": [
    {
     "funcion": "_solve_core",
     "archivo": "backend/services/quantum_matrix_engine.py",
-    "lineas": 820
+    "lineas": 740
    },
    {
     "funcion": "sync_marcaciones",
@@ -212,7 +212,7 @@
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
-   "lineas": 2810
+   "lineas": 2825
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",

@@ -1986,6 +1986,101 @@ class QuantumMatrixEngine:
             '_jornada_adicional': None,
         }
 
+    @staticmethod
+    def _ventana_de_observacion(fecha: str, cruza_med: bool, hora_ent_teo, hora_sal_teo, is_bolsa: bool,
+                                marcas_no_consumidas: List[Dict[str, Any]], todos_ciclos_dia, d_cfg: Dict[str, Any],
+                                todos_ciclos_dia_siguiente):
+        """Sección 3.1 de _solve_core: qué marcas son de esta jornada. En Bolsa, el día natural; en los demás, la ventana
+        por los bordes del horario entre esta jornada y los ciclos vecinos; en turnos de noche, la marca del día siguiente
+        solo si hubo presencia. Devuelve (fecha como datetime, si el turno es de noche, marcas disponibles).
+        Mismo código que estaba en _solve_core."""
+        # 3.1. DYNAMIC OBSERVATION HORIZON:
+        # Delimita la ventana temporal matemática para el turno de esta fecha específica.
+        dt_fecha = datetime.strptime(fecha, "%Y-%m-%d")
+
+        es_nocturno = cruza_med
+        if not es_nocturno and hora_ent_teo and hora_sal_teo:
+            p_in = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
+            p_out = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
+            if p_out < p_in:
+                es_nocturno = True
+
+        if is_bolsa:
+            # En Bolsa Flexible no hay horario rígido diario (meta del tramo) y la jornada es el día natural, de 00:00:00 a
+            # 23:59:59: no cruza la noche ni hay viajes largos (decisión del dueño, 09-11-2026). Antes, un día que terminaba en
+            # ENTRADA (o con marcas impares) se llevaba la marca del día siguiente como «viaje de noche»; con una salida
+            # marcada con el botón equivocado eso encadenaba días en anomalía. Ahora cada día usa solo sus propias marcas.
+            start_horizon = dt_fecha
+            end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
+        else:
+            # Sin banda fija (orden del dueño, 27-10-2026): cada marca de alrededor de la jornada es de la jornada cuyo borde del
+            # horario le queda más cerca, entre esta jornada y los otros ciclos del día o los del día siguiente.
+            start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
+                fecha_str=fecha,
+                hora_ent_teo_str=hora_ent_teo,
+                hora_sal_teo_str=hora_sal_teo,
+                cruza_medianoche=es_nocturno,
+                marcas=marcas_no_consumidas,
+                ciclos_dia=todos_ciclos_dia or [d_cfg],
+                ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
+            )
+
+        # Si es turno nocturno, verificar si existe presencia física en la víspera (fecha)
+        # o dentro del horizonte dinámico de observación del turno en el día siguiente.
+        # Si no hubo ninguna marcación en dicho rango, el turno nocturno de 'fecha' fue una inasistencia,
+        # por lo que marcas posteriores pertenecerán a la jornada siguiente y no deben absorberse.
+        has_night_presence = False
+        if es_nocturno:
+            for l in marcas_no_consumidas:
+                f_l = str(l.get('fecha_hora', ''))[:10]
+                if f_l == fecha:
+                    has_night_presence = True
+                    break
+                elif f_l > fecha:
+                    try:
+                        cand_dt = datetime.strptime(str(l.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
+                        if start_horizon <= cand_dt <= end_horizon:
+                            has_night_presence = True
+                            break
+                    except Exception:
+                        pass
+
+        marcas_disponibles = []
+        for l in marcas_no_consumidas:
+            fh_str = str(l.get('fecha_hora', ''))[:19]
+            try:
+                dt_l = datetime.strptime(fh_str, "%Y-%m-%d %H:%M:%S")
+                if start_horizon <= dt_l <= end_horizon:
+                    tipo_m = str(l.get('tipo', '')).strip().lower()
+                    if dt_l.strftime("%Y-%m-%d") > fecha:
+                        if es_nocturno and has_night_presence:
+                            # En turnos nocturnos, la marca en D+1 dentro del horizonte dinámico
+                            # es la culminación del turno nocturno, sin importar el rótulo físico del reloj biométrico.
+                            pass
+                        else:
+                            # Las ENTRADAS del día siguiente pertenecen a la jornada de mañana
+                            if tipo_m in _TIPOS_E:
+                                continue
+                            # Las SALIDAS del día siguiente solo se absorben si hubo presencia física previa en 'fecha'
+                            has_presence_today = any(str(x.get('fecha_hora', ''))[:10] == fecha for x in marcas_no_consumidas)
+                            if not has_presence_today:
+                                continue
+                            if es_nocturno and not has_night_presence:
+                                continue
+                    marcas_disponibles.append(l)
+            except Exception as e:
+                logger.warning(f"Error evaluando marca candidata {l.get('id')}: {e}")
+
+        # (El caso de una persona del 05-10-2026 —turno 15:00-23:00 con SALIDA a las 01:00:06— lo resuelve la ventana por bordes:
+        # esa SALIDA está más cerca de la SALIDA de su ciclo que de cualquier SALIDA de ciclo del día siguiente.)
+
+        # (Antes aquí se elegía, con 1 Entrada y >= 2 Salidas, la Salida más cercana a la salida teórica. Eso contradecía la regla de
+        # collapse_consecutive_same_type —"Salidas seguidas: se queda la última"— y cortaba la jornada en la Salida a colación cuando la persona
+        # se quedaba más tarde. Ahora manda la última Salida; ver MultiBlockTensorSolver.collapse_consecutive_same_type.)
+
+        return dt_fecha, es_nocturno, marcas_disponibles
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2079,89 +2174,9 @@ class QuantumMatrixEngine:
         consumidas_set = set(consumidas_previas or [])
         marcas_no_consumidas = [l for l in logs if l.get('id') not in consumidas_set]
 
-        # 3.1. DYNAMIC OBSERVATION HORIZON:
-        # Delimita la ventana temporal matemática para el turno de esta fecha específica.
-        dt_fecha = datetime.strptime(fecha, "%Y-%m-%d")
-
-        es_nocturno = cruza_med
-        if not es_nocturno and hora_ent_teo and hora_sal_teo:
-            p_in = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
-            p_out = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
-            if p_out < p_in:
-                es_nocturno = True
-
-        if is_bolsa:
-            # En Bolsa Flexible no hay horario rígido diario (meta del tramo) y la jornada es el día natural, de 00:00:00 a
-            # 23:59:59: no cruza la noche ni hay viajes largos (decisión del dueño, 09-11-2026). Antes, un día que terminaba en
-            # ENTRADA (o con marcas impares) se llevaba la marca del día siguiente como «viaje de noche»; con una salida
-            # marcada con el botón equivocado eso encadenaba días en anomalía. Ahora cada día usa solo sus propias marcas.
-            start_horizon = dt_fecha
-            end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
-        else:
-            # Sin banda fija (orden del dueño, 27-10-2026): cada marca de alrededor de la jornada es de la jornada cuyo borde del
-            # horario le queda más cerca, entre esta jornada y los otros ciclos del día o los del día siguiente.
-            start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
-                fecha_str=fecha,
-                hora_ent_teo_str=hora_ent_teo,
-                hora_sal_teo_str=hora_sal_teo,
-                cruza_medianoche=es_nocturno,
-                marcas=marcas_no_consumidas,
-                ciclos_dia=todos_ciclos_dia or [d_cfg],
-                ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
-            )
-
-        # Si es turno nocturno, verificar si existe presencia física en la víspera (fecha)
-        # o dentro del horizonte dinámico de observación del turno en el día siguiente.
-        # Si no hubo ninguna marcación en dicho rango, el turno nocturno de 'fecha' fue una inasistencia,
-        # por lo que marcas posteriores pertenecerán a la jornada siguiente y no deben absorberse.
-        has_night_presence = False
-        if es_nocturno:
-            for l in marcas_no_consumidas:
-                f_l = str(l.get('fecha_hora', ''))[:10]
-                if f_l == fecha:
-                    has_night_presence = True
-                    break
-                elif f_l > fecha:
-                    try:
-                        cand_dt = datetime.strptime(str(l.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
-                        if start_horizon <= cand_dt <= end_horizon:
-                            has_night_presence = True
-                            break
-                    except Exception:
-                        pass
-
-        marcas_disponibles = []
-        for l in marcas_no_consumidas:
-            fh_str = str(l.get('fecha_hora', ''))[:19]
-            try:
-                dt_l = datetime.strptime(fh_str, "%Y-%m-%d %H:%M:%S")
-                if start_horizon <= dt_l <= end_horizon:
-                    tipo_m = str(l.get('tipo', '')).strip().lower()
-                    if dt_l.strftime("%Y-%m-%d") > fecha:
-                        if es_nocturno and has_night_presence:
-                            # En turnos nocturnos, la marca en D+1 dentro del horizonte dinámico
-                            # es la culminación del turno nocturno, sin importar el rótulo físico del reloj biométrico.
-                            pass
-                        else:
-                            # Las ENTRADAS del día siguiente pertenecen a la jornada de mañana
-                            if tipo_m in _TIPOS_E:
-                                continue
-                            # Las SALIDAS del día siguiente solo se absorben si hubo presencia física previa en 'fecha'
-                            has_presence_today = any(str(x.get('fecha_hora', ''))[:10] == fecha for x in marcas_no_consumidas)
-                            if not has_presence_today:
-                                continue
-                            if es_nocturno and not has_night_presence:
-                                continue
-                    marcas_disponibles.append(l)
-            except Exception as e:
-                logger.warning(f"Error evaluando marca candidata {l.get('id')}: {e}")
-
-        # (El caso Orlando Carreño 05-10-2026 —turno 15:00-23:00 con SALIDA a las 01:00:06— lo resuelve la ventana por bordes:
-        # esa SALIDA está más cerca de la SALIDA de su ciclo que de cualquier SALIDA de ciclo del día siguiente.)
-
-        # (Antes aquí se elegía, con 1 Entrada y >= 2 Salidas, la Salida más cercana a la salida teórica. Eso contradecía la regla de
-        # collapse_consecutive_same_type —"Salidas seguidas: se queda la última"— y cortaba la jornada en la Salida a colación cuando la persona
-        # se quedaba más tarde. Ahora manda la última Salida; ver MultiBlockTensorSolver.collapse_consecutive_same_type.)
+        dt_fecha, es_nocturno, marcas_disponibles = cls._ventana_de_observacion(
+            fecha, cruza_med, hora_ent_teo, hora_sal_teo, is_bolsa, marcas_no_consumidas, todos_ciclos_dia, d_cfg,
+            todos_ciclos_dia_siguiente)
 
         # 4. Segmentación Multi-Bloque (+2 y Emergencias)
         segment_res = MultiBlockTensorSolver.segment_blocks(
