@@ -110,7 +110,8 @@ def ciclos_de_importacion():
 
 # Etapa 4 (consultas a los repositorios): routers que ya no hablan directo con la base. Se agrega uno cada vez que se
 # ordena; desde entonces sus consultas van en backend/repositories/.
-ROUTERS_SIN_SQL = ["flota.py", "llaves.py", "visitas.py", "porteria.py", "productos_4.py", "cierre.py", "sync.py", "empleados.py", "auth.py", "turnos.py", "articulo22.py", "configuracion.py"]
+# Etapa 4 terminada (16-11-2026): ningún router consulta la base directo; vale también para los routers nuevos
+ROUTERS_SIN_SQL = sorted(p.name for p in (BACKEND / "routers").glob("*.py") if p.name != "__init__.py")
 LLAMADAS_A_LA_BASE = ("fetch_all", "fetch_one", "execute", "execute_batch", "executemany", "fetchval", "fetchrow", "fetch")
 
 
@@ -125,35 +126,6 @@ def test_routers_ordenados_sin_consultas_propias():
             # db.fetch_one(…) o, por el repositorio, repo.db.fetch_one(…)
             if (isinstance(base, ast.Name) and base.id == "db") or (isinstance(base, ast.Attribute) and base.attr == "db"):
                 con_sql.append(f"routers/{nombre}:{n.lineno} {ast.unparse(base)}.{n.func.attr}(…)")
-    assert con_sql == [], "estas consultas van en su repositorio (backend/repositories/):\n" + "\n".join(con_sql)
-
-
-# El router de Asistencia se ordena por partes: estas funciones ya no consultan la base directo (se suman en cada parte)
-FUNCIONES_SIN_SQL = {
-    "asistencia.py": ["get_auditoria_bloqueo", "get_primera_marcacion_empleado", "get_last_change", "get_filters_data",
-                      "get_empleados_sin_turno_activos", "diagnostic_no_shift", "get_inasistencias_disponibles",
-                      "delete_intercambio", "create_compensacion", "delete_compensacion", "reasignar_turno_endpoint",
-                      "_hora_de_entrada_sin_cerrar", "agregar_marcacion_manual", "_marcas_del_dia", "reclasificar_marcaciones",
-                      "quitar_marcacion_manual", "eliminar_jornada_especial_manual",
-                      "agregar_marcaciones_masivas", "post_asignacion_individual", "post_batch_sync",
-                      "condonar_deuda", "reproceso_masivo_async", "_colacion_tipica", "_propuesta_dia_tres_marcas",
-                      "marcaciones_del_dia"],
-}
-
-
-def test_funciones_ordenadas_sin_consultas_propias():
-    con_sql = []
-    for archivo, funciones in FUNCIONES_SIN_SQL.items():
-        arbol = ast.parse((BACKEND / "routers" / archivo).read_text(encoding="utf-8"))
-        por_nombre = {f.name: f for f in arbol.body if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
-        for nombre in funciones:
-            assert nombre in por_nombre, f"routers/{archivo}: la función {nombre} ya no existe (sacarla de la lista)"
-            for n in ast.walk(por_nombre[nombre]):
-                if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in LLAMADAS_A_LA_BASE):
-                    continue
-                base = n.func.value
-                if (isinstance(base, ast.Name) and base.id == "db") or (isinstance(base, ast.Attribute) and base.attr == "db"):
-                    con_sql.append(f"routers/{archivo}:{n.lineno} {nombre}: {ast.unparse(base)}.{n.func.attr}(…)")
     assert con_sql == [], "estas consultas van en su repositorio (backend/repositories/):\n" + "\n".join(con_sql)
 
 

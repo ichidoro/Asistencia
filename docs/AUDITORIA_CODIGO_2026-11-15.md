@@ -420,6 +420,20 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
   - Pasan las 578 pruebas. La prueba de la ventana ahora lee la consulta de los ciclos desde el repositorio de turnos.
 - **Puede que el ensayo no haya pasado por** el caso en que una opción daría lo mismo que ya está guardado (se lee lo guardado). Es una sola consulta de lectura y se movió sin cambios.
 
+**Avance (16-11-2026): parte 14 hecha, y con ella la etapa 4.** La libreta del Art. 25 bis y el GPS: 9 consultas en 8 funciones. Ningún router consulta la base directo (el mapa marca 0).
+- **Libreta del Art. 25 bis: solo se movieron consultas; su lógica no se tocó.**
+  - Sus cinco registros de auditoría (editar un día validado, reasignar al acompañante, inasistencia, borrar el día y purgar las marcas del reloj) usan ahora `SeguridadRepository.log_auditoria`, el mismo que usan los demás. Guarda las mismas columnas y deja la IP vacía, como antes; la columna no tiene valor por defecto.
+  - La lectura de los nombres de las personas enlazadas pasó a `EmpleadoRepository`.
+- **GPS:** las personas del área del empleado (patente propuesta) y los choferes de Logística Tradicional (velocidades) pasaron a `EmpleadoRepository`; el límite de velocidad de Configuración, a `ConfiguracionRepository`.
+- **El guardián ahora revisa todos los routers**, también los que se agreguen. Ya no hace falta la lista por función, así que se quitó esa prueba. Se comprobó con una consulta puesta a propósito en Reportes, que no estaba en la lista anterior: la prueba falló y la consulta se quitó.
+- **Cómo se probó:**
+  - La copia de práctica se levantó con respuestas fijas del GPS, sin llamar a Nexacol.
+  - El ensayo crea un chofer y un peoneta de ensayo en un área de ensayo de Logística Tradicional, con el horario de libreta.
+  - Recorre 17 pasos: abrir la libreta, patente propuesta (por el plan y por el chofer), guardar con acompañante, validar y editar el día validado, borrar, reasignar al acompañante (y a quien no lo es), inasistencia (de un día pasado y de uno futuro), purgar y velocidades de los choferes.
+  - Compara las respuestas, los registros de auditoría (los 6), las libretas y los días recalculados.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. También el ensayo de la parte 13.
+  - Pasan las 577 pruebas: una menos, la del guardián por función.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

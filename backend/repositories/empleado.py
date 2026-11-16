@@ -1349,3 +1349,23 @@ class EmpleadoRepository:
             f"SELECT id, rut, nombre, apellido_paterno FROM empleados WHERE id IN ({placeholders})",
             ids_empleados
         )
+
+    async def get_nombres_por_ids(self, ids: List[int]) -> List[Dict]:
+        """Nombre y apellidos de varios empleados a la vez."""
+        marcas = ", ".join("?" for _ in ids)
+        return await self.db.fetch_all(f"SELECT id, nombre, apellido_paterno, apellido_materno FROM empleados WHERE id IN ({marcas})", tuple(ids))
+
+    async def get_personas_de_su_area(self, empleado_id: int) -> List[Dict]:
+        """Las personas del área del empleado (él incluido), con su nombre completo y si están activas."""
+        return await self.db.fetch_all(
+            """SELECT e.id, e.activo, (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
+           FROM empleados e WHERE e.area_id = (SELECT area_id FROM empleados WHERE id = ?)""", (empleado_id,))
+
+    async def get_choferes_logistica_tradicional(self) -> List[Dict]:
+        """Las personas con cargo CHOFER del área Logística Tradicional."""
+        return await self.db.fetch_all(
+            """SELECT e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.activo,
+                  (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
+           FROM empleados e JOIN areas a ON a.id = e.area_id
+           WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'
+             AND UPPER(TRIM(a.nombre)) LIKE 'LOG_STICA TRADICIONAL'""")

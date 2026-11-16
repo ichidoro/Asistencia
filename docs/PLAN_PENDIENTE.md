@@ -103,6 +103,8 @@ Etapa 4, parte 12 (16-11-2026): asignar turno a una persona, sincronizar en grup
 
 Etapa 4, parte 13 (16-11-2026): la ventana de marcas del día (5 consultas). En Asistencia quedan 9: el GPS y las auditorías de la libreta del Art. 25 bis.
 
+Etapa 4, parte 14 (16-11-2026): la libreta del Art. 25 bis (solo sus registros de auditoría y los nombres, sin tocar su lógica) y el GPS. **La etapa 4 quedó terminada:** ningún router consulta la base directo, y una prueba lo revisa en todos, también en los nuevos. Sigue la etapa 5.
+
 **Hecho el 16-11-2026 (decisión de la persona dueña):** se quitaron de la ventana de marcas manuales las casillas antiguas de conducción y espera de Bolsa, y su ruta `/tramos/`. Siempre daban error 500, porque la base nunca tuvo esas columnas. Esos minutos se registran en la libreta del Art. 25 bis, que no se tocó.
 
 **Fallas que ya existían, vistas en el ensayo de la parte 5: arregladas el 16-11-2026** (decisión de la persona dueña):

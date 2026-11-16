@@ -26,6 +26,7 @@ from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.empleado import EmpleadoRepository
 from backend.repositories.turno import TurnoRepository
 from backend.repositories.seguridad import SeguridadRepository
+from backend.repositories.configuracion import ConfiguracionRepository
 from backend.core.database import Database, get_db
 from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.schemas.asistencia import (
@@ -2895,8 +2896,7 @@ async def _enlazados_libreta(service: AsistenciaService, empleado_id: int, fecha
 async def _nombres_personas(db, ids: List[int]) -> Dict[int, str]:
     if not ids:
         return {}
-    marcas = ", ".join("?" for _ in ids)
-    filas = await db.fetch_all(f"SELECT id, nombre, apellido_paterno, apellido_materno FROM empleados WHERE id IN ({marcas})", tuple(ids))
+    filas = await EmpleadoRepository(db).get_nombres_por_ids(ids)
     return {int(f["id"]): libreta_orden.nombre_persona(dict(f)) for f in filas}
 
 
@@ -3213,11 +3213,10 @@ async def save_libreta_180h(
             try:
                 antes = {k: int(existente.get(k) or 0) for k in ('minutos_conduccion', 'minutos_espera', 'minutos_auxiliares', 'minutos_descanso', 'minutos_efectivos')}
                 despues = {k: int(data[k]) for k in antes}
-                await repo.db.execute(
-                    "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-                    (current_user.user_id, current_user.username, 'EDITAR_LIBRETA_VALIDADA', 'Marcaciones',
-                     json.dumps({"empleado_id": payload.empleado_id, "fecha": payload.fecha, "antes": antes, "despues": despues,
-                                 "replicado_a": replicados}, ensure_ascii=False)))
+                await SeguridadRepository(repo.db).log_auditoria(
+                    current_user.user_id, current_user.username, 'EDITAR_LIBRETA_VALIDADA', 'Marcaciones',
+                    json.dumps({"empleado_id": payload.empleado_id, "fecha": payload.fecha, "antes": antes, "despues": despues,
+                                "replicado_a": replicados}, ensure_ascii=False))
             except Exception as aud_err:
                 logger.warning(f"No se pudo registrar la auditoría de la libreta validada editada: {aud_err}")
 
@@ -3320,11 +3319,9 @@ async def reasignar_turno_acompanante_180h(
         try:
             val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
             val_user = getattr(current_user, 'username', 'sistema')
-            await repo.db.execute("""
-                INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
-                VALUES (?, ?, ?, ?, ?)
-            """, (val_id, val_user, 'REASIGNAR_TURNO_ACOMPANANTE_180H', 'Marcaciones',
-                  f"Turno del chofer {chofer_id} reasignado al acompañante {payload.empleado_id} en fecha {payload.fecha}"))
+            await SeguridadRepository(repo.db).log_auditoria(
+                val_id, val_user, 'REASIGNAR_TURNO_ACOMPANANTE_180H', 'Marcaciones',
+                f"Turno del chofer {chofer_id} reasignado al acompañante {payload.empleado_id} en fecha {payload.fecha}")
         except Exception:
             pass
 
@@ -3373,10 +3370,9 @@ async def marcar_inasistencia_libreta_180h(
         res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
         estado = (res_dia or {}).get('estado') if isinstance(res_dia, dict) else None
         try:
-            await repo.db.execute(
-                "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-                (current_user.user_id, current_user.username, 'MARCAR_INASISTENCIA_LIBRETA', 'Marcaciones',
-                 f"Inasistencia del {payload.fecha} registrada desde la libreta 180h (empleado {payload.empleado_id}); día resultante: {estado}"))
+            await SeguridadRepository(repo.db).log_auditoria(
+                current_user.user_id, current_user.username, 'MARCAR_INASISTENCIA_LIBRETA', 'Marcaciones',
+                f"Inasistencia del {payload.fecha} registrada desde la libreta 180h (empleado {payload.empleado_id}); día resultante: {estado}")
         except Exception as aud_err:
             logger.warning(f"No se pudo registrar auditoría de la inasistencia de libreta: {aud_err}")
         logger.warning(f"🚫 Inasistencia registrada desde libreta 180h por {current_user.username}: emp={payload.empleado_id} fecha={payload.fecha} -> {estado}")
@@ -3433,9 +3429,7 @@ async def patente_propuesta_libreta(
             _VEHICULOS_GPS['v'] = (ahora, vehiculos)
     except gps_nexacol.GpsNexacolError as e:
         return {"success": True, "origen": "PLAN", "propuestas": [], "mensaje": f"No se pudo leer la planificación de Nexacol: {e.mensaje}"}
-    personas = [dict(r) for r in await repo.db.fetch_all(
-        """SELECT e.id, e.activo, (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
-           FROM empleados e WHERE e.area_id = (SELECT area_id FROM empleados WHERE id = ?)""", (empleado_id,))]
+    personas = [dict(r) for r in await EmpleadoRepository(repo.db).get_personas_de_su_area(empleado_id)]
     norm = lambda p: re.sub(r"[^A-Z0-9]", "", str(p).upper())
     por_patente = {norm(v["patente"]): v for v in vehiculos}
     props = [{"vehiculo_id": (por_patente.get(norm(p)) or {}).get("id"), "patente": p}
@@ -3529,12 +3523,7 @@ async def velocidades_choferes(
                 _VEL_CHOFERES.pop(next(iter(_VEL_CHOFERES)))
     except gps_nexacol.GpsNexacolError as e:
         raise HTTPException(status_code=e.status, detail=e.mensaje)
-    filas = await db.fetch_all(
-        """SELECT e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.activo,
-                  (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
-           FROM empleados e JOIN areas a ON a.id = e.area_id
-           WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'
-             AND UPPER(TRIM(a.nombre)) LIKE 'LOG_STICA TRADICIONAL'""")
+    filas = await EmpleadoRepository(db).get_choferes_logistica_tradicional()
     choferes = [dict(r) for r in filas]
     por_emp, sin_calzar = calzar_choferes(dias, choferes)
     # Nombre y RUT de quienes tienen velocidades: el reporte semanal los imprime junto a la firma del chofer.
@@ -3546,7 +3535,7 @@ async def velocidades_choferes(
     diagnostico = {"dias_plan": len(dias), "dias_con_gps": sum(1 for d in dias if d.get("velMax") is not None), "choferes": len(choferes), "con_velocidad": len(por_emp)}
     # Límite de velocidad de Configuración › Sistema (05-11-2026); sin ajuste válido va None y la pantalla no evalúa el límite
     from backend.services.libreta_revision import limites_desde_ajustes
-    lim = limites_desde_ajustes([dict(f) for f in await db.fetch_all("SELECT clave, valor FROM ajustes WHERE clave = ?", ("gps_velocidad_limite_kmh",))])
+    lim = limites_desde_ajustes([dict(f) for f in await ConfiguracionRepository(db).get_ajustes_clave_valor("gps_velocidad_limite_kmh")])
     return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "personas": personas, "sin_calzar": sin_calzar,
             "diagnostico": diagnostico, "limite_kmh": int(lim["velocidad_kmh"]) if lim["velocidad_kmh"] else None}
 
@@ -3631,11 +3620,9 @@ async def delete_libreta_180h(
         try:
             val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
             val_user = getattr(current_user, 'username', 'sistema')
-            await service.repository.db.execute("""
-                INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
-                VALUES (?, ?, ?, ?, ?)
-            """, (val_id, val_user, 'DELETE_LIBRETA_180H', 'Marcaciones',
-                  f"Eliminado registro de Libreta 180h de empleado {empleado_id} en fecha {fecha}"))
+            await SeguridadRepository(service.repository.db).log_auditoria(
+                val_id, val_user, 'DELETE_LIBRETA_180H', 'Marcaciones',
+                f"Eliminado registro de Libreta 180h de empleado {empleado_id} en fecha {fecha}")
         except Exception:
             pass
 
@@ -3679,11 +3666,9 @@ async def purgar_marcas_reloj_libreta_180h(
         try:
             val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
             val_user = getattr(current_user, 'username', 'sistema')
-            await service.repository.db.execute("""
-                INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
-                VALUES (?, ?, ?, ?, ?)
-            """, (val_id, val_user, 'PURGA_MARCAS_RELOJ_LIBRETA_180H', 'Marcaciones',
-                  f"Purga de marcas de reloj para turnos Libreta 180h desde {f_desde}: {resultado.get('marcas_purgadas')} marcas eliminadas, {resultado.get('dias_recalculados')} días recalculados."))
+            await SeguridadRepository(service.repository.db).log_auditoria(
+                val_id, val_user, 'PURGA_MARCAS_RELOJ_LIBRETA_180H', 'Marcaciones',
+                f"Purga de marcas de reloj para turnos Libreta 180h desde {f_desde}: {resultado.get('marcas_purgadas')} marcas eliminadas, {resultado.get('dias_recalculados')} días recalculados.")
         except Exception:
             pass
 

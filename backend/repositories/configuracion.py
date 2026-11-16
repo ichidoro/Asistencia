@@ -1141,3 +1141,7 @@ class ConfiguracionRepository:
         await self.db.execute("UPDATE periodos_rrhh SET activo = 0")
         res = await self.db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (id,))
         return res.rowcount > 0
+
+    async def get_ajustes_clave_valor(self, clave: str) -> List[Dict[str, Any]]:
+        """Las filas (clave, valor) de ese ajuste."""
+        return await self.db.fetch_all("SELECT clave, valor FROM ajustes WHERE clave = ?", (clave,))
