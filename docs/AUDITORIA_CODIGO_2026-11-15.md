@@ -334,6 +334,22 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
 - La prueba de la etapa 1 sobre las justificaciones ahora lee la consulta desde su nuevo lugar, el repositorio. La condición que revisa es la misma.
 - Un guardián nuevo, `test_funciones_ordenadas_sin_consultas_propias`, vigila función por función las que ya se ordenaron. Se comprobó contra el código anterior.
 
+**Avance (16-11-2026): parte 9 hecha.** Se movieron 7 consultas más de Asistencia: compensaciones, intercambios de días y reasignar turno. En Asistencia quedan 42 (según el mapa).
+- **Dónde quedaron:**
+  - Buscar una compensación y un intercambio por su número: `AsistenciaRepository.get_compensacion_by_id` y `get_intercambio_by_id`.
+  - El tipo de programación del turno de la persona: `TurnoRepository.get_tipo_programacion_ultima_asignacion`. Con ese dato se impide reasignar a quien está en Bolsa.
+  - Los 3 avisos a la auditoría: `SeguridadRepository.log_auditoria`.
+- **La prueba de nombres sin definir atrapó un error de este cambio antes de subirlo:** el router no tenía importado `SeguridadRepository` arriba. Como esos avisos están dentro de un `try`, la auditoría habría fallado sin que nadie lo notara. Se corrigió.
+- **Cómo se probó:**
+  - El ensayo crea un empleado de ensayo con turno, 3 horas extra aprobadas el lunes, una inasistencia el martes y marcas el jueves.
+  - Recorre 11 pasos:
+    - compensaciones: empleado que no existe, saldo insuficiente, una compensación de 60 minutos y su borrado;
+    - intercambios: uno que no existe, y uno creado para el ensayo y borrado;
+    - reasignar turno: empleado que no existe, un empleado de Bolsa, y dos reasignaciones.
+  - Compara también lo guardado: los días recalculados, las marcas, las compensaciones, los intercambios y los 3 registros de auditoría.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**, auditoría incluida.
+  - Pasan las 578 pruebas.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

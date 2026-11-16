@@ -654,6 +654,16 @@ class TurnoRepository:
             JOIN areas a ON a.id = ta.area_id
         """)
 
+    async def get_tipo_programacion_ultima_asignacion(self, empleado_id: int) -> Optional[Dict]:
+        """Tipo de programación (ciclo, bolsa…) del turno de la asignación más reciente del empleado."""
+        return await self.db.fetch_one("""
+            SELECT t.tipo_programacion
+            FROM asignacion_turnos at
+            JOIN turnos t ON at.turno_id = t.id
+            WHERE at.empleado_id = ?
+            ORDER BY at.fecha_inicio DESC LIMIT 1
+        """, (empleado_id,))
+
     async def get_nombres_areas_del_turno(self, turno_id: int) -> List[Dict]:
         """Los nombres de las áreas asignadas a un turno (para revisar si el usuario puede cambiarlo o borrarlo)."""
         return await self.db.fetch_all(

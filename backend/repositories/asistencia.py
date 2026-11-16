@@ -970,6 +970,9 @@ class AsistenciaRepository:
         cursor = await self.db.execute(query, params)
         return cursor.lastrowid
 
+    async def get_intercambio_by_id(self, intercambio_id: int) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one("SELECT * FROM intercambios_dias WHERE id = ?", (intercambio_id,))
+
     async def delete_intercambio(self, intercambio_id: int) -> None:
         """Elimina un intercambio de dÃ­as."""
         query = "DELETE FROM intercambios_dias WHERE id = ?"
@@ -1085,6 +1088,9 @@ class AsistenciaRepository:
         )
         cursor = await self.db.execute(query, params)
         return cursor.lastrowid
+
+    async def get_compensacion_by_id(self, compensacion_id: int) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one("SELECT * FROM compensaciones_he_inasistencia WHERE id = ?", (compensacion_id,))
 
     async def delete_compensacion(self, compensacion_id: int) -> None:
         """Elimina una compensación por ID."""

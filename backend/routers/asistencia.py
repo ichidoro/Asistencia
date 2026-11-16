@@ -25,6 +25,7 @@ from backend.services.turno_service import TurnoService
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.empleado import EmpleadoRepository
 from backend.repositories.turno import TurnoRepository
+from backend.repositories.seguridad import SeguridadRepository
 from backend.core.database import Database, get_db
 from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.schemas.asistencia import (
@@ -2617,7 +2618,7 @@ async def delete_intercambio(
     """Elimina un intercambio de días."""
     db = service.repository.db
     # Obtener el intercambio para saber qué fechas reprocesar
-    intercambio = await db.fetch_one("SELECT * FROM intercambios_dias WHERE id = ?", (intercambio_id,))
+    intercambio = await service.repository.get_intercambio_by_id(intercambio_id)
     if not intercambio:
         raise HTTPException(status_code=404, detail="Intercambio no encontrado")
         
@@ -2823,11 +2824,9 @@ async def create_compensacion(
     
     # Registrar auditoría
     try:
-        await db.execute("""
-            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
-            VALUES (?, ?, ?, ?, ?)
-        """, (current_user.user_id, current_user.username, 'CREATE_COMPENSACION', 'Marcaciones', 
-              f"Compensación ID {compensacion_id}: Inasistencia del {data.fecha_inasistencia} cubierta con {data.minutos} min de la bolsa de HE"))
+        await SeguridadRepository(db).log_auditoria(
+            current_user.user_id, current_user.username, 'CREATE_COMPENSACION', 'Marcaciones',
+            f"Compensación ID {compensacion_id}: Inasistencia del {data.fecha_inasistencia} cubierta con {data.minutos} min de la bolsa de HE")
     except Exception as aud_err:
         logger.warning(f"No se pudo registrar auditoría de compensación: {aud_err}")
         
@@ -2843,7 +2842,7 @@ async def delete_compensacion(
     """Elimina una compensación y devuelve la fecha a su estado natural."""
     db = service.repository.db
     # Obtener el registro para saber a qué empleado y fechas corresponde
-    c = await db.fetch_one("SELECT * FROM compensaciones_he_inasistencia WHERE id = ?", (compensacion_id,))
+    c = await service.repository.get_compensacion_by_id(compensacion_id)
     if not c:
         raise HTTPException(status_code=404, detail="Compensación no encontrada")
         
@@ -2874,11 +2873,9 @@ async def delete_compensacion(
     
     # Registrar auditoría
     try:
-        await db.execute("""
-            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
-            VALUES (?, ?, ?, ?, ?)
-        """, (current_user.user_id, current_user.username, 'DELETE_COMPENSACION', 'Marcaciones', 
-              f"Eliminada compensación ID {compensacion_id}: Inasistencia del {fecha_inasistencia} desmarcada de la bolsa de HE"))
+        await SeguridadRepository(db).log_auditoria(
+            current_user.user_id, current_user.username, 'DELETE_COMPENSACION', 'Marcaciones',
+            f"Eliminada compensación ID {compensacion_id}: Inasistencia del {fecha_inasistencia} desmarcada de la bolsa de HE")
     except Exception as aud_err:
         logger.warning(f"No se pudo registrar auditoría de eliminación de compensación: {aud_err}")
         
@@ -2955,13 +2952,7 @@ async def reasignar_turno_endpoint(
     current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Exclusión Bolsa Flexible
-    t_row = await db.fetch_one("""
-        SELECT t.tipo_programacion 
-        FROM asignacion_turnos at
-        JOIN turnos t ON at.turno_id = t.id
-        WHERE at.empleado_id = ?
-        ORDER BY at.fecha_inicio DESC LIMIT 1
-    """, (req.empleado_id,))
+    t_row = await TurnoRepository(db).get_tipo_programacion_ultima_asignacion(req.empleado_id)
     if t_row and t_row.get('tipo_programacion') == 'BOLSA_FLEXIBLE':
         raise HTTPException(status_code=400, detail="La reasignación de turno no está permitida para trabajadores en Bolsa Flexible.")
 
@@ -2987,14 +2978,13 @@ async def reasignar_turno_endpoint(
 
     # Registrar auditoría DT
     try:
-        await db.execute("""
-            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
-            VALUES (?, ?, 'REASIGNAR_TURNO', 'Marcaciones', ?)
-        """, (
+        await SeguridadRepository(db).log_auditoria(
             current_user.user_id,
             current_user.username,
+            'REASIGNAR_TURNO',
+            'Marcaciones',
             f"Reasignación de turno Emp {req.empleado_id}: Mapeado bloque de {req.fecha_origen} a {req.fecha_destino}. Motivo: {req.motivo}"
-        ))
+        )
     except Exception as ae:
         logger.warning(f"Error registrando auditoría reasignación: {ae}")
 
