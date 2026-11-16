@@ -78,12 +78,6 @@ class AsistenciaRepository:
         query = "DELETE FROM asistencias WHERE empleado_id = ? AND fecha = ?"
         await self.db.execute(query, (empleado_id, fecha))
 
-    async def get_turno_detalle_dia(self, turno_id: int, dia_semana: int) -> Optional[Dict[str, Any]]:
-        """
-        Obtiene la configuración de entrada/salida para un día específico (0-6).
-        """
-        query = "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ?"
-        return await self.db.fetch_one(query, (turno_id, dia_semana))
 
     async def get_turno_dias_map(self, turno_id: int) -> Dict[int, Dict[int, Dict[str, Any]]]:
         """
@@ -165,15 +159,6 @@ class AsistenciaRepository:
         """
         await self.batch_upsert_asistencia([data])
 
-    async def toggle_condonacion_deuda(self, empleado_id: int, fecha: str, tipo_condonacion: int) -> None:
-        """
-        Cambia el estado de condonaciÃ³n de deuda para un registro de asistencia.
-        Condonar deuda anula los minutos de deuda a 0 en el cÃ¡lculo, sin alterar las marcas.
-        Tipos: 0=Ninguno, 1=Salida Adelantada, 2=Atraso, 3=Ambos
-        """
-        query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
-        await self.batch_upsert_asistencia([]) # just in case
-        await self.db.execute_batch([(query, (tipo_condonacion, empleado_id, fecha))])
 
     async def batch_upsert_asistencia(self, data_list: List[Dict[str, Any]], bypass_cierre_check: bool = False) -> None:
         """
@@ -691,25 +676,6 @@ class AsistenciaRepository:
         query += " GROUP BY a.fecha ORDER BY a.fecha ASC"
         rows = await self.db.fetch_all(query, tuple(params))
         return [dict(row) for row in rows]
-    async def save_cierre_periodo(self, data: Dict[str, Any]) -> int:
-        """Registra un nuevo cierre de periodo en el historial"""
-        query = """
-            INSERT INTO cierres_periodos 
-            (fecha_inicio, fecha_fin, usuario_id, username, tipo_cierre, comentarios, area, turno_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        params = (
-            data.get('fecha_inicio'),
-            data.get('fecha_fin'),
-            data.get('usuario_id'),
-            data.get('username'),
-            data.get('tipo_cierre', 'RRHH'),
-            data.get('comentarios'),
-            data.get('area'),
-            data.get('turno_id')
-        )
-        cursor = await self.db.execute(query, params)
-        return cursor.lastrowid
 
     async def get_ultimo_cierre_periodo(self, tipo: str = 'RRHH') -> Optional[Dict[str, Any]]:
         """Obtiene el Ãºltimo periodo cerrado para sugerir el siguiente"""
@@ -721,13 +687,6 @@ class AsistenciaRepository:
         query = "SELECT * FROM cierres_periodos ORDER BY fecha_fin DESC LIMIT ?"
         return await self.db.fetch_all(query, (limit,))
 
-    async def get_cierres_bulk(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
-        """
-        Obtiene todos los cierres que intersectan un rango de fechas.
-        OptimizaciÃ³n para evitar consultas N+1 en procesamiento masivo.
-        """
-        query = "SELECT * FROM cierres_periodos WHERE fecha_inicio <= ? AND fecha_fin >= ?"
-        return await self.db.fetch_all(query, (fecha_fin, fecha_inicio))
 
     async def check_fecha_cerrada(self, fecha: str, empleado_id: int = None) -> bool:
         """

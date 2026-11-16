@@ -1,5 +1,5 @@
 {
- "archivos_revisados": 165,
+ "archivos_revisados": 168,
  "repetidas": {
   "total": 141,
   "top": [
@@ -60,7 +60,8 @@
      "frontend/js/ficha_persona.js",
      "frontend/js/marcaciones_manuales.js",
      "frontend/js/porteria_panel.js",
-     "frontend/js/velocidades_ui.js"
+     "frontend/js/velocidades_ui.js",
+     "scripts/efecto_domino.py"
     ]
    },
    {
@@ -71,7 +72,8 @@
      "scripts/exportar_ciclos_periodo.py",
      "scripts/exportar_turnos_ciclo.py",
      "scripts/horas_art22_empleado.py",
-     "scripts/publicar_mapa.py"
+     "scripts/publicar_mapa.py",
+     "scripts/revisar_sql.py"
     ]
    },
    {
@@ -128,7 +130,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1316,
+  "total": 1305,
   "top": [
    {
     "funcion": "_solve_core",
@@ -193,11 +195,11 @@
   },
   {
    "archivo": "backend/routers/asistencia.py",
-   "lineas": 4178
+   "lineas": 4179
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3520
+   "lineas": 3274
   },
   {
    "archivo": "frontend/js/sync_wizard.js",
@@ -269,75 +271,6 @@
    }
   ]
  },
- "sin_uso": [
-  {
-   "funcion": "get_table_names",
-   "archivo": "backend/core/database.py"
-  },
-  {
-   "funcion": "save_setting",
-   "archivo": "backend/core/database.py"
-  },
-  {
-   "funcion": "get_empleado_service_internal",
-   "archivo": "backend/core/events.py"
-  },
-  {
-   "funcion": "get_cierres_bulk",
-   "archivo": "backend/repositories/asistencia.py"
-  },
-  {
-   "funcion": "get_turno_detalle_dia",
-   "archivo": "backend/repositories/asistencia.py"
-  },
-  {
-   "funcion": "save_cierre_periodo",
-   "archivo": "backend/repositories/asistencia.py"
-  },
-  {
-   "funcion": "toggle_condonacion_deuda",
-   "archivo": "backend/repositories/asistencia.py"
-  },
-  {
-   "funcion": "is_feriado",
-   "archivo": "backend/repositories/calendario.py"
-  },
-  {
-   "funcion": "get_vehiculo_by_patente",
-   "archivo": "backend/repositories/flota.py"
-  },
-  {
-   "funcion": "get_embudo_he",
-   "archivo": "backend/repositories/hora_extra.py"
-  },
-  {
-   "funcion": "save_raw_log",
-   "archivo": "backend/repositories/turno.py"
-  },
-  {
-   "funcion": "_apply_rounding",
-   "archivo": "backend/services/asistencia_service.py"
-  },
-  {
-   "funcion": "replicar_libreta_chofer",
-   "archivo": "backend/services/asistencia_service.py"
-  },
-  {
-   "funcion": "evaluar_bonos_mes",
-   "archivo": "backend/services/bono_service.py"
-  },
-  {
-   "funcion": "audit_all_assignments",
-   "archivo": "backend/services/configuracion_service.py"
-  },
-  {
-   "funcion": "repair_all_period_inconsistencies",
-   "archivo": "backend/services/empleado_service.py"
-  },
-  {
-   "funcion": "draw",
-   "archivo": "backend/services/informe_cierre_pdf.py"
-  }
- ],
+ "sin_uso": [],
  "ciclos": []
 }

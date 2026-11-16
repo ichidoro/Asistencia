@@ -3123,10 +3123,11 @@ async def get_inasistencias_disponibles(
     clean_dates = []
     for r in rows:
         f_str = r['fecha']
-        # Verificar que no tenga Licencias/Vacaciones activas
+        # Verificar que no tenga Licencias/Vacaciones activas. La tabla no tiene «estado»: una justificación registrada
+        # vale (auditoría del 15-11-2026: la condición «estado = 'APROBADA'» hacía caer siempre este selector).
         just = await db.fetch_one("""
             SELECT id FROM justificaciones
-            WHERE empleado_id = ? AND ? BETWEEN fecha_inicio AND fecha_fin AND estado = 'APROBADA'
+            WHERE empleado_id = ? AND ? BETWEEN fecha_inicio AND fecha_fin
         """, (empleado_id, f_str))
         if not just:
             clean_dates.append({

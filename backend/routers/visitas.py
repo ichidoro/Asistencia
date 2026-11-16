@@ -5,8 +5,13 @@ Escaneo de cédula chilena (PDF417 + QR) vía Keyboard Wedge
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
-CHILE_TZ = timezone(timedelta(hours=-4))
+from backend.core.config import settings
+
+# Hora de Chile con el cambio de horario (auditoría del 15-11-2026): antes era UTC-4 fijo y, desde el horario de verano
+# (UTC-3), cada visita quedaba con una hora menos. Igual que el resto de la aplicación: la zona de la configuración.
+CHILE_TZ = ZoneInfo(settings.TIMEZONE)
 def _now_chile():
     return datetime.now(CHILE_TZ).replace(tzinfo=None)
 from loguru import logger

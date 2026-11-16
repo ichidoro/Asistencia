@@ -88,16 +88,6 @@ class FlotaRepository:
         row = await self.db.fetch_one(query, (v_id,))
         return dict(row) if row else None
 
-    async def get_vehiculo_by_patente(self, patente: str) -> Optional[Dict[str, Any]]:
-        cleaned_patente = str(patente).strip().upper().replace(" ", "").replace("-", "")
-        query = """
-            SELECT f.id, f.patente, f.area_id, f.activo, f.created_at, a.nombre as area_nombre
-            FROM flota_aguacol f
-            JOIN areas a ON f.area_id = a.id
-            WHERE f.patente = ? AND f.activo = 1
-        """
-        row = await self.db.fetch_one(query, (cleaned_patente,))
-        return dict(row) if row else None
 
     async def create_vehiculo(self, patente: str, area_id: int) -> int:
         cleaned_patente = str(patente).strip().upper().replace(" ", "").replace("-", "")

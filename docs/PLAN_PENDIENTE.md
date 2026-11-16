@@ -69,6 +69,10 @@ No arregla errores visibles: da orden para cambiar el código con menos riesgo.
 - En el servidor no está definido `DEBUG` y el valor por defecto es verdadero: ante un error, la app muestra el detalle técnico.
 - La clave inicial del usuario admin está escrita en `backend/repositories/seguridad.py` (solo se usa si el admin no existe).
 
-### 2.7 Mapa del código (graphify)
+### 2.7 Auditoría del código del 15-11-2026
+
+Plan en cinco etapas en `docs/AUDITORIA_CODIGO_2026-11-15.md`. La etapa 1 está probada en una copia aparte y espera el sí para subirla: corrige cuatro fallas (la hora de Visitas, el selector de inasistencias, el Excel por rango de Reportes y la purga del registro de auditoría) y quita 18 funciones sin uso. Queda decidir qué hacer con las 81 visitas pasadas que tienen la hora corrida.
+
+### 2.8 Mapa del código (graphify)
 
 El grafo de `graphify-out/` es del 7-11 (commit `48c4485`) y desde entonces hubo más de 50 commits: está desactualizado. Solo existe en el PC donde se genera. Ver la propuesta de mostrarlo en Configuración.

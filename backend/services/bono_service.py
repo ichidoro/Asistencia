@@ -27,44 +27,6 @@ class BonoService:
         self.db = db
         self.config_repo = ConfiguracionRepository(db)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # PUNTO DE ENTRADA — carga datos y delega
-    # ──────────────────────────────────────────────────────────────────────
-    async def evaluar_bonos_mes(
-        self, mes: int, anio: int, empleados: List[Dict[str, Any]]
-    ) -> Dict[int, Dict[str, Any]]:
-        """
-        Evalúa todos los bonos activos para una lista de empleados en un mes.
-        Retorna {empleado_id: {nombre_bono: resultado}}.
-        """
-        last_day = calendar.monthrange(anio, mes)[1]
-        fecha_inicio = f"{anio}-{mes:02d}-01"
-        fecha_fin    = f"{anio}-{mes:02d}-{last_day:02d}"
-
-        asistencias_raw = await self.db.fetch_all(
-            "SELECT * FROM asistencias WHERE fecha BETWEEN ? AND ?",
-            (fecha_inicio, fecha_fin),
-        )
-
-        just_raw = await self.db.fetch_all(
-            """
-            SELECT j.*, jt.nombre AS tipo_nombre,
-                   jt.con_goce_sueldo, jt.descuenta_remuneracion, jt.pagador,
-                   1 AS aplica_bono_pagador
-            FROM justificaciones j
-            JOIN justificacion_tipos jt ON j.tipo_id = jt.id
-            WHERE j.fecha_inicio <= ? AND j.fecha_fin >= ?
-            """,
-            (fecha_fin, fecha_inicio),
-        )
-
-        asist_service = AsistenciaService(AsistenciaRepository(self.db))
-        matrix_res  = await asist_service.get_matrix_data_with_projections(mes, anio)
-        matrix_data = matrix_res.get("matrix", {})
-
-        return await self.evaluar_bonos_directo(
-            empleados, asistencias_raw, just_raw, matrix_data, mes, anio
-        )
 
     # ──────────────────────────────────────────────────────────────────────
     # EVALUACIÓN DIRECTA (recibe datos ya cargados — reutilizable)

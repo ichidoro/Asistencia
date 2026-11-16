@@ -172,9 +172,11 @@ class ReportService:
             f_fin = date.fromisoformat(fecha_fin)
             rango_dias = [(f_ini + timedelta(days=i)) for i in range((f_fin - f_ini).days + 1)]
             
-            # Obtener datos usando el motor por rango
-            matrix_data = await self.asistencia_service.get_matrix_data_by_range(
-                fecha_inicio, fecha_fin, area=area, turno_id=turno_id
+            # La misma matriz que el Excel del período (auditoría del 15-11-2026: get_matrix_data_by_range devuelve filas
+            # sueltas y el armado del libro espera la matriz, así que el Excel por rango de Reportes siempre fallaba)
+            matrix_data = await self.asistencia_service.get_matrix_data_with_projections(
+                f_ini.month, f_ini.year, area=area, turno_id=turno_id,
+                fecha_inicio_override=fecha_inicio, fecha_fin_override=fecha_fin
             )
             return await self._generate_excel_workbook(matrix_data, rango_dias, area)
         except Exception as e:

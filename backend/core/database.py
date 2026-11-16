@@ -296,11 +296,6 @@ class PostgresDatabase:
             self._schema_cache[table_name] = cols
         return cols
 
-    async def get_table_names(self) -> List[str]:
-        rows = await self.fetch_all(
-            "SELECT table_name AS name FROM information_schema.tables "
-            "WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'")
-        return [r["name"] for r in rows]
 
     async def column_exists(self, table_name: str, column_name: str) -> bool:
         return column_name in await self.get_column_names(table_name)
@@ -315,11 +310,6 @@ class PostgresDatabase:
         self._schema_cache.clear()
         self._id_tables = None
 
-    async def save_setting(self, clave: str, valor: str):
-        try:
-            await self.execute("INSERT OR REPLACE INTO ajustes (clave, valor) VALUES (?, ?)", (clave, str(valor)))
-        except Exception as e:
-            logger.error(f"⚠️ No se pudo persistir ajuste {clave}: {e}")
 
     async def health_check(self) -> Dict[str, Any]:
         try:

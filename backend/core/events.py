@@ -267,8 +267,10 @@ async def lifespan(app: FastAPI):
                     # ── Purga semanal: logs_auditoria (retencion 12 meses) ────────────
                     async def _purgar_logs_auditoria():
                         try:
+                            # La tabla guarda la fecha en created_at (auditoría del 15-11-2026: pedía una columna «fecha»
+                            # que no existe y la purga fallaba todas las semanas)
                             result = await db.execute(
-                                "DELETE FROM logs_auditoria WHERE fecha < date('now', '-12 months')"
+                                "DELETE FROM logs_auditoria WHERE created_at < date('now', '-12 months')"
                             )
                             logger.info("🗑️ [Purga] logs_auditoria: registros > 12 meses eliminados")
                         except Exception as purge_err:
@@ -405,20 +407,3 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Error durante shutdown: {e}")
 
 
-async def get_empleado_service_internal(db_instance) -> "EmpleadoService":
-    """Helper interno para evitar imports circulares pesados en startup"""
-    from backend.repositories.empleado import EmpleadoRepository
-    from backend.services.empleado_service import EmpleadoService
-    from backend.repositories.configuracion import ConfiguracionRepository
-    from backend.services.configuracion_service import ConfiguracionService
-    from backend.services.notification_service import NotificationService
-    
-    emp_repository = EmpleadoRepository(db_instance)
-    notification_service = NotificationService()
-    config_repository = ConfiguracionRepository(db_instance)
-    config_service = ConfiguracionService(config_repository, notification_service)
-    await config_service.initialize()
-    
-    service = EmpleadoService(emp_repository, config_service, notification_service)
-    await service.initialize()
-    return service

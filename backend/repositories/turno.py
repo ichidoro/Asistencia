@@ -915,11 +915,6 @@ class TurnoRepository:
             logger.error(f"Error eliminando turno {turno_id}: {e}")
             raise
 
-    async def save_raw_log(self, data: Dict[str, Any]) -> bool:
-        """
-        Guarda una marcación cruda individual.
-        """
-        return await self.save_raw_logs([data])
 
     async def save_raw_logs(self, data_list: List[Dict[str, Any]]) -> bool:
         """

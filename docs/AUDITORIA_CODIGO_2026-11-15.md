@@ -1,0 +1,128 @@
+# Auditoría del código con el grafo (15-11-2026)
+
+Pedido de la persona dueña: «realiza una auditoría usando el grafo y crea un plan acabado y probado; si eso requiere simulaciones tipo arañas, efecto dominó, hilo rojo, debes realizarlo».
+
+Este documento no lleva nombres de personas. Todo se hizo en solo lectura sobre producción o en copias aparte; nada se cambió en producción para medir.
+
+---
+
+## 1. Cómo se hizo
+
+| Herramienta | Qué hace | Dónde está |
+|---|---|---|
+| **Grafo** (graphify) | Mapa de 5.109 piezas y 11.736 conexiones del código, armado el 15-11 sobre el commit `284cfeb`. | `backend/mapa_codigo/` (Configuración → Mapa del código) |
+| **Efecto dominó** («hilo rojo») | Para una pieza, recorre el grafo hacia atrás nivel por nivel (quién la llama, quién llama a esos…) hasta los endpoints, las pantallas que los piden y las pruebas que la cuidan. | `scripts/efecto_domino.py` |
+| **Simulación de copias** | Toma cada copia de un ayudante repetido (mismo nombre en varios archivos), le da las mismas entradas y compara lo que devuelve. | Simulación con el lector Babel (en el ensayo) |
+| **Araña de consultas** | Llama cada endpoint de consulta (GET) de la copia de práctica como administrador y anota los que se caen. | `scripts/arana_consultas.py` |
+| **Araña de SQL** | Toma cada consulta SQL fija del servidor (también las que guardan), la traduce como la aplicación y le pide a la base que la prepare, sin ejecutarla: detecta tablas o columnas que no existen. | `scripts/revisar_sql.py` |
+| **Ensayo aislado** | Los cambios se aplicaron en una copia aparte del código (otra carpeta, sin tocar la de trabajo), con todas las pruebas y otra pasada de la araña. | Copia `Asistencia_ensayo_auditoria` |
+
+**Límites honestos.** El grafo ve quién llama a quién, no si un cálculo está bien. El efecto dominó sobrestima un poco (el grafo no distingue la dirección de algunas conexiones), así que sirve como cota máxima de lo que se puede romper. La araña de consultas solo llama endpoints GET; lo que guarda se revisó con la araña de SQL (527 de 955 llamadas a la base tienen SQL fijo y se pudieron revisar; las armadas con partes variables no).
+
+---
+
+## 2. Fallas encontradas (reales, comprobadas): 4
+
+| # | Falla | Cómo se encontró | Efecto para las personas | Comprobación |
+|---|---|---|---|---|
+| F1 | **Visitas guardan la hora con UTC-4 fijo.** Desde el cambio a horario de verano (6-09-2026) Chile está en UTC-3: cada visita queda con **una hora menos**. | Simulación de copias: la «hora de Chile» está escrita 6 veces y una de ellas no sigue el cambio de horario. | 81 visitas (43 entradas y 38 salidas) del 7-09 al 10-11 con la hora corrida (por ejemplo, una registrada a las 18:19 figura 17:19). Ninguna quedó a las 23:xx, así que corregirlas no cambiaría su fecha. | Datos de producción: la diferencia con la hora real del servidor es siempre 4 h, también en noviembre. |
+| F2 | **El selector de inasistencias siempre falla** («Error consultando inasistencias.» al compensar una inasistencia en Marcaciones). La consulta pide una columna `estado` que la tabla de justificaciones no tiene. | Araña: error 500. | Cualquier persona con una inasistencia: la ventana no carga. | Columna inexistente también en la base de producción. |
+| F3 | **Reportes → Excel por rango de fechas siempre falla.** Recibe una lista de filas donde espera la matriz del período. | Araña: error 500. | El botón de Excel de la pantalla Reportes no descarga nada. | Corregido, devuelve un Excel válido con sus 6 hojas para un día, un tramo, 40 días y tres meses (unos 2 s). El permiso por área no cambia: quien no tiene alcance global no puede pedir «Todas» ni otra área. |
+| F4 | **La purga semanal del registro de auditoría falla siempre.** Borra según una columna `fecha` que la tabla no tiene (se llama `created_at`). | Araña de SQL. | El registro de auditoría no se recorta a 12 meses. Hoy no se nota (el registro más antiguo es del 29-05-2026); se notaría desde mayo de 2027. | Corregida, la base acepta la consulta traducida. |
+
+## 3. Limpieza confirmada
+
+**16 funciones que nadie usa.** Sin llamadas en el grafo, sin ninguna mención en el código, las pantallas, los scripts ni las pruebas, y con efecto dominó cero (ninguna pieza, endpoint ni pantalla depende de ellas): 520 líneas.
+
+`database.get_table_names`, `database.save_setting`, `events.get_empleado_service_internal`, `AsistenciaRepository.get_cierres_bulk`, `.get_turno_detalle_dia`, `.save_cierre_periodo`, `.toggle_condonacion_deuda`, `calendario.is_feriado`, `flota.get_vehiculo_by_patente`, `hora_extra.get_embudo_he`, `turno.save_raw_log`, `AsistenciaService._apply_rounding`, `.replicar_libreta_chofer`, `bono_service.evaluar_bonos_mes`, `ConfiguracionService.audit_all_assignments`, `EmpleadoService.repair_all_period_inconsistencies`.
+
+Al corregir F3, `AsistenciaService.get_matrix_data_by_range` queda también sin uso, y al quitar `get_embudo_he` queda sin uso `HoraExtraRepository.get_resumen_periodo`, que solo esa función llamaba (efecto dominó en cadena). Total: 18 funciones.
+
+Se descartó `informe_cierre_pdf.draw`: el detector la marcó, pero la llama por dentro la librería de PDF.
+
+## 4. Copias que deberían hacer lo mismo y no lo hacen (simulación)
+
+| Ayudante | Copias | Comportamientos distintos | Lo que se vio | Riesgo |
+|---|---:|---:|---|---|
+| Escapar texto para HTML (`esc`, `_esc`, `escHtml`) | 25 | 5 | 2 copias no escapan nada si no cargó otro archivo antes; 5 no escapan la comilla simple; 2 muestran «null» cuando no hay valor. | Bajo hoy (ningún texto escapado termina dentro del código de un botón), pero cualquier cambio futuro puede romper una pantalla y no otra. |
+| Fecha corta día-mes (`ddmm`) | 5 | 4 | Con una fecha mal formada devuelven «-1-», «undefined-undefined» o la fecha sin cambiar. | Bajo (las fechas vienen bien formadas del servidor). |
+| Iniciales para el avatar (`iniciales`) | 5 | 3 | Una pantalla muestra las dos primeras letras del apellido y las demás las iniciales: el mismo avatar se ve distinto según la pantalla. | Solo visual. |
+| Minutos a texto (`fmt`) | 5 | 5 | Son funciones distintas con el mismo nombre (fecha, HH:MM:SS, HH:MM redondeado, número). Una redondea 0,5 min a «00:01». | Confusión al mantener; revisar que lo que se muestra a RR.HH. sea HH:MM:SS. |
+| Hora de Chile en el servidor (`_now_chile`, `_get_now_local`) | 6 | 2 | Cinco siguen el cambio de horario; la de Visitas no (falla F1). | Real: corregido en el ensayo. |
+
+## 5. Riesgos estructurales (con su efecto dominó)
+
+| Pieza | Tamaño | Efecto dominó | Pruebas que la cuidan |
+|---|---|---|---|
+| `_solve_core` (cálculo del día) | 820 líneas | 124 piezas, 43 endpoints, 19 pantallas, 10 niveles | 11 archivos de prueba + prueba guardiana de valores fijos |
+| `check_fecha_cerrada` (días cerrados) | pequeña | 128 piezas, 46 endpoints, 19 pantallas | 14 archivos de prueba |
+| `routers/asistencia.py` | 4.178 líneas, 57 consultas SQL directas | — | 12 de sus 66 endpoints nombrados en pruebas |
+| `marcaciones_ui.js` | 9.909 líneas | — | solo pruebas de texto y de pantallas |
+
+**Cobertura:** de 268 endpoints, **233 no los nombra ninguna prueba** (las pruebas cuidan sobre todo los servicios). Por eso F2 y F3 no se habían visto: no había ninguna prueba que pasara por ahí.
+
+---
+
+## 6. El plan, por etapas
+
+Cada etapa se ensaya primero en una copia aparte, con todas las pruebas y con la araña antes y después. Una etapa no empieza si la anterior no quedó en verde.
+
+### Etapa 1: fallas y código muerto (**probada**)
+
+1. Corregir F1, F2, F3 y F4, cada una con su prueba (`backend/tests/test_auditoria_fallas.py`).
+2. Quitar las 16 funciones sin uso (y `get_matrix_data_by_range`).
+3. Dejar en el proyecto `scripts/efecto_domino.py`, `scripts/arana_consultas.py` y `scripts/revisar_sql.py`.
+
+**Ensayo (15-11-2026):**
+- 550 pruebas pasan (4 nuevas) y 5 se saltan. Las 4 nuevas fallan con el código de hoy: detectan las fallas.
+- La aplicación arranca con las mismas 290 rutas.
+- La hora de Visitas da UTC-3 en noviembre y UTC-4 en julio.
+- Araña de consultas: antes 2 endpoints caídos (F2 y F3), después ninguno; 112 respuestas correctas contra 110.
+- Araña de SQL: antes 4 consultas rechazadas, después 2, y esas 2 no son fallas (tablas que el código crea justo antes de usarlas).
+- El selector de inasistencias sigue la misma regla que el servicio de compensación (una justificación registrada excluye el día), así que hay un solo criterio. Con la condición corregida, un día con un permiso registrado tampoco aparece como inasistencia para compensar.
+
+**Decisión de la persona dueña:** qué hacer con las 81 visitas pasadas con la hora corrida. Corregirlas es escribir en la base de producción y la aplicación no tiene una pantalla para eso; dejarlas como están también es posible. No se hace sin su sí.
+
+### Etapa 2: un solo ayudante por tarea
+
+1. Un archivo común de ayudantes de pantalla (escapar HTML, fecha corta, iniciales, minutos a HH:MM:SS) con el comportamiento de la mayoría y sin «null».
+2. Cada pantalla deja su copia y usa el común, un archivo por vez.
+3. Una prueba que falle si vuelve a aparecer una copia nueva de esos ayudantes.
+
+**Cómo se prueba:**
+- La simulación de copias se corre antes y después: el común tiene que dar lo mismo que la mayoría de las copias para todas las entradas.
+- Las diferencias se anotan una por una: son las correcciones.
+- Pruebas de pantallas en teléfono, tablet y escritorio, y araña.
+
+### Etapa 3: red de seguridad permanente
+
+1. La araña de consultas como prueba automática contra la copia de práctica, junto a las de pantallas: ningún endpoint de consulta puede devolver 500.
+2. La araña de SQL como prueba automática: ninguna consulta fija puede nombrar tablas o columnas que no existen.
+3. Pruebas guardianas del mapa: sin funciones nuevas sin uso, sin copias nuevas de ayudantes y sin dependencias circulares.
+
+**Cómo se prueba:** se agrega a propósito una falla de cada tipo en la copia aparte y la prueba tiene que detectarla, como ya hace la autocomprobación de las pruebas de pantallas.
+
+### Etapa 4: consultas SQL a su lugar
+
+Mover las 177 consultas de los routers a los repositorios, de a un router por vez, empezando por los más chicos. Las URL y las respuestas no cambian.
+
+**Cómo se prueba:**
+- Araña antes y después en la copia de práctica, comparando no solo el estado sino también la respuesta.
+- Revisar la traducción a PostgreSQL de cada consulta movida.
+- Pruebas completas.
+
+### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
+
+`_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.
+
+**Cómo se prueba, en cada paso:**
+- La prueba guardiana de valores fijos en verde.
+- Un ensayo con los días reales del período abierto, en memoria (`collect_only`, sin guardar), que tiene que dar **0 diferencias** contra lo guardado.
+- Revisar contra `backend/docs/REGLAS_ASISTENCIA.md`.
+
+---
+
+## 7. Lo que no promete este plan
+
+- No asegura que no haya fallas de cálculo: eso lo cuidan las pruebas del cálculo, la prueba guardiana y los ensayos con datos reales.
+- Las arañas no ejecutan lo que guarda: revisan que el SQL sea válido, no que el resultado sea el correcto. Para probar los guardados de punta a punta haría falta una base de práctica con datos de ejemplo que se pueda borrar después de cada pasada.

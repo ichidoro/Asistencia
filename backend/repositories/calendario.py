@@ -43,10 +43,6 @@ class CalendarioRepository:
     async def delete_feriado(self, feriado_id: int):
         await self.db.execute("DELETE FROM feriados WHERE id = ?", (feriado_id,))
 
-    async def is_feriado(self, fecha: date) -> bool:
-        query = "SELECT id FROM feriados WHERE fecha = ?"
-        res = await self.db.fetch_one(query, (str(fecha),))
-        return res is not None
 
     async def count_feriados_year(self, year: int) -> int:
         """Cuenta cuántos feriados existen para un año. Operación barata (COUNT)."""
