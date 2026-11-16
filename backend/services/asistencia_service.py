@@ -13,7 +13,7 @@ REGLAS DE NEGOCIO FUNDAMENTALES:
 import asyncio
 import json
 import math
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from loguru import logger
@@ -1881,53 +1881,12 @@ class AsistenciaService:
     # PROCESAR EMPLEADO DÍA (ORQUESTADOR)
     # ─────────────────────────────────────────────────────────────────────────
 
-    async def procesar_empleado_dia(
-        self,
-        empleado_id: int,
-        fecha: str,
-        save: bool = True,
-        force: bool = False,
-        bulk_ctx: Optional[Dict] = None,
-        marcas_consumidas_session: Optional[Dict] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Calcula la asistencia para UN empleado en UNA fecha.
-        Puede usar un bulk_ctx para evitar consultas a la DB.
-        """
-        db = self.repository.db
-
-        # Validar si el día está cerrado
-        is_closed = False
-        if bulk_ctx and 'closed_dates' in bulk_ctx:
-            closed_val = bulk_ctx['closed_dates']
-            if isinstance(closed_val, dict):
-                is_closed = fecha in closed_val.get(empleado_id, set())
-            elif isinstance(closed_val, set):
-                if closed_val:
-                    first_el = next(iter(closed_val))
-                    if isinstance(first_el, tuple):
-                        is_closed = (empleado_id, fecha) in closed_val
-                    else:
-                        is_closed = fecha in closed_val
-                else:
-                    is_closed = False
-        else:
-            is_closed = await self.is_fecha_cerrada_empleado(empleado_id, fecha)
-            
-        if is_closed and not force:
-            has_raw = await db.fetch_one(
-                "SELECT id FROM logs_raw WHERE empleado_id = ? AND fecha_hora LIKE ? LIMIT 1",
-                (empleado_id, f"{fecha}%")
-            )
-            asist_row = await self.repository.get_asistencia(empleado_id, fecha)
-            has_consumed = asist_row and asist_row.get('marcas_consumidas_ids') and asist_row['marcas_consumidas_ids'] != '[]'
-            if has_raw and not has_consumed:
-                logger.info(f"🔄 Auto-forcing recalculo para emp {empleado_id} fecha {fecha}: existen marcas raw sin consumos previas.")
-                force = True
-            else:
-                logger.warning(f"🚫 Intento de procesar día cerrado: emp {empleado_id}, fecha {fecha}. Retornando registro existente.")
-                return asist_row
-
+    async def _dia_fuera_de_contrato(self, db, empleado_id: int, fecha: str, save: bool,
+                                     bulk_ctx: Optional[Dict]) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        """Período legal de empleo en procesar_empleado_dia: un día después de la baja o fuera de un período de contrato
+        no se calcula (con marcas queda como anomalía de contrato; sin marcas se borra lo que hubiera). Devuelve
+        (True, lo que procesar_empleado_dia devuelve) si el día termina aquí, o (False, None) si sigue. Mismo código que
+        estaba en procesar_empleado_dia."""
         # Validar período legal de empleo
         if bulk_ctx:
             emp_info = bulk_ctx.get('empleados', {}).get(empleado_id)
@@ -1981,7 +1940,7 @@ class AsistenciaService:
                     }
                     if save:
                         await self.repository.upsert_asistencia(anomalia_record)
-                    return anomalia_record
+                    return True, anomalia_record
                 else:
                     # Posterior a la baja y sin marcas: descartar día y limpiar residuos
                     if save:
@@ -1989,7 +1948,7 @@ class AsistenciaService:
                         if asist_del:
                             await self.repository.delete_asistencia(empleado_id, fecha)
                         await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
-                    return None
+                    return True, None
 
             if bulk_ctx:
                 periodos = bulk_ctx.get('periodos_empleo', {}).get(empleado_id, [])
@@ -2046,7 +2005,7 @@ class AsistenciaService:
                     }
                     if save:
                         await self.repository.upsert_asistencia(anomalia_record)
-                    return anomalia_record
+                    return True, anomalia_record
                 else:
                     # Sin contrato y sin marcas: no generar asistencia
                     if save:
@@ -2054,8 +2013,17 @@ class AsistenciaService:
                         if asist_del:
                             await self.repository.delete_asistencia(empleado_id, fecha)
                         await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
-                    return None
+                    return True, None
 
+        return False, None
+
+
+    async def _dia_antes_del_primer_turno(self, db, empleado_id: int, fecha: str, save: bool,
+                                          bulk_ctx: Optional[Dict]) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        """Primera asignación en procesar_empleado_dia: antes del primer horario de la persona, o sin ningún horario y
+        sin marcas ese día, no hay jornada que anotar (se borra lo que hubiera, salvo una fila escrita a mano o con
+        justificación). Devuelve (True, None) si el día termina aquí, o (False, None) si sigue. Mismo código que estaba
+        en procesar_empleado_dia."""
         # 1. Obtener Primera Asignación (para validación de TRABAJO SIN TURNO)
         if bulk_ctx:
             f_primer_turno = bulk_ctx.get('first_assignments', {}).get(empleado_id)
@@ -2080,7 +2048,7 @@ class AsistenciaService:
 
         if f_primer_turno and fecha < f_primer_turno:
             if not save:
-                return None
+                return True, None
             # Si estamos procesando individualmente, nos aseguramos de borrarlo
             asist_actual_del = await self.repository.get_asistencia(empleado_id, fecha)
             if asist_actual_del:
@@ -2088,7 +2056,7 @@ class AsistenciaService:
                 await self.repository.delete_asistencia(empleado_id, fecha)
             # También eliminamos horas extras si existieran
             await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
-            return None
+            return True, None
 
         # Sin ningún horario asignado todavía y sin marcas ese día no hay jornada que anotar: ni feriado, ni día libre, ni
         # inasistencia. 31-10-2026: al guardar el contrato de una persona recién creada (ingresa el 02-11) se recalculó «hoy»
@@ -2100,12 +2068,70 @@ class AsistenciaService:
                 asist_sin_turno = await self.repository.get_asistencia(empleado_id, fecha)
             if not (asist_sin_turno and (asist_sin_turno.get('origen') == 'MANUAL' or asist_sin_turno.get('justificacion_id'))):
                 if not save:
-                    return None
+                    return True, None
                 if asist_sin_turno:
                     logger.info(f"🧹 Limpiando registro sin horario asignado: Emp {empleado_id} en {fecha}")
                     await self.repository.delete_asistencia(empleado_id, fecha)
                 await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
-                return None
+                return True, None
+
+        return False, None
+
+
+    async def procesar_empleado_dia(
+        self,
+        empleado_id: int,
+        fecha: str,
+        save: bool = True,
+        force: bool = False,
+        bulk_ctx: Optional[Dict] = None,
+        marcas_consumidas_session: Optional[Dict] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Calcula la asistencia para UN empleado en UNA fecha.
+        Puede usar un bulk_ctx para evitar consultas a la DB.
+        """
+        db = self.repository.db
+
+        # Validar si el día está cerrado
+        is_closed = False
+        if bulk_ctx and 'closed_dates' in bulk_ctx:
+            closed_val = bulk_ctx['closed_dates']
+            if isinstance(closed_val, dict):
+                is_closed = fecha in closed_val.get(empleado_id, set())
+            elif isinstance(closed_val, set):
+                if closed_val:
+                    first_el = next(iter(closed_val))
+                    if isinstance(first_el, tuple):
+                        is_closed = (empleado_id, fecha) in closed_val
+                    else:
+                        is_closed = fecha in closed_val
+                else:
+                    is_closed = False
+        else:
+            is_closed = await self.is_fecha_cerrada_empleado(empleado_id, fecha)
+            
+        if is_closed and not force:
+            has_raw = await db.fetch_one(
+                "SELECT id FROM logs_raw WHERE empleado_id = ? AND fecha_hora LIKE ? LIMIT 1",
+                (empleado_id, f"{fecha}%")
+            )
+            asist_row = await self.repository.get_asistencia(empleado_id, fecha)
+            has_consumed = asist_row and asist_row.get('marcas_consumidas_ids') and asist_row['marcas_consumidas_ids'] != '[]'
+            if has_raw and not has_consumed:
+                logger.info(f"🔄 Auto-forcing recalculo para emp {empleado_id} fecha {fecha}: existen marcas raw sin consumos previas.")
+                force = True
+            else:
+                logger.warning(f"🚫 Intento de procesar día cerrado: emp {empleado_id}, fecha {fecha}. Retornando registro existente.")
+                return asist_row
+
+        termina, resultado_previo = await self._dia_fuera_de_contrato(db, empleado_id, fecha, save, bulk_ctx)
+        if termina:
+            return resultado_previo
+
+        termina, resultado_previo = await self._dia_antes_del_primer_turno(db, empleado_id, fecha, save, bulk_ctx)
+        if termina:
+            return resultado_previo
 
         # 2. Obtener Turno Asignado Vigente para el día
         if bulk_ctx:

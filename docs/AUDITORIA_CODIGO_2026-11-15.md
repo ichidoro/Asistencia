@@ -499,6 +499,15 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - La prueba que revisa que el cuadre se reparta después de guardar buscaba la marca del guardado dentro de la función grande. Ahora busca la llamada a `_guardar_resultados_periodo` y revisa que esa función sea la que guarda.
 - Pasan las 577 pruebas.
 
+**Avance (16-11-2026): paso 2a hecho.** En `procesar_empleado_dia`, los dos chequeos de «este día no se calcula» pasaron a su propia función, con el mismo texto:
+- `_dia_fuera_de_contrato` (127 líneas): un día después de la baja o fuera de un período de contrato. Con marcas queda como anomalía de contrato; sin marcas se borra lo que hubiera.
+- `_dia_antes_del_primer_turno` (50 líneas): antes del primer horario, o sin horario y sin marcas.
+- Lo único distinto es la salida: donde el bloque terminaba el día con `return X`, ahora devuelve `True, X`, y `procesar_empleado_dia` termina con ese mismo valor. Se comparó línea por línea con el original, salvo esas salidas.
+- El chequeo del día cerrado queda en la función grande por ahora: puede cambiar `force`, que se usa después.
+- `procesar_empleado_dia` bajó de 563 a 392 líneas.
+- **Ensayos:** con el respaldo, **idéntico** (incluye 2.586 días calculados de a uno, que pasan por estos chequeos sin el contexto precargado). Guardando en la copia de práctica, los de las partes 12, 13 y 14: **idénticos**. En los de las partes 12 y 13, el empleado de ensayo ahora también se crea con un número fijo: un número nuevo chocó otra vez con el tapado (cambió el 999999 del empleado que no existe). Es un ajuste del ensayo, no del código.
+- Pasan las 577 pruebas.
+
 ---
 
 ## 7. Lo que no promete este plan

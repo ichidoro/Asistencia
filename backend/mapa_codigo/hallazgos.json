@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1432,
+  "total": 1434,
   "top": [
    {
     "funcion": "_solve_core",
@@ -142,11 +142,6 @@
     "funcion": "sync_marcaciones",
     "archivo": "backend/services/sync_service.py",
     "lineas": 695
-   },
-   {
-    "funcion": "procesar_empleado_dia",
-    "archivo": "backend/services/asistencia_service.py",
-    "lineas": 563
    },
    {
     "funcion": "_generate_excel_workbook",
@@ -167,6 +162,11 @@
     "funcion": "get_matrix_data_with_projections",
     "archivo": "backend/services/asistencia_service.py",
     "lineas": 451
+   },
+   {
+    "funcion": "procesar_empleado_dia",
+    "archivo": "backend/services/asistencia_service.py",
+    "lineas": 392
    },
    {
     "funcion": "_calcular_filas",
@@ -200,7 +200,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3368
+   "lineas": 3394
   },
   {
    "archivo": "frontend/js/sync_wizard.js",
