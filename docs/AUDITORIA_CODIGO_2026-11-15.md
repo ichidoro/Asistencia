@@ -269,6 +269,24 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
   - Configuración (33).
   - Asistencia (57).
 
+**Avance (16-11-2026): parte 6 hecha.** Artículo 22 ya no tiene consultas en su router: eran 15, y en los routers quedan 90 de 177.
+- **Dónde quedó:** todo pasó a un repositorio nuevo, `repositories/articulo22.py`, con las mismas consultas sin cambios.
+- **Lo que se ordenó de paso:**
+  - La lista de empleados con Artículo 22 estaba escrita dos veces (una sin la columna «activo»). Ahora es una sola. Las pantallas no usan esa columna, así que no cambia nada de lo que muestran.
+  - Los filtros del historial y del Excel se arman en un solo lugar, en el mismo orden que antes.
+- **Cómo se probó:**
+  - El ensayo crea en la copia de práctica un empleado con Artículo 22 y otro sin él, con marcas de otros días:
+    - un día con salida a almorzar;
+    - uno que cruza la medianoche;
+    - uno con solo una salida;
+    - uno normal.
+  - Recorre 18 pasos: la lista de empleados, marcar (con errores, con el doble clic de menos de 5 segundos y con la salida que se anota en el día de la entrada), el estado del día, el historial con sus filtros y el resumen, y el Excel con sus errores.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**, Excel incluido. Lo único distinto es la hora real de las marcas de hoy en la hoja «Resumen por día».
+  - Pasan las 577 pruebas.
+- **Siguen:**
+  - Configuración (33).
+  - Asistencia (57).
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

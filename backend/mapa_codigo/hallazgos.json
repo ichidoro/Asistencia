@@ -1,5 +1,5 @@
 {
- "archivos_revisados": 167,
+ "archivos_revisados": 168,
  "repetidas": {
   "total": 137,
   "top": [
@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1346,
+  "total": 1360,
   "top": [
    {
     "funcion": "_solve_core",
@@ -228,7 +228,7 @@
   }
  ],
  "sql_en_routers": {
-  "total": 105,
+  "total": 90,
   "top": [
    {
     "archivo": "backend/routers/asistencia.py",
@@ -237,10 +237,6 @@
    {
     "archivo": "backend/routers/configuracion.py",
     "consultas": 33
-   },
-   {
-    "archivo": "backend/routers/articulo22.py",
-    "consultas": 15
    }
   ]
  },

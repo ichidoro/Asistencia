@@ -20,6 +20,7 @@ from backend.core.database import get_db, Database
 from backend.services.telegram_porteria import avisar_marca
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
 from backend.services.deshacer_porteria import MARGEN_RED_SEGUNDOS, permiso_deshacer, segundos_para_deshacer
+from backend.repositories.articulo22 import Articulo22Repository
 
 router = APIRouter(
     prefix="/articulo22",
@@ -35,7 +36,7 @@ async def _avisar_tras_plazo(db, reg_id, emp, tipo, hora, registrador, espera):
     if espera > 0 and reg_id:
         await asyncio.sleep(espera + MARGEN_RED_SEGUNDOS)
         try:
-            if not await db.fetch_one("SELECT id FROM articulo22_registros WHERE id = ?", (reg_id,)):
+            if not await Articulo22Repository(db).existe_registro(reg_id):
                 return
         except Exception as ex:
             logger.warning(f"[ART22] No se pudo revisar si la marca {reg_id} se deshizo: {ex}")
@@ -45,25 +46,11 @@ async def _avisar_tras_plazo(db, reg_id, emp, tipo, hora, registrador, espera):
 # ============================================
 # INICIALIZACIÓN DE TABLA
 # ============================================
-async def _ensure_table(db: Database):
-    """Crea la tabla si no existe."""
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS articulo22_registros (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empleado_id INTEGER NOT NULL,
-            fecha TEXT NOT NULL,
-            hora TEXT NOT NULL,
-            tipo TEXT NOT NULL,
-            registrado_por_id INTEGER,
-            registrado_por_nombre TEXT,
-            observaciones TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (empleado_id) REFERENCES empleados(id)
-        )
-    """)
-    # Índices (CREATE INDEX IF NOT EXISTS no falla si ya existen)
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_art22_fecha ON articulo22_registros(fecha)")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_art22_emp_fecha ON articulo22_registros(empleado_id, fecha)")
+async def _repo(db: Database) -> Articulo22Repository:
+    """El repositorio de Artículo 22 con su tabla asegurada (las consultas viven en repositories/articulo22.py)."""
+    repo = Articulo22Repository(db)
+    await repo.init_tables()
+    return repo
 
 
 def _analizar_dia(marcas: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -127,14 +114,7 @@ async def get_empleados_art22(
     _perm = Depends(RequirePermission("porteria.art22"))
 ):
     """Lista empleados con excluido_asistencia=1 incluyendo datos de ficha."""
-    rows = await db.fetch_all("""
-        SELECT e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno,
-               e.cargo, a.nombre as area_nombre, e.activo
-        FROM empleados e
-        LEFT JOIN areas a ON e.area_id = a.id
-        WHERE e.excluido_asistencia = 1 AND e.activo = 1
-        ORDER BY e.apellido_paterno, e.nombre
-    """)
+    rows = await Articulo22Repository(db).listar_empleados()
     return [dict(r) for r in rows]
 
 
@@ -149,7 +129,7 @@ async def marcar_presencia(
     Registra una marca de presencia. Auto-detecta tipo E/S.
     Body: { "empleado_id": int, "observaciones": str (opcional) }
     """
-    await _ensure_table(db)
+    repo = await _repo(db)
 
     empleado_id = data.get("empleado_id")
     observaciones = data.get("observaciones", "")
@@ -158,10 +138,7 @@ async def marcar_presencia(
         raise HTTPException(status_code=400, detail="empleado_id requerido")
 
     # Verificar que sea empleado Art. 22
-    emp = await db.fetch_one(
-        "SELECT id, nombre, apellido_paterno, apellido_materno, excluido_asistencia FROM empleados WHERE id = ?",
-        (empleado_id,)
-    )
+    emp = await repo.get_empleado(empleado_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
     if not emp.get("excluido_asistencia"):
@@ -174,10 +151,7 @@ async def marcar_presencia(
 
     # Obtener última marca GLOBAL del empleado (sin filtro de fecha)
     # para detectar correctamente E/S en sesiones cross-midnight
-    ultima = await db.fetch_one(
-        "SELECT tipo, fecha, hora FROM articulo22_registros WHERE empleado_id = ? ORDER BY id DESC LIMIT 1",
-        (empleado_id,)
-    )
+    ultima = await repo.get_ultima_marca(empleado_id)
 
     # Protección contra doble click / debounce en el backend (ej. 5 segundos)
     if ultima:
@@ -213,16 +187,11 @@ async def marcar_presencia(
     # Registrar
     registrador = f"{current_user.nombre_completo}" if hasattr(current_user, 'nombre_completo') else (current_user.username or "Sistema")
 
-    cur = await db.execute(
-        """INSERT INTO articulo22_registros 
-           (empleado_id, fecha, hora, tipo, registrado_por_id, registrado_por_nombre, observaciones)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (empleado_id, fecha_registro, hora_actual, nuevo_tipo, 
+    reg_id = await repo.registrar_marca(
+        (empleado_id, fecha_registro, hora_actual, nuevo_tipo,
          current_user.user_id if hasattr(current_user, 'user_id') else None,
          registrador, observaciones)
     )
-
-    reg_id = getattr(cur, "lastrowid", None)
     segundos = await segundos_para_deshacer(db)
 
     asyncio.create_task(_avisar_tras_plazo(db, reg_id, emp, nuevo_tipo, hora_actual, registrador, segundos))
@@ -252,29 +221,16 @@ async def get_estado_dia(
     Estado de presencia de todos los empleados Art. 22 para un día.
     Incluye marcas, estadía acumulada, y estado actual.
     """
-    await _ensure_table(db)
+    repo = await _repo(db)
 
     if not fecha:
         fecha = _now_chile().strftime("%Y-%m-%d")
 
     # Obtener empleados Art. 22
-    empleados = await db.fetch_all("""
-        SELECT e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno,
-               e.cargo, a.nombre as area_nombre
-        FROM empleados e
-        LEFT JOIN areas a ON e.area_id = a.id
-        WHERE e.excluido_asistencia = 1 AND e.activo = 1
-        ORDER BY e.apellido_paterno, e.nombre
-    """)
+    empleados = await repo.listar_empleados()
 
     # Obtener todas las marcas del día
-    marcas = await db.fetch_all(
-        """SELECT empleado_id, hora, tipo, registrado_por_nombre, observaciones
-           FROM articulo22_registros
-           WHERE fecha = ?
-           ORDER BY empleado_id, id""",
-        (fecha,)
-    )
+    marcas = await repo.get_marcas_del_dia(fecha)
 
     # Agrupar marcas por empleado
     marcas_por_emp = {}
@@ -392,66 +348,25 @@ async def get_historial(
     _perm = Depends(RequirePermission("porteria.art22"))
 ):
     """Historial de registros Art. 22 con filtros y paginación."""
-    await _ensure_table(db)
+    repo = await _repo(db)
 
     if not hasta:
         hasta = _now_chile().strftime("%Y-%m-%d")
     if not desde:
         desde = (datetime.strptime(hasta, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
-    # Consulta agrupada por empleado+fecha
-    where_clauses = ["r.fecha BETWEEN ? AND ?"]
-    params = [desde, hasta]
-
-    if area:
-        where_clauses.append("a.nombre = ?")
-        params.append(area)
-    if empleado_id:
-        where_clauses.append("r.empleado_id = ?")
-        params.append(empleado_id)
-
-    where_sql = " AND ".join(where_clauses)
-
-    # Obtener resumen por empleado/día
-    count_row = await db.fetch_one(
-        f"""SELECT COUNT(DISTINCT r.empleado_id || r.fecha) as total
-            FROM articulo22_registros r
-            JOIN empleados e ON r.empleado_id = e.id
-            LEFT JOIN areas a ON e.area_id = a.id
-            WHERE {where_sql}""",
-        tuple(params)
-    )
-    total_records = count_row["total"] if count_row else 0
+    # Resumen por empleado/día (consulta agrupada por empleado+fecha)
+    total_records = await repo.contar_historial(desde, hasta, area, empleado_id)
 
     offset = (page - 1) * limit
-    params_query = list(params) + [limit, offset]
-
-    rows = await db.fetch_all(
-        f"""SELECT r.empleado_id, r.fecha,
-                   e.nombre as emp_nombre, e.apellido_paterno, e.apellido_materno,
-                   e.cargo, a.nombre as area_nombre,
-                   MIN(CASE WHEN r.tipo='E' THEN r.hora END) as primera_entrada,
-                   MAX(CASE WHEN r.tipo='S' THEN r.hora END) as ultima_salida,
-                   COUNT(*) as total_marcas
-            FROM articulo22_registros r
-            JOIN empleados e ON r.empleado_id = e.id
-            LEFT JOIN areas a ON e.area_id = a.id
-            WHERE {where_sql}
-            GROUP BY r.empleado_id, r.fecha
-            ORDER BY r.fecha DESC, e.apellido_paterno
-            LIMIT ? OFFSET ?""",
-        tuple(params_query)
-    )
+    rows = await repo.get_historial(desde, hasta, area, empleado_id, limit, offset)
 
     # Para cada fila, calcular estadía
     resultado = []
     for row in rows:
         r = dict(row)
         # Obtener marcas detalladas
-        marcas = await db.fetch_all(
-            "SELECT hora, tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha = ? ORDER BY id",
-            (r["empleado_id"], r["fecha"])
-        )
+        marcas = await repo.get_marcas_empleado_dia(r["empleado_id"], r["fecha"])
         an = _analizar_dia([dict(m) for m in marcas])
         estadia_min = an["estadia"]
 
@@ -478,10 +393,7 @@ async def get_historial(
     # Resumen de TODO el rango para un solo empleado (no solo la página visible)
     resumen = None
     if empleado_id:
-        todas = await db.fetch_all(
-            "SELECT fecha, hora, tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha BETWEEN ? AND ? ORDER BY fecha, id",
-            (empleado_id, desde, hasta)
-        )
+        todas = await repo.get_marcas_empleado_rango(empleado_id, desde, hasta)
         por_dia: Dict[str, List[Dict[str, Any]]] = {}
         for m in todas:
             por_dia.setdefault(m["fecha"], []).append(dict(m))
@@ -535,7 +447,7 @@ async def exportar_excel(
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
 
-    await _ensure_table(db)
+    repo = await _repo(db)
     try:
         d0 = datetime.strptime(desde, "%Y-%m-%d")
         d1 = datetime.strptime(hasta, "%Y-%m-%d")
@@ -546,24 +458,7 @@ async def exportar_excel(
     if (d1 - d0).days > 3660:
         raise HTTPException(status_code=400, detail="El rango máximo es de 10 años")
 
-    where = ["r.fecha BETWEEN ? AND ?"]
-    params: List[Any] = [desde, hasta]
-    if empleado_id:
-        where.append("r.empleado_id = ?")
-        params.append(empleado_id)
-    if area:
-        where.append("a.nombre = ?")
-        params.append(area)
-    rows = await db.fetch_all(
-        f"""SELECT r.empleado_id, r.fecha, r.hora, r.tipo, r.registrado_por_nombre, r.observaciones,
-                   e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, a.nombre AS area_nombre
-            FROM articulo22_registros r
-            JOIN empleados e ON r.empleado_id = e.id
-            LEFT JOIN areas a ON e.area_id = a.id
-            WHERE {" AND ".join(where)}
-            ORDER BY e.apellido_paterno, e.nombre, r.fecha, r.id""",
-        tuple(params)
-    )
+    rows = await repo.get_marcas_para_excel(desde, hasta, empleado_id, area)
     if not rows:
         raise HTTPException(status_code=404, detail="No hay marcaciones en el rango seleccionado")
 

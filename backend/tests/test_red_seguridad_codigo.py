@@ -110,7 +110,7 @@ def ciclos_de_importacion():
 
 # Etapa 4 (consultas a los repositorios): routers que ya no hablan directo con la base. Se agrega uno cada vez que se
 # ordena; desde entonces sus consultas van en backend/repositories/.
-ROUTERS_SIN_SQL = ["flota.py", "llaves.py", "visitas.py", "porteria.py", "productos_4.py", "cierre.py", "sync.py", "empleados.py", "auth.py", "turnos.py"]
+ROUTERS_SIN_SQL = ["flota.py", "llaves.py", "visitas.py", "porteria.py", "productos_4.py", "cierre.py", "sync.py", "empleados.py", "auth.py", "turnos.py", "articulo22.py"]
 LLAMADAS_A_LA_BASE = ("fetch_all", "fetch_one", "execute", "execute_batch", "fetchval", "fetchrow", "fetch")
 
 
