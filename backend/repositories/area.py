@@ -26,6 +26,55 @@ class AreaRepository:
         query = "SELECT id, nombre, created_at FROM areas WHERE nombre = ?"
         return await self.db.fetch_one(query, (nombre,))
 
+    async def get_area_por_nombre_sin_mayusculas(self, nombre: str) -> Optional[dict]:
+        """Un área con ese nombre sin distinguir mayúsculas."""
+        return await self.db.fetch_one("SELECT nombre FROM areas WHERE LOWER(nombre) = LOWER(?)", (nombre,))
+
+    async def get_alias_con_nombre(self, nombre: str) -> Optional[dict]:
+        """Un alias de área con ese nombre sin distinguir mayúsculas."""
+        return await self.db.fetch_one("SELECT id FROM areas_alias WHERE LOWER(alias) = LOWER(?)", (nombre,))
+
+    async def contar_empleados(self, area_id: int) -> Optional[dict]:
+        return await self.db.fetch_one("SELECT COUNT(*) as count FROM empleados WHERE area_id = ?", (area_id,))
+
+    async def contar_marcas_en_su_historial(self, area_id: int) -> Optional[dict]:
+        """Marcas crudas de quienes estuvieron en el área, dentro de su tiempo en ella."""
+        return await self.db.fetch_one("""
+            SELECT COUNT(*) as count
+            FROM logs_raw l
+            JOIN historial_areas ha ON l.empleado_id = ha.empleado_id
+            WHERE ha.area_id = ?
+              AND substr(l.fecha_hora, 1, 10) BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
+        """, (area_id,))
+
+    async def contar_asistencias_en_su_historial(self, area_id: int) -> Optional[dict]:
+        """Jornadas calculadas de quienes estuvieron en el área, dentro de su tiempo en ella."""
+        return await self.db.fetch_one("""
+            SELECT COUNT(*) as count
+            FROM asistencias a
+            JOIN historial_areas ha ON a.empleado_id = ha.empleado_id
+            WHERE ha.area_id = ?
+              AND a.fecha BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
+        """, (area_id,))
+
+    async def contar_horas_extras_en_su_historial(self, area_id: int) -> Optional[dict]:
+        """Horas extra de quienes estuvieron en el área, dentro de su tiempo en ella."""
+        return await self.db.fetch_one("""
+            SELECT COUNT(*) as count
+            FROM horas_extras he
+            JOIN historial_areas ha ON he.empleado_id = ha.empleado_id
+            WHERE ha.area_id = ?
+              AND he.fecha BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
+        """, (area_id,))
+
+    async def eliminar_area(self, area_id: int) -> None:
+        """Borra el historial de áreas que apunta a ella y después el área (alias, bonos y turnos van en cascada)."""
+        await self.db.execute("DELETE FROM historial_areas WHERE area_id = ?", (area_id,))
+        await self.db.execute("DELETE FROM areas WHERE id = ?", (area_id,))
+
+    async def set_aplica_flota(self, area_id: int, aplica_flota: int) -> None:
+        await self.db.execute("UPDATE areas SET aplica_flota = ? WHERE id = ?", (aplica_flota, area_id))
+
     async def find_area_id_by_name_or_alias(self, name_or_alias: str) -> Optional[int]:
         """
         Busca un área usando su nombre exacto o su alias.

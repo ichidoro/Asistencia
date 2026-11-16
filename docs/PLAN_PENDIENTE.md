@@ -87,7 +87,9 @@ Etapa 4, parte 4 (16-11-2026): Sync también (7 consultas); en los routers queda
 
 Etapa 4, parte 5 (16-11-2026): Empleados, Auth y Turnos (7 consultas); en los routers quedan 105 de 177.
 
-Etapa 4, parte 6 (16-11-2026): Artículo 22 (15 consultas, a un repositorio nuevo); en los routers quedan 90 de 177. Siguen Configuración y Asistencia.
+Etapa 4, parte 6 (16-11-2026): Artículo 22 (15 consultas, a un repositorio nuevo); en los routers quedan 90 de 177.
+
+Etapa 4, parte 7 (16-11-2026): Configuración (33 consultas: estados, áreas, cargos y géneros); en los routers quedan 57 de 177, todas de Asistencia, que es lo que sigue.
 
 **Fallas que ya existían, vistas en el ensayo de la parte 5: arregladas el 16-11-2026** (decisión de la persona dueña):
 - Confirmar un cambio de área pendiente daba error 500 (buscaba un dato «area» que la tabla no tiene). Ahora usa el número del área y anota solo la ficha del empleado: el historial queda con la fecha efectiva, sin un registro de más. En producción no había cambios pendientes (0) y nadie la había usado en 30 días.

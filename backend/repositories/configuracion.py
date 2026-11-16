@@ -1078,6 +1078,46 @@ class ConfiguracionRepository:
         res = await self.db.execute("DELETE FROM periodos_rrhh WHERE id = ?", (id,))
         return res.rowcount > 0
 
+    # ── Estados de asistencia (tabla maestra; se movió del router de Configuración sin cambios) ──
+
+    async def listar_estados(self, solo_activos: bool) -> List[Dict[str, Any]]:
+        query = "SELECT * FROM estados_asistencia"
+        if solo_activos:
+            query += " WHERE activo = 1"
+        query += " ORDER BY orden ASC"
+        return await self.db.fetch_all(query)
+
+    async def get_estado(self, codigo: str) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one("SELECT * FROM estados_asistencia WHERE codigo = ?", (codigo,))
+
+    async def get_otros_estados_activos(self, codigo: str) -> List[Dict[str, Any]]:
+        """Los demás estados activos (para no repetir sigla y avisar si el color se repite)."""
+        return await self.db.fetch_all(
+            "SELECT * FROM estados_asistencia WHERE activo = 1 AND codigo <> ?", (codigo,))
+
+    async def actualizar_estado(self, codigo: str, cambios: Dict[str, Any]) -> None:
+        """Cambia los campos dados de un estado. Los nombres de campo los filtra el router (lista permitida)."""
+        set_clause = ", ".join(f"{k} = ?" for k in cambios)
+        values = list(cambios.values()) + [codigo]
+        await self.db.execute(f"UPDATE estados_asistencia SET {set_clause} WHERE codigo = ?", values)
+
+    async def contar_estados(self) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one("SELECT COUNT(*) as cnt FROM estados_asistencia")
+
+    async def sembrar_estados(self, filas: List[tuple]) -> None:
+        for row in filas:
+            await self.db.execute(
+                """INSERT OR IGNORE INTO estados_asistencia
+                   (codigo, nombre_display, short_label, descripcion, color_clase, icono_bi, es_sistema, activo, orden)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                row
+            )
+
+    async def get_fechas_periodo_vigente(self) -> Optional[Dict[str, Any]]:
+        """Inicio y fin del período vigente, tal como están (a diferencia de get_periodo_rrhh_activo, no corre el
+        auto-arreglo de períodos antes de leer)."""
+        return await self.db.fetch_one("SELECT fecha_inicio, fecha_fin FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
+
     async def reabrir_periodo_rrhh(self, fecha_inicio: str, fecha_fin: str) -> None:
         """Al reabrir un cierre: vuelve el período de esas fechas a «abierto» y lo marca vigente.
         Se movió del router de Cierre sin cambios (etapa 4 de la auditoría): no desactiva los demás períodos,

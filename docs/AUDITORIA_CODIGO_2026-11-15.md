@@ -287,6 +287,30 @@ Mover las 177 consultas de los routers a los repositorios, de a un router por ve
   - Configuración (33).
   - Asistencia (57).
 
+**Avance (16-11-2026): parte 7 hecha.** Configuración ya no tiene consultas en su router: eran 33, y en los routers quedan 57 de 177, todas de Asistencia.
+- **Dónde quedó cada cosa:** cada consulta fue al repositorio de su tabla.
+  - Los estados de asistencia: `ConfiguracionRepository`, donde ya se creaba esa tabla. La lista de «otros estados activos», que estaba dos veces, ahora es una sola.
+  - Las áreas: `AreaRepository`, con los bloqueos que impiden borrar un área que tiene empleados, marcas, jornadas u horas extra en su historia.
+  - Los cargos: `CargoRepository`.
+  - Borrar las jornadas y horas extra de una persona: `AsistenciaRepository`.
+  - Los géneros: `EmpleadoRepository`.
+  - Los 5 avisos a la auditoría: `SeguridadRepository.log_auditoria`.
+- **Una función que ya existía no se reutilizó, porque no hace lo mismo:** `get_periodo_rrhh_activo` corre antes un auto-arreglo de períodos. Para el período vigente se agregó `get_fechas_periodo_vigente`, que solo lee, como antes.
+- **Cómo se probó:**
+  - El ensayo tiene 33 pasos.
+    - Usa áreas, cargos y empleados propios del ensayo.
+    - Al terminar, deja el estado PERMISO exactamente como estaba.
+  - Recorre:
+    - los estados: listar, los errores (no existe, campo inválido, sigla repetida, color inválido), cambiar, desactivar y activar;
+    - las áreas: crear (repetida, con otras mayúsculas, igual a un alias, vacía), flota, y borrar con cada bloqueo (empleados, marcas, jornadas, horas extra) hasta que se puede;
+    - los cargos: crear con los mismos errores, y marcarlo y desmarcarlo como Artículo 22;
+    - los géneros.
+  - **Marcar un cargo como Artículo 22 borra datos**, así que se comprobó en detalle. Borra las jornadas y horas extra del período vigente de los empleados manuales con ese cargo. No toca las de otros meses ni las del empleado sincronizado.
+  - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**, incluidos lo que se borra y el registro de auditoría.
+  - Se repitieron los seis ensayos anteriores: siguen idénticos.
+  - Pasan las 577 pruebas.
+- **Sigue:** Asistencia (57). Es el más grande y el más delicado, porque toca el cálculo.
+
 ### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.

@@ -591,6 +591,12 @@ async def delete_feriado(
     return await service.delete_holiday(id)
 
 
+async def _auditar(db: Database, current_user: SecurityContext, accion: str, detalle: str) -> None:
+    """Deja el cambio en el registro de auditoría (módulo «Configuracion»)."""
+    from backend.repositories.seguridad import SeguridadRepository
+    await SeguridadRepository(db).log_auditoria(current_user.user_id, current_user.username, accion, "Configuracion", detalle)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # ESTADOS DE ASISTENCIA — Tabla Maestra Configurable
 # ──────────────────────────────────────────────────────────────────────────────
@@ -605,11 +611,7 @@ async def get_estados_asistencia(
     Retorna la tabla maestra de estados de asistencia.
     Usada por el frontend para construir los badges y tooltips dinámicamente.
     """
-    query = "SELECT * FROM estados_asistencia"
-    if solo_activos:
-        query += " WHERE activo = 1"
-    query += " ORDER BY orden ASC"
-    rows = await db.fetch_all(query)
+    rows = await ConfiguracionRepository(db).listar_estados(solo_activos)
     return [dict(r) for r in rows]
 
 
@@ -656,7 +658,8 @@ async def update_estado_asistencia(
     caracteres sin repetir entre estados activos, color e icono con formato conocido.
     Un color repetido entre estados activos NO se bloquea: se devuelve en `warnings`.
     """
-    row = await db.fetch_one("SELECT * FROM estados_asistencia WHERE codigo = ?", (codigo,))
+    config_repo = ConfiguracionRepository(db)
+    row = await config_repo.get_estado(codigo)
     if not row:
         raise HTTPException(status_code=404, detail=f"Estado '{codigo}' no encontrado")
     row = dict(row)
@@ -701,8 +704,7 @@ async def update_estado_asistencia(
     cambia_sigla = _sigla_efectiva(final) != _sigla_efectiva(row) or int(row.get('activo') or 0) != int(final.get('activo') or 0)
     if int(final.get('activo') or 0) == 1 and cambia_sigla:
         mi_sigla = _sigla_efectiva(final)
-        otros = [dict(r) for r in await db.fetch_all(
-            "SELECT * FROM estados_asistencia WHERE activo = 1 AND codigo <> ?", (codigo,))]
+        otros = [dict(r) for r in await config_repo.get_otros_estados_activos(codigo)]
         choque = [o['codigo'] for o in otros if _sigla_efectiva(o) == mi_sigla]
         if choque:
             raise HTTPException(
@@ -710,8 +712,7 @@ async def update_estado_asistencia(
                 detail=f"La etiqueta '{mi_sigla}' ya la usa el estado {', '.join(choque)}. Elige otra.")
 
     if int(final.get('activo') or 0) == 1:
-        otros_act = [dict(r) for r in await db.fetch_all(
-            "SELECT * FROM estados_asistencia WHERE activo = 1 AND codigo <> ?", (codigo,))]
+        otros_act = [dict(r) for r in await config_repo.get_otros_estados_activos(codigo)]
         mismo_color = [o['codigo'] for o in otros_act if (o.get('color_clase') or '') == (final.get('color_clase') or '')]
         if mismo_color:
             warnings.append(f"El color de '{codigo}' es igual al de: {', '.join(mismo_color)}. "
@@ -720,9 +721,7 @@ async def update_estado_asistencia(
     from datetime import datetime
     updates['updated_at'] = datetime.now().isoformat()
 
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [codigo]
-    await db.execute(f"UPDATE estados_asistencia SET {set_clause} WHERE codigo = ?", values)
+    await config_repo.actualizar_estado(codigo, updates)
     logger.info(f"✏️ Estado '{codigo}' actualizado por usuario {current_user.username}: {updates}")
     return {"success": True, "codigo": codigo, "message": "Estado actualizado correctamente",
             "saved": {k: v for k, v in updates.items() if k != 'updated_at'}, "warnings": warnings}
@@ -737,7 +736,8 @@ async def seed_estados_asistencia(
     Inicializa la tabla estados_asistencia con los valores por defecto
     del sistema si está vacía. Útil tras un reset de BD.
     """
-    count_row = await db.fetch_one("SELECT COUNT(*) as cnt FROM estados_asistencia")
+    config_repo = ConfiguracionRepository(db)
+    count_row = await config_repo.contar_estados()
     if count_row and count_row['cnt'] > 0:
         return {"message": "La tabla ya contiene datos. No se realizaron cambios.", "count": count_row['cnt']}
 
@@ -757,13 +757,7 @@ async def seed_estados_asistencia(
         ('JORNADA_COMPENSATORIA',   'JORNADA COMPENSATORIA',   'COMP', 'Día libre compensatorio por jornada trabajada en día de descanso.', 'badge-compensatorio', 'bi-arrow-left-right', 1, 1, 15),
         ('LLAMADO_EMERGENCIA',      'LLAMADO DE EMERGENCIA',   'EME',  'Llamado de emergencia en un día que la persona no tenía que trabajar (día libre, feriado o sin turno). Se valida aparte de la jornada especial: EXTRA, horas extra o rechazo.', 'color-violeta', 'bi-telephone-inbound-fill', 1, 1, 17),
     ]
-    for row in seed_data:
-        await db.execute(
-            """INSERT OR IGNORE INTO estados_asistencia
-               (codigo, nombre_display, short_label, descripcion, color_clase, icono_bi, es_sistema, activo, orden)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            row
-        )
+    await config_repo.sembrar_estados(seed_data)
     return {"success": True, "message": f"Tabla inicializada con {len(seed_data)} estados.", "count": len(seed_data)}
 
 # ============================================
@@ -807,28 +801,19 @@ async def create_area_manual(
         raise HTTPException(status_code=400, detail=f"El área '{nombre_normalizado}' ya existe en el catálogo.")
     
     # Verificar case-insensitive
-    case_exist = await db.fetch_one("SELECT nombre FROM areas WHERE LOWER(nombre) = LOWER(?)", (nombre_normalizado,))
+    case_exist = await repo.get_area_por_nombre_sin_mayusculas(nombre_normalizado)
     if case_exist:
         raise HTTPException(status_code=400, detail=f"Ya existe una área con este nombre pero diferente capitalización ('{case_exist['nombre']}').")
 
     # Verificar en alias para evitar colisiones
-    alias_colision = await db.fetch_one("SELECT id FROM areas_alias WHERE LOWER(alias) = LOWER(?)", (nombre_normalizado,))
+    alias_colision = await repo.get_alias_con_nombre(nombre_normalizado)
     if alias_colision:
         raise HTTPException(status_code=400, detail=f"El nombre '{nombre_normalizado}' ya está registrado como alias de otra área.")
 
     area_id = await repo.create_area(nombre_normalizado)
     
     # Registrar en auditoría
-    await db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "CREATE_AREA_MANUAL",
-            "Configuracion",
-            f"Creada área manualmente: '{nombre_normalizado}' (ID: {area_id})."
-        )
-    )
+    await _auditar(db, current_user, "CREATE_AREA_MANUAL", f"Creada área manualmente: '{nombre_normalizado}' (ID: {area_id}).")
     return {"id": area_id, "nombre": nombre_normalizado, "message": "Área creada exitosamente"}
 
 @router.delete("/areas/alias/{alias_id}", status_code=204)
@@ -853,12 +838,14 @@ async def delete_area(
 ):
     """Eliminar un área principal aplicando restricciones de empleados activos y marcaciones."""
     # 1. Verificar existencia del área
-    area = await db.fetch_one("SELECT * FROM areas WHERE id = ?", (area_id,))
+    from backend.repositories.area import AreaRepository
+    repo = AreaRepository(db)
+    area = await repo.get_area_by_id(area_id)
     if not area:
         raise HTTPException(status_code=404, detail="El área no existe.")
 
     # 2. Verificar si hay empleados activos asignados a esta área actualmente
-    emp_count = await db.fetch_one("SELECT COUNT(*) as count FROM empleados WHERE area_id = ?", (area_id,))
+    emp_count = await repo.contar_empleados(area_id)
     if emp_count and emp_count["count"] > 0:
         raise HTTPException(
             status_code=400,
@@ -866,13 +853,7 @@ async def delete_area(
         )
 
     # 3. Verificar si hay marcaciones crudas (logs_raw) asociadas a empleados (activos o históricos) durante su permanencia en esta área
-    logs_count = await db.fetch_one("""
-        SELECT COUNT(*) as count 
-        FROM logs_raw l
-        JOIN historial_areas ha ON l.empleado_id = ha.empleado_id
-        WHERE ha.area_id = ?
-          AND substr(l.fecha_hora, 1, 10) BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
-    """, (area_id,))
+    logs_count = await repo.contar_marcas_en_su_historial(area_id)
     if logs_count and logs_count["count"] > 0:
         raise HTTPException(
             status_code=400,
@@ -880,13 +861,7 @@ async def delete_area(
         )
 
     # 4. Verificar si hay jornadas de asistencia procesadas (asistencias) asociadas a esta área en el historial
-    asist_count = await db.fetch_one("""
-        SELECT COUNT(*) as count
-        FROM asistencias a
-        JOIN historial_areas ha ON a.empleado_id = ha.empleado_id
-        WHERE ha.area_id = ?
-          AND a.fecha BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
-    """, (area_id,))
+    asist_count = await repo.contar_asistencias_en_su_historial(area_id)
     if asist_count and asist_count["count"] > 0:
         raise HTTPException(
             status_code=400,
@@ -894,13 +869,7 @@ async def delete_area(
         )
 
     # 5. Verificar si hay registros de horas extras calculadas (horas_extras) asociados a esta área en el historial
-    he_count = await db.fetch_one("""
-        SELECT COUNT(*) as count
-        FROM horas_extras he
-        JOIN historial_areas ha ON he.empleado_id = ha.empleado_id
-        WHERE ha.area_id = ?
-          AND he.fecha BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
-    """, (area_id,))
+    he_count = await repo.contar_horas_extras_en_su_historial(area_id)
     if he_count and he_count["count"] > 0:
         raise HTTPException(
             status_code=400,
@@ -908,23 +877,11 @@ async def delete_area(
         )
 
     # 6. Proceder con la eliminación
-    # Primero eliminar historial_areas (ya que no hay marcas asociadas a este area, es seguro limpiar su historial)
-    await db.execute("DELETE FROM historial_areas WHERE area_id = ?", (area_id,))
-    
-    # areas_alias, area_bonos, turno_areas se eliminarán por cascada en SQLite
-    await db.execute("DELETE FROM areas WHERE id = ?", (area_id,))
+    # Primero su historial_areas (no hay marcas asociadas a esta área, es seguro limpiarlo) y después el área
+    await repo.eliminar_area(area_id)
 
     # Registrar en auditoría
-    await db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "DELETE_AREA_MANUAL",
-            "Configuracion",
-            f"Eliminada área manualmente: '{area['nombre']}' (ID: {area_id})."
-        )
-    )
+    await _auditar(db, current_user, "DELETE_AREA_MANUAL", f"Eliminada área manualmente: '{area['nombre']}' (ID: {area_id}).")
     return
 
 @router.patch("/areas/{area_id}/aplica-flota")
@@ -936,23 +893,16 @@ async def patch_area_aplica_flota(
 ):
     """Activar/desactivar flag aplica_flota para un área"""
     aplica_flota = 1 if data.get("aplica_flota") else 0
-    area = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+    from backend.repositories.area import AreaRepository
+    repo = AreaRepository(db)
+    area = await repo.get_area_by_id(area_id)
     if not area:
         raise HTTPException(status_code=404, detail="El área no existe.")
-    
-    await db.execute("UPDATE areas SET aplica_flota = ? WHERE id = ?", (aplica_flota, area_id))
+
+    await repo.set_aplica_flota(area_id, aplica_flota)
     
     # Registrar en auditoría
-    await db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "UPDATE_AREA_FLOTA",
-            "Configuracion",
-            f"Modificado flag aplica_flota para el área '{area['nombre']}' (ID: {area_id}) a {aplica_flota}."
-        )
-    )
+    await _auditar(db, current_user, "UPDATE_AREA_FLOTA", f"Modificado flag aplica_flota para el área '{area['nombre']}' (ID: {area_id}) a {aplica_flota}.")
     return {"ok": True, "message": "Área actualizada exitosamente"}
 
 # ============================================
@@ -988,28 +938,19 @@ async def create_cargo_manual(
         raise HTTPException(status_code=400, detail=f"El cargo '{nombre_normalizado}' ya existe en el catálogo.")
     
     # Verificar case-insensitive
-    case_exist = await db.fetch_one("SELECT nombre FROM cargos WHERE LOWER(nombre) = LOWER(?)", (nombre_normalizado,))
+    case_exist = await repo.get_cargo_por_nombre_sin_mayusculas(nombre_normalizado)
     if case_exist:
         raise HTTPException(status_code=400, detail=f"Ya existe un cargo con este nombre pero diferente capitalización ('{case_exist['nombre']}').")
 
     # Verificar en alias para evitar colisiones
-    alias_colision = await db.fetch_one("SELECT id FROM cargos_alias WHERE LOWER(alias) = LOWER(?)", (nombre_normalizado,))
+    alias_colision = await repo.get_alias_con_nombre(nombre_normalizado)
     if alias_colision:
         raise HTTPException(status_code=400, detail=f"El nombre '{nombre_normalizado}' ya está registrado como alias de otro cargo.")
 
     cargo_id = await repo.create_cargo(nombre_normalizado)
     
     # Registrar en auditoría
-    await db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "CREATE_CARGO_MANUAL",
-            "Configuracion",
-            f"Creado cargo manualmente: '{nombre_normalizado}' (ID: {cargo_id})."
-        )
-    )
+    await _auditar(db, current_user, "CREATE_CARGO_MANUAL", f"Creado cargo manualmente: '{nombre_normalizado}' (ID: {cargo_id}).")
     return {"id": cargo_id, "nombre": nombre_normalizado, "message": "Cargo creado exitosamente"}
 
 @router.delete("/cargos/alias/{alias_id}", status_code=204)
@@ -1035,42 +976,32 @@ async def toggle_cargo_exclusion(
 ):
     """Habilitar/deshabilitar la exclusión de asistencia por cargo y propagarla a los empleados con ese cargo"""
     # Verificar si el cargo existe
-    cargo = await db.fetch_one("SELECT * FROM cargos WHERE id = ?", (cargo_id,))
+    from backend.repositories.cargo import CargoRepository
+    from backend.repositories.asistencia import AsistenciaRepository
+    repo = CargoRepository(db)
+    cargo = await repo.get_cargo_by_id(cargo_id)
     if not cargo:
         raise HTTPException(status_code=404, detail="Cargo no encontrado")
-        
+
     val = 1 if excluir else 0
-    
-    # Actualizar cargo
-    await db.execute("UPDATE cargos SET excluido_asistencia = ? WHERE id = ?", (val, cargo_id))
-    
-    # Propagar únicamente a empleados manuales (los sincronizados nunca se excluyen por Art. 22)
-    await db.execute("UPDATE empleados SET excluido_asistencia = ? WHERE cargo_id = ? AND es_manual = 1", (val, cargo_id))
-    
+
+    # Actualizar el cargo y propagar únicamente a empleados manuales (los sincronizados nunca se excluyen por Art. 22)
+    await repo.set_excluido_asistencia(cargo_id, val)
+
     # Limpieza para los empleados afectados (solo manuales)
-    periodo_activo = await db.fetch_one("SELECT fecha_inicio, fecha_fin FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
+    periodo_activo = await ConfiguracionRepository(db).get_fechas_periodo_vigente()
     if periodo_activo:
         f_ini = periodo_activo["fecha_inicio"]
         f_fin = periodo_activo["fecha_fin"]
-        emp_rows = await db.fetch_all("SELECT id FROM empleados WHERE cargo_id = ? AND activo = 1 AND es_manual = 1", (cargo_id,))
+        emp_rows = await repo.get_empleados_manuales_activos(cargo_id)
         for r in emp_rows:
             emp_id = r["id"]
             if excluir:
                 # Si se excluye, borrar registros residuales del periodo activo
-                await db.execute("DELETE FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (emp_id, f_ini, f_fin))
-                await db.execute("DELETE FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (emp_id, f_ini, f_fin))
+                await AsistenciaRepository(db).borrar_asistencias_y_horas_extras(emp_id, f_ini, f_fin)
                 
     # Registrar auditoría
-    await db.execute(
-        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
-        (
-            current_user.user_id,
-            current_user.username,
-            "TOGGLE_CARGO_EXCLUSION",
-            "Configuracion",
-            f"Modificado excluido_asistencia a {val} para cargo '{cargo['nombre']}' (ID: {cargo_id}) y sus empleados."
-        )
-    )
+    await _auditar(db, current_user, "TOGGLE_CARGO_EXCLUSION", f"Modificado excluido_asistencia a {val} para cargo '{cargo['nombre']}' (ID: {cargo_id}) y sus empleados.")
     
     return {"id": cargo_id, "excluido_asistencia": excluir, "message": "Exclusión de cargo y empleados actualizada exitosamente"}
 
@@ -1084,8 +1015,8 @@ async def get_catalogo_generos(
     current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.ver", "empleados.ver", "empleados.crear", "empleados.editar"]))
 ):
     """Obtener el catálogo de géneros"""
-    query = "SELECT id, nombre FROM cat_generos ORDER BY nombre ASC"
-    rows = await db.fetch_all(query)
+    from backend.repositories.empleado import EmpleadoRepository
+    rows = await EmpleadoRepository(db).get_generos()
     return [dict(r) for r in rows]
 
 

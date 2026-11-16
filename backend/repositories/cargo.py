@@ -21,6 +21,22 @@ class CargoRepository:
         query = "SELECT id, nombre, created_at FROM cargos WHERE nombre = ?"
         return await self.db.fetch_one(query, (nombre,))
 
+    async def get_cargo_por_nombre_sin_mayusculas(self, nombre: str) -> Optional[dict]:
+        """Un cargo con ese nombre sin distinguir mayúsculas."""
+        return await self.db.fetch_one("SELECT nombre FROM cargos WHERE LOWER(nombre) = LOWER(?)", (nombre,))
+
+    async def get_alias_con_nombre(self, nombre: str) -> Optional[dict]:
+        """Un alias de cargo con ese nombre sin distinguir mayúsculas."""
+        return await self.db.fetch_one("SELECT id FROM cargos_alias WHERE LOWER(alias) = LOWER(?)", (nombre,))
+
+    async def set_excluido_asistencia(self, cargo_id: int, valor: int) -> None:
+        """Marca el cargo como Artículo 22 (o no) y lo propaga solo a sus empleados manuales."""
+        await self.db.execute("UPDATE cargos SET excluido_asistencia = ? WHERE id = ?", (valor, cargo_id))
+        await self.db.execute("UPDATE empleados SET excluido_asistencia = ? WHERE cargo_id = ? AND es_manual = 1", (valor, cargo_id))
+
+    async def get_empleados_manuales_activos(self, cargo_id: int) -> List[dict]:
+        return await self.db.fetch_all("SELECT id FROM empleados WHERE cargo_id = ? AND activo = 1 AND es_manual = 1", (cargo_id,))
+
     async def find_cargo_id_by_name_or_alias(self, name_or_alias: str) -> Optional[int]:
         """
         Busca un cargo usando su nombre exacto o su alias.

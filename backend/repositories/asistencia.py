@@ -682,6 +682,11 @@ class AsistenciaRepository:
         query = "SELECT * FROM cierres_periodos WHERE tipo_cierre = ? ORDER BY fecha_fin DESC LIMIT 1"
         return await self.db.fetch_one(query, (tipo,))
 
+    async def borrar_asistencias_y_horas_extras(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> None:
+        """Borra las jornadas y horas extra de un empleado entre dos fechas (al marcar su cargo como Artículo 22)."""
+        await self.db.execute("DELETE FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
+        await self.db.execute("DELETE FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
+
     async def get_cierre_by_id(self, cierre_id: int) -> Optional[Dict[str, Any]]:
         """Un registro de cierre por su id (para reabrirlo)."""
         return await self.db.fetch_one("SELECT * FROM cierres_periodos WHERE id = ?", (cierre_id,))

@@ -99,6 +99,16 @@
     ]
    },
    {
+    "nombre": "_auditar",
+    "archivos": [
+     "backend/routers/configuracion.py",
+     "backend/routers/flota.py",
+     "backend/routers/porteria.py",
+     "backend/routers/productos_4.py",
+     "backend/services/compensar_inasistencia.py"
+    ]
+   },
+   {
     "nombre": "_norm",
     "archivos": [
      "backend/core/sql_groupby.py",
@@ -117,21 +127,11 @@
      "frontend/js/horarios.js",
      "frontend/js/marcaciones_ui.js"
     ]
-   },
-   {
-    "nombre": "hhmm",
-    "archivos": [
-     "dashboard_build/src/DashboardApp.jsx",
-     "frontend/js/articulo22_ui.js",
-     "frontend/js/ficha_persona.js",
-     "frontend/js/porteria_panel.js",
-     "frontend/js/tarjeta_dia.js"
-    ]
    }
   ]
  },
  "funciones_largas": {
-  "total": 1360,
+  "total": 1382,
   "top": [
    {
     "funcion": "_solve_core",
@@ -228,15 +228,11 @@
   }
  ],
  "sql_en_routers": {
-  "total": 90,
+  "total": 57,
   "top": [
    {
     "archivo": "backend/routers/asistencia.py",
     "consultas": 57
-   },
-   {
-    "archivo": "backend/routers/configuracion.py",
-    "consultas": 33
    }
   ]
  },

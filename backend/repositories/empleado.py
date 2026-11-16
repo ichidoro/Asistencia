@@ -1157,6 +1157,10 @@ class EmpleadoRepository:
             (area_id, empleado_id)
         )
 
+    async def get_generos(self) -> List[dict]:
+        """El catálogo de géneros (la tabla cat_generos se crea en create_table de este archivo)."""
+        return await self.db.fetch_all("SELECT id, nombre FROM cat_generos ORDER BY nombre ASC")
+
     async def get_historial_area_by_id(self, historial_id: int) -> Optional[dict]:
         """Un registro del historial de áreas por su id, tal como está en la tabla (SELECT *)."""
         return await self.db.fetch_one(
