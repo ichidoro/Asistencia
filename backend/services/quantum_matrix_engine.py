@@ -2273,6 +2273,87 @@ class QuantumMatrixEngine:
         return horas_netas
 
 
+    @staticmethod
+    def _una_sola_marca(res: Dict[str, Any], bloque_p: List[Dict[str, Any]], dt_list: List[datetime], fecha: str,
+                        es_nocturno: bool, hora_ent_teo, hora_sal_teo, today_str: str, now_local: datetime,
+                        ventana_en_curso_min: int) -> Dict[str, Any]:
+        """Sección 6 de _solve_core: un día con una sola marca. Si es hoy y la marca es de Entrada, la jornada sigue en
+        curso hasta la salida del horario más la ventana de espera; si no, queda en anomalía (falta la entrada o la
+        salida, según el rótulo de la marca o su cercanía al horario). Devuelve el resultado que recibe, completado.
+        Mismo código que estaba en _solve_core."""
+        log_item = bloque_p[0]
+        m_dt = dt_list[0]
+        t_m = str(log_item.get('tipo', '')).strip().lower()
+        is_tipo_s = t_m in _TIPOS_S
+        is_tipo_e = t_m in _TIPOS_E
+
+        # Determinar si la marca corresponde a una Entrada (por rótulo o por cercanía horaria/fase)
+        es_entrada = is_tipo_e
+        if not es_entrada and not is_tipo_s:
+            if hora_ent_teo and hora_sal_teo:
+                m_phase = QuantumPhaseTopology.time_to_phase(m_dt)
+                p_ent = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
+                p_sal = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
+                d_ent = abs(QuantumPhaseTopology.circular_distance(p_ent, m_phase))
+                d_sal = abs(QuantumPhaseTopology.circular_distance(p_sal, m_phase))
+                if d_ent <= d_sal:
+                    es_entrada = True
+            elif hora_ent_teo and not hora_sal_teo:
+                es_entrada = True
+
+        # Evaluar si la jornada sigue en curso hoy
+        f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
+        jornada_vigente_hoy = (fecha == today_str) or (es_nocturno and today_str == f_sal_eval)
+        if jornada_vigente_hoy and es_entrada:
+            ventana_min = ventana_en_curso_min
+            sigue_en_curso = True
+            if hora_sal_teo:
+                try:
+                    h_sal_norm = str(hora_sal_teo).strip()[:5]
+                    dt_sal_teo = datetime.strptime(f"{f_sal_eval} {h_sal_norm}", "%Y-%m-%d %H:%M")
+                    if now_local >= dt_sal_teo + timedelta(minutes=ventana_min):
+                        sigue_en_curso = False
+                except Exception:
+                    pass
+            if sigue_en_curso:
+                res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
+                res['estado'] = 'EN_CURSO'
+                res['observaciones'] += 'Jornada en curso (falta salida).'
+                return res
+
+        if is_tipo_s:
+            res['hora_entrada_real'] = None
+            res['hora_salida_real'] = m_dt.strftime("%H:%M:%S")
+            res['estado'] = 'ANOMALIA'
+            res['observaciones'] += 'Solo una marcación de Salida registrada (falta entrada). '
+            return res
+        elif is_tipo_e:
+            res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
+            res['hora_salida_real'] = None
+            res['estado'] = 'ANOMALIA'
+            res['observaciones'] += 'Solo una marcación de Entrada registrada (falta salida). '
+            return res
+        elif hora_ent_teo and hora_sal_teo:
+            m_phase = QuantumPhaseTopology.time_to_phase(m_dt)
+            p_ent = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
+            p_sal = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
+            d_ent = abs(QuantumPhaseTopology.circular_distance(p_ent, m_phase))
+            d_sal = abs(QuantumPhaseTopology.circular_distance(p_sal, m_phase))
+            if d_ent <= d_sal:
+                res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
+                res['estado'] = 'ANOMALIA'
+                res['observaciones'] += 'Solo una marcación (falta salida). '
+            else:
+                res['hora_salida_real'] = m_dt.strftime("%H:%M:%S")
+                res['estado'] = 'ANOMALIA'
+                res['observaciones'] += 'Solo una marcación (falta entrada). '
+        else:
+            res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
+            res['estado'] = 'ANOMALIA'
+            res['observaciones'] += 'Solo una marcación registrada. '
+        return res
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2612,77 +2693,8 @@ class QuantumMatrixEngine:
 
         # 6. Caso 1 Marca Aislada (Anomalía o En Curso)
         if n_marks == 1:
-            log_item = bloque_p[0]
-            m_dt = dt_list[0]
-            t_m = str(log_item.get('tipo', '')).strip().lower()
-            is_tipo_s = t_m in _TIPOS_S
-            is_tipo_e = t_m in _TIPOS_E
-
-            # Determinar si la marca corresponde a una Entrada (por rótulo o por cercanía horaria/fase)
-            es_entrada = is_tipo_e
-            if not es_entrada and not is_tipo_s:
-                if hora_ent_teo and hora_sal_teo:
-                    m_phase = QuantumPhaseTopology.time_to_phase(m_dt)
-                    p_ent = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
-                    p_sal = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
-                    d_ent = abs(QuantumPhaseTopology.circular_distance(p_ent, m_phase))
-                    d_sal = abs(QuantumPhaseTopology.circular_distance(p_sal, m_phase))
-                    if d_ent <= d_sal:
-                        es_entrada = True
-                elif hora_ent_teo and not hora_sal_teo:
-                    es_entrada = True
-
-            # Evaluar si la jornada sigue en curso hoy
-            f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
-            jornada_vigente_hoy = (fecha == today_str) or (es_nocturno and today_str == f_sal_eval)
-            if jornada_vigente_hoy and es_entrada:
-                ventana_min = ventana_en_curso_min
-                sigue_en_curso = True
-                if hora_sal_teo:
-                    try:
-                        h_sal_norm = str(hora_sal_teo).strip()[:5]
-                        dt_sal_teo = datetime.strptime(f"{f_sal_eval} {h_sal_norm}", "%Y-%m-%d %H:%M")
-                        if now_local >= dt_sal_teo + timedelta(minutes=ventana_min):
-                            sigue_en_curso = False
-                    except Exception:
-                        pass
-                if sigue_en_curso:
-                    res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
-                    res['estado'] = 'EN_CURSO'
-                    res['observaciones'] += 'Jornada en curso (falta salida).'
-                    return res
-
-            if is_tipo_s:
-                res['hora_entrada_real'] = None
-                res['hora_salida_real'] = m_dt.strftime("%H:%M:%S")
-                res['estado'] = 'ANOMALIA'
-                res['observaciones'] += 'Solo una marcación de Salida registrada (falta entrada). '
-                return res
-            elif is_tipo_e:
-                res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
-                res['hora_salida_real'] = None
-                res['estado'] = 'ANOMALIA'
-                res['observaciones'] += 'Solo una marcación de Entrada registrada (falta salida). '
-                return res
-            elif hora_ent_teo and hora_sal_teo:
-                m_phase = QuantumPhaseTopology.time_to_phase(m_dt)
-                p_ent = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
-                p_sal = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
-                d_ent = abs(QuantumPhaseTopology.circular_distance(p_ent, m_phase))
-                d_sal = abs(QuantumPhaseTopology.circular_distance(p_sal, m_phase))
-                if d_ent <= d_sal:
-                    res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
-                    res['estado'] = 'ANOMALIA'
-                    res['observaciones'] += 'Solo una marcación (falta salida). '
-                else:
-                    res['hora_salida_real'] = m_dt.strftime("%H:%M:%S")
-                    res['estado'] = 'ANOMALIA'
-                    res['observaciones'] += 'Solo una marcación (falta entrada). '
-            else:
-                res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
-                res['estado'] = 'ANOMALIA'
-                res['observaciones'] += 'Solo una marcación registrada. '
-            return res
+            return cls._una_sola_marca(res, bloque_p, dt_list, fecha, es_nocturno, hora_ent_teo, hora_sal_teo, today_str,
+                                       now_local, ventana_en_curso_min)
 
         r_ent_dt, r_sal_dt, pausas_intermedias, horas_brutas = cls._varias_marcas(
             bloque_p, dt_list, res, is_bolsa, repetidas_seg, dt_ent_teo, dt_sal_teo, horas_teoricas, is_holiday, es_libre_dia,

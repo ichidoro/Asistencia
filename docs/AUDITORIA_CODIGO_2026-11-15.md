@@ -560,6 +560,17 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
   - En el de la parte 13, las marcas de ensayo ahora se crean con números fijos y muy altos: un número de marca chocaba con un minuto del resultado al taparlo. Es un ajuste del ensayo, no del código.
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
 
+**Avance (17-11-2026): paso 3d hecho.** Una sola marca (sección 6, 71 líneas) pasó a `_una_sola_marca`, con el mismo texto (cuatro espacios menos de sangría; comparado línea por línea).
+- Si el día es hoy y la marca es de Entrada, la jornada sigue en curso hasta la salida del horario más la ventana de espera. Si no, el día queda en anomalía: falta la entrada o la salida, según el rótulo de la marca o su cercanía al horario.
+- Ese bloque siempre terminaba devolviendo el resultado, así que `_solve_core` ahora devuelve lo que entrega `_una_sola_marca`.
+- `_solve_core` bajó a 508 líneas.
+- **Ensayos:**
+  - Con el respaldo (reloj fijo al 16-11): **idéntico**.
+  - Ese ensayo nunca pasa por «jornada en curso hoy», porque su reloj queda después del último día. Por eso se repitió con el reloj fijo al 14-11 a las 10:00, el único día del respaldo con una persona que solo tiene la Entrada. Con el código anterior y con el nuevo: **idéntico**, con ese día en curso.
+  - Guardando en la copia de práctica, los de las partes 10, 13 y 14: **idénticos**.
+  - El de la parte 12 dio distinto porque pasaron las horas: a las 17:54 el día de hoy, sin marcas, pasó a inasistencia. Se rehízo su referencia en ese momento con el código anterior y dio **idéntico**.
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan

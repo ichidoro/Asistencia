@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-17T13:06:46+00:00",
- "publicado": "2026-11-17T13:06:47+00:00",
- "commit": "f508db8",
+ "armado": "2026-11-17T20:57:08+00:00",
+ "publicado": "2026-11-17T20:57:09+00:00",
+ "commit": "e3cd725",
  "archivos_leidos": 261,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -104,7 +104,7 @@
   "backend/services/libreta_revision.py": "294cb9456d40a056e92a2e34ea04e7e7",
   "backend/services/notification_service.py": "ec4a6ab1a706736af792a803086c2d1c",
   "backend/services/productos_4_service.py": "2c545f55c1d8513b4615edccb5c22eec",
-  "backend/services/quantum_matrix_engine.py": "9515a8a89fa50abf0de7097095d0cd9e",
+  "backend/services/quantum_matrix_engine.py": "7cec850c7f2828861ae1dc1473d23ee2",
   "backend/services/recalculo_service.py": "b07de162fbe723d0ed90b34e9e8e81d3",
   "backend/services/reglas_marcas_corridas.py": "c00ea2e805f0c51dae6b61120a5eb64b",
   "backend/services/reglas_marcas_def.py": "802ccf1378d8012b3ced181d9c119e80",
