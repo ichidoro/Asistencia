@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1439,
+  "total": 1440,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -141,7 +141,7 @@
    {
     "funcion": "_solve_core",
     "archivo": "backend/services/quantum_matrix_engine.py",
-    "lineas": 644
+    "lineas": 577
    },
    {
     "funcion": "_generate_excel_workbook",
@@ -212,7 +212,7 @@
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
-   "lineas": 2840
+   "lineas": 2854
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",

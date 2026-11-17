@@ -549,6 +549,17 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - Una revisión de nombres confirmó que no falta ninguna variable.
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
 
+**Avance (17-11-2026): paso 3c hecho.** Colación y permisos (secciones 8 y 9, 69 líneas) pasó a `_colacion_y_permisos`, con el mismo texto (comparado línea por línea).
+- Decide cuál pausa es la colación (la más cercana a la colación del horario o, si no tiene, la más larga) y cuáles son permisos, y descuenta la colación (la mayor entre la pactada y la real).
+- Anota en el mismo resultado la colación, los permisos, las horas trabajadas y el exceso de colación, y devuelve las horas netas.
+- `_solve_core` bajó a 577 líneas.
+- **Ensayos:**
+  - Con el respaldo (reloj fijo): **idéntico**.
+  - Guardando en la copia de práctica, los de las partes 10 y 14: **idénticos**.
+  - Los de las partes 12 y 13 dieron distinto contra la referencia del 16-11, porque calculan «hasta hoy»: el 16-11 pasó a ser un día vencido. Se rehízo la referencia del 17-11 con el código anterior y, contra ella, los dos dieron **idénticos**.
+  - En el de la parte 13, las marcas de ensayo ahora se crean con números fijos y muy altos: un número de marca chocaba con un minuto del resultado al taparlo. Es un ajuste del ensayo, no del código.
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan

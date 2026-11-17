@@ -2192,6 +2192,87 @@ class QuantumMatrixEngine:
         return r_ent_dt, r_sal_dt, pausas_intermedias, horas_brutas
 
 
+    @staticmethod
+    def _colacion_y_permisos(res: Dict[str, Any], pausas_intermedias, horas_brutas: float, t_cfg: Dict[str, Any],
+                             regla_dia, dt_ent_teo, dt_sal_teo, umbral_col: float, descuento_col_auto: bool,
+                             tolerancia_exceso_col: int, tipo_prog: str) -> float:
+        """Secciones 8 y 9 de _solve_core: cuál pausa es la colación (la más cercana a la colación del horario, o la más
+        larga) y cuáles son permisos, y el descuento de colación (el mayor entre la pactada y la real). Anota en el
+        resultado que recibe la colación, los permisos, las horas trabajadas y el exceso de colación. Devuelve las horas
+        netas. Mismo código que estaba en _solve_core."""
+        # ─────────────────────────────────────────────────────────────────────
+        # 8. DISCRIMINACIÓN DE PAUSAS: COLACIÓN VS PERMISOS
+        # ─────────────────────────────────────────────────────────────────────
+        minutos_col_real = 0.0
+        minutos_permisos_detectados = 0.0
+
+        if pausas_intermedias:
+            t_col_pactado_target = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
+            # Duración que se busca: la colación del horario asignado (obligatoria al guardar un horario). Si un horario
+            # antiguo no la tuviera, la colación es la pausa más larga: no hay valor de referencia aparte (orden del dueño, 27-10-2026).
+            target_col = float(t_col_pactado_target) if t_col_pactado_target > 0 else None
+
+            # ¿Cuál pausa es la colación? Lo decide la regla del día (asistente de Reglas de marcaciones):
+            # CORTE_UMBRAL = las pausas que terminan antes de la ENTRADA del horario más su «Mínimo para descontar»
+            # son permiso y la colación se busca entre las demás; si ninguna termina después (o el mínimo es 0),
+            # se decide entre todas, como siempre. La hora de corte sale solo del horario: aquí no hay números.
+            candidatas = pausas_intermedias
+            if (str((regla_dia or {}).get('eleccion_colacion') or '') == 'CORTE_UMBRAL'
+                    and dt_ent_teo is not None and umbral_col > 0 and len(pausas_intermedias) > 1):
+                corte_col = dt_ent_teo + timedelta(hours=umbral_col)
+                despues_corte = [p for p in pausas_intermedias if p[1] > corte_col]
+                if despues_corte and len(despues_corte) < len(pausas_intermedias):
+                    candidatas = despues_corte
+                    res['observaciones'] += (f"Regla de marcaciones: las pausas que terminan antes de las "
+                                             f"{corte_col.strftime('%H:%M')} (ENTRADA del horario más su mínimo) "
+                                             f"cuentan como permiso. ")
+            # El intervalo intermedio más cercano a la duración de colación se asigna a colación;
+            # sin ninguna duración de referencia configurada, la pausa más larga.
+            if target_col:
+                mejor_par_col = min(candidatas, key=lambda p: abs(p[2] - target_col))
+            else:
+                mejor_par_col = max(candidatas, key=lambda p: p[2])
+            
+            res['hora_salida_colacion'] = mejor_par_col[0].strftime("%H:%M:%S")
+            res['hora_entrada_colacion'] = mejor_par_col[1].strftime("%H:%M:%S")
+            minutos_col_real = mejor_par_col[2]
+            res['minutos_colacion_real'] = int(round(minutos_col_real))
+
+            # Las demás pausas intermedias corresponden a Permisos / Salidas Intermedias (si ocurrieron dentro del horario programado)
+            pausas_permisos = [
+                p for p in pausas_intermedias 
+                if p != mejor_par_col and (not dt_sal_teo or p[0] < dt_sal_teo) and (not dt_ent_teo or p[1] > dt_ent_teo)
+            ]
+            if pausas_permisos:
+                minutos_permisos_detectados = sum(p[2] for p in pausas_permisos)
+                res['minutos_permisos_detectados'] = int(round(minutos_permisos_detectados))
+                res['hora_inicio_permiso'] = pausas_permisos[0][0].strftime("%H:%M:%S")
+                res['hora_termino_permiso'] = pausas_permisos[-1][1].strftime("%H:%M:%S")
+                res['tiene_permiso'] = 1
+                res['observaciones'] += f"Permiso intermedio detectado ({int(round(minutos_permisos_detectados))} min). "
+
+        # 9. Operador Asimétrico Unidireccional de Colación: Descuento = max(T_pactado, T_real)
+        t_col_pactado = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
+        horas_netas, min_col_ap, min_exc_col = AutoMealOperator.apply_meal_deduction(
+            horas_presenciales_brutas=horas_brutas,
+            minutos_colacion_real=minutos_col_real,
+            minutos_colacion_pactada=t_col_pactado,
+            descuento_colacion_auto=descuento_col_auto,
+            umbral_horas_colacion=umbral_col,
+            tolerancia_exceso_minutos=tolerancia_exceso_col,
+            umbral_con_pausa=(tipo_prog == 'CICLO_INTELIGENTE'),
+        )
+
+        res['horas_trabajadas'] = round(horas_netas, DECIMALES_HORAS)
+        res['minutos_colacion'] = min_col_ap
+        res['minutos_colacion_auto'] = t_col_pactado if (descuento_col_auto or t_col_pactado > 0) else 0
+        res['minutos_exceso_colacion'] = min_exc_col
+        if min_exc_col > 0:
+            res['observaciones'] += f"Exceso de colacion detectado ({min_exc_col} min). "
+
+        return horas_netas
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2607,75 +2688,8 @@ class QuantumMatrixEngine:
             bloque_p, dt_list, res, is_bolsa, repetidas_seg, dt_ent_teo, dt_sal_teo, horas_teoricas, is_holiday, es_libre_dia,
             anclaje_entrada, anclaje_salida)
 
-        # ─────────────────────────────────────────────────────────────────────
-        # 8. DISCRIMINACIÓN DE PAUSAS: COLACIÓN VS PERMISOS
-        # ─────────────────────────────────────────────────────────────────────
-        minutos_col_real = 0.0
-        minutos_permisos_detectados = 0.0
-
-        if pausas_intermedias:
-            t_col_pactado_target = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
-            # Duración que se busca: la colación del horario asignado (obligatoria al guardar un horario). Si un horario
-            # antiguo no la tuviera, la colación es la pausa más larga: no hay valor de referencia aparte (orden del dueño, 27-10-2026).
-            target_col = float(t_col_pactado_target) if t_col_pactado_target > 0 else None
-
-            # ¿Cuál pausa es la colación? Lo decide la regla del día (asistente de Reglas de marcaciones):
-            # CORTE_UMBRAL = las pausas que terminan antes de la ENTRADA del horario más su «Mínimo para descontar»
-            # son permiso y la colación se busca entre las demás; si ninguna termina después (o el mínimo es 0),
-            # se decide entre todas, como siempre. La hora de corte sale solo del horario: aquí no hay números.
-            candidatas = pausas_intermedias
-            if (str((regla_dia or {}).get('eleccion_colacion') or '') == 'CORTE_UMBRAL'
-                    and dt_ent_teo is not None and umbral_col > 0 and len(pausas_intermedias) > 1):
-                corte_col = dt_ent_teo + timedelta(hours=umbral_col)
-                despues_corte = [p for p in pausas_intermedias if p[1] > corte_col]
-                if despues_corte and len(despues_corte) < len(pausas_intermedias):
-                    candidatas = despues_corte
-                    res['observaciones'] += (f"Regla de marcaciones: las pausas que terminan antes de las "
-                                             f"{corte_col.strftime('%H:%M')} (ENTRADA del horario más su mínimo) "
-                                             f"cuentan como permiso. ")
-            # El intervalo intermedio más cercano a la duración de colación se asigna a colación;
-            # sin ninguna duración de referencia configurada, la pausa más larga.
-            if target_col:
-                mejor_par_col = min(candidatas, key=lambda p: abs(p[2] - target_col))
-            else:
-                mejor_par_col = max(candidatas, key=lambda p: p[2])
-            
-            res['hora_salida_colacion'] = mejor_par_col[0].strftime("%H:%M:%S")
-            res['hora_entrada_colacion'] = mejor_par_col[1].strftime("%H:%M:%S")
-            minutos_col_real = mejor_par_col[2]
-            res['minutos_colacion_real'] = int(round(minutos_col_real))
-
-            # Las demás pausas intermedias corresponden a Permisos / Salidas Intermedias (si ocurrieron dentro del horario programado)
-            pausas_permisos = [
-                p for p in pausas_intermedias 
-                if p != mejor_par_col and (not dt_sal_teo or p[0] < dt_sal_teo) and (not dt_ent_teo or p[1] > dt_ent_teo)
-            ]
-            if pausas_permisos:
-                minutos_permisos_detectados = sum(p[2] for p in pausas_permisos)
-                res['minutos_permisos_detectados'] = int(round(minutos_permisos_detectados))
-                res['hora_inicio_permiso'] = pausas_permisos[0][0].strftime("%H:%M:%S")
-                res['hora_termino_permiso'] = pausas_permisos[-1][1].strftime("%H:%M:%S")
-                res['tiene_permiso'] = 1
-                res['observaciones'] += f"Permiso intermedio detectado ({int(round(minutos_permisos_detectados))} min). "
-
-        # 9. Operador Asimétrico Unidireccional de Colación: Descuento = max(T_pactado, T_real)
-        t_col_pactado = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
-        horas_netas, min_col_ap, min_exc_col = AutoMealOperator.apply_meal_deduction(
-            horas_presenciales_brutas=horas_brutas,
-            minutos_colacion_real=minutos_col_real,
-            minutos_colacion_pactada=t_col_pactado,
-            descuento_colacion_auto=descuento_col_auto,
-            umbral_horas_colacion=umbral_col,
-            tolerancia_exceso_minutos=tolerancia_exceso_col,
-            umbral_con_pausa=(tipo_prog == 'CICLO_INTELIGENTE'),
-        )
-
-        res['horas_trabajadas'] = round(horas_netas, DECIMALES_HORAS)
-        res['minutos_colacion'] = min_col_ap
-        res['minutos_colacion_auto'] = t_col_pactado if (descuento_col_auto or t_col_pactado > 0) else 0
-        res['minutos_exceso_colacion'] = min_exc_col
-        if min_exc_col > 0:
-            res['observaciones'] += f"Exceso de colacion detectado ({min_exc_col} min). "
+        horas_netas = cls._colacion_y_permisos(res, pausas_intermedias, horas_brutas, t_cfg, regla_dia, dt_ent_teo, dt_sal_teo,
+                                               umbral_col, descuento_col_auto, tolerancia_exceso_col, tipo_prog)
 
         # ─────────────────────────────────────────────────────────────────────
         # 10. SEGREGACIÓN ESTRICTA DE JORNADA_ESPECIAL
