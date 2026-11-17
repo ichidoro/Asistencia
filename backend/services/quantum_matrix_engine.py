@@ -2506,6 +2506,91 @@ class QuantumMatrixEngine:
                         res['estado'] = 'OK'
 
 
+    @staticmethod
+    def _reglas_de_marcaciones(bloque_p, segment_res: Dict[str, Any], marcas_disponibles: List[Dict[str, Any]],
+                               marcas_consumidas_ids, fecha: str, dt_fecha: datetime, es_nocturno: bool,
+                               es_libre_dia: bool, horas_teoricas: float, is_holiday: bool, hora_ent_teo, hora_sal_teo,
+                               is_bolsa: bool, tipo_prog: str, descuento_col_auto: bool, minutos_col_auto: int):
+        """Parte de la sección 4 de _solve_core: las reglas de marcaciones (pestaña de Configuración). Arma la secuencia
+        del día con sus marcas, busca la regla encendida para esa secuencia y aplica su lectura (extremos, alternada u
+        orden) y su colación. Solo Ciclo Inteligente, días con turno, sin +2 ni emergencia, y jornadas ya terminadas.
+        Devuelve (bloque_p, descuento_col_auto, minutos_col_auto, obs_regla, regla_dia, reglas_marcas, secuencia_dia). Mismo código que estaba en _solve_core.
+        """
+        # ── Reglas de marcaciones (pestaña de Configuración) ─────────────────
+        # Solo Ciclo Inteligente, solo reglas ENCENDIDAS y solo jornadas ya
+        # terminadas (nunca el día en curso). Bolsa Flexible, los días con
+        # bloques extra (+2) o emergencia y las secuencias sin regla encendida
+        # conservan la lógica de siempre. La secuencia del día se arma con TODAS
+        # las marcas que el día consume (igual que la pestaña las cuenta), y la
+        # lectura por extremos no cambia qué marcas quedan consumidas.
+        regla_dia = None
+        secuencia_dia = ''
+        obs_regla = ''
+        reglas_marcas = REGLAS_MARCAS_ENSAYO.get()
+        if reglas_marcas is None:
+            reglas_marcas = REGLAS_MARCAS_ACTIVAS
+        # Las reglas son para días con turno: un día hábil o un feriado en que la persona tenía turno (se usa su horario;
+        # decisión del dueño, 08-11-2026). Un día libre de su turno no tiene horario y queda fuera.
+        con_turno = not es_libre_dia and (horas_teoricas > 0 or bool(is_holiday and hora_ent_teo and hora_sal_teo))
+        if (reglas_marcas and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE' and con_turno
+                and bloque_p and not segment_res['bloques_extras'] and not segment_res['emergencia_detectada']):
+            hoy_regla = _get_now_local().strftime("%Y-%m-%d")
+            fin_jornada = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
+            if fin_jornada < hoy_regla:
+                por_id = {l.get('id'): l for l in marcas_disponibles if l.get('id') is not None}
+                # Una ENTRADA suelta es otra jornada (se revisa aparte): no cuenta en la secuencia de esta jornada.
+                sueltas_ids = {l.get('id') for l in segment_res['marcas_sueltas']}
+                consumidos_dia = sorted(
+                    (por_id[i] for i in marcas_consumidas_ids if i in por_id and i not in sueltas_ids),
+                    key=lambda l: str(l.get('fecha_hora', ''))
+                )
+                letras = ''.join(
+                    'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E
+                    else ('S' if str(l.get('tipo', '')).strip().lower() in _TIPOS_S else '?')
+                    for l in consumidos_dia
+                )
+                if letras and '?' not in letras:
+                    secuencia_dia = letras
+                    regla_dia = reglas_marcas.get(secuencia_dia)
+                if regla_dia:
+                    sec_fmt = secuencia_en_palabras(secuencia_dia)
+                    marcador = f"{MARCA_REVISION_REGLA}{sec_fmt}). "
+                    pide_solo_revision = (regla_dia.get('lectura') == 'NINGUNA'
+                                          or regla_dia.get('accion') == 'SOLO_REVISA')
+                    if not pide_solo_revision:
+                        if regla_dia.get('lectura') in ('EXTREMOS', 'ALTERNADA', 'ORDEN'):
+                            alternada = regla_dia.get('lectura') == 'ALTERNADA'
+                            por_orden = regla_dia.get('lectura') == 'ORDEN'
+                            if por_orden:
+                                nuevo_bloque = _aplicar_orden(consumidos_dia, str(regla_dia.get('orden_marcas') or ''))
+                            elif alternada:
+                                nuevo_bloque = _aplicar_alternada(consumidos_dia)
+                            else:
+                                nuevo_bloque = _aplicar_extremos(consumidos_dia, str(regla_dia.get('colacion') or ''))
+                            def _letras(ls):
+                                return [(l.get('id'), 'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E else 'S')
+                                        for l in ls]
+                            # Si la lectura por extremos deja las marcas tal cual (p. ej. ENTRADA · SALIDA),
+                            # no hay nada que cambiar ni que anotar: sigue el camino de siempre.
+                            if _letras(nuevo_bloque) != _letras(consumidos_dia):
+                                bloque_p = nuevo_bloque
+                                orden_txt = ' · '.join({'E': 'ENTRADA', 'S': 'SALIDA'}.get(c, 'no se usa')
+                                                       for c in str(regla_dia.get('orden_marcas') or ''))
+                                obs_regla += (f"Regla de marcaciones ({sec_fmt}): se leyó en el orden indicado en la "
+                                              f"regla ({orden_txt}). " if por_orden else
+                                              f"Regla de marcaciones ({sec_fmt}): se leyó alternando ENTRADA y "
+                                              f"SALIDA por hora, como propone el sistema. " if alternada else
+                                              f"Regla de marcaciones ({sec_fmt}): se leyó con la primera marca "
+                                              f"como ENTRADA y la última como SALIDA. ")
+                        if regla_dia.get('colacion') == 'NINGUNA':
+                            descuento_col_auto = False
+                            minutos_col_auto = 0
+                        if regla_dia.get('accion') == 'CALCULA_Y_REVISA':
+                            obs_regla += marcador
+
+        return bloque_p, descuento_col_auto, minutos_col_auto, obs_regla, regla_dia, reglas_marcas, secuencia_dia
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2616,77 +2701,9 @@ class QuantumMatrixEngine:
         bloque_p = segment_res['bloque_principal']
         marcas_consumidas_ids = list(set(segment_res['marcas_consumidas_ids']))
 
-        # ── Reglas de marcaciones (pestaña de Configuración) ─────────────────
-        # Solo Ciclo Inteligente, solo reglas ENCENDIDAS y solo jornadas ya
-        # terminadas (nunca el día en curso). Bolsa Flexible, los días con
-        # bloques extra (+2) o emergencia y las secuencias sin regla encendida
-        # conservan la lógica de siempre. La secuencia del día se arma con TODAS
-        # las marcas que el día consume (igual que la pestaña las cuenta), y la
-        # lectura por extremos no cambia qué marcas quedan consumidas.
-        regla_dia = None
-        secuencia_dia = ''
-        obs_regla = ''
-        reglas_marcas = REGLAS_MARCAS_ENSAYO.get()
-        if reglas_marcas is None:
-            reglas_marcas = REGLAS_MARCAS_ACTIVAS
-        # Las reglas son para días con turno: un día hábil o un feriado en que la persona tenía turno (se usa su horario;
-        # decisión del dueño, 08-11-2026). Un día libre de su turno no tiene horario y queda fuera.
-        con_turno = not es_libre_dia and (horas_teoricas > 0 or bool(is_holiday and hora_ent_teo and hora_sal_teo))
-        if (reglas_marcas and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE' and con_turno
-                and bloque_p and not segment_res['bloques_extras'] and not segment_res['emergencia_detectada']):
-            hoy_regla = _get_now_local().strftime("%Y-%m-%d")
-            fin_jornada = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
-            if fin_jornada < hoy_regla:
-                por_id = {l.get('id'): l for l in marcas_disponibles if l.get('id') is not None}
-                # Una ENTRADA suelta es otra jornada (se revisa aparte): no cuenta en la secuencia de esta jornada.
-                sueltas_ids = {l.get('id') for l in segment_res['marcas_sueltas']}
-                consumidos_dia = sorted(
-                    (por_id[i] for i in marcas_consumidas_ids if i in por_id and i not in sueltas_ids),
-                    key=lambda l: str(l.get('fecha_hora', ''))
-                )
-                letras = ''.join(
-                    'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E
-                    else ('S' if str(l.get('tipo', '')).strip().lower() in _TIPOS_S else '?')
-                    for l in consumidos_dia
-                )
-                if letras and '?' not in letras:
-                    secuencia_dia = letras
-                    regla_dia = reglas_marcas.get(secuencia_dia)
-                if regla_dia:
-                    sec_fmt = secuencia_en_palabras(secuencia_dia)
-                    marcador = f"{MARCA_REVISION_REGLA}{sec_fmt}). "
-                    pide_solo_revision = (regla_dia.get('lectura') == 'NINGUNA'
-                                          or regla_dia.get('accion') == 'SOLO_REVISA')
-                    if not pide_solo_revision:
-                        if regla_dia.get('lectura') in ('EXTREMOS', 'ALTERNADA', 'ORDEN'):
-                            alternada = regla_dia.get('lectura') == 'ALTERNADA'
-                            por_orden = regla_dia.get('lectura') == 'ORDEN'
-                            if por_orden:
-                                nuevo_bloque = _aplicar_orden(consumidos_dia, str(regla_dia.get('orden_marcas') or ''))
-                            elif alternada:
-                                nuevo_bloque = _aplicar_alternada(consumidos_dia)
-                            else:
-                                nuevo_bloque = _aplicar_extremos(consumidos_dia, str(regla_dia.get('colacion') or ''))
-                            def _letras(ls):
-                                return [(l.get('id'), 'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E else 'S')
-                                        for l in ls]
-                            # Si la lectura por extremos deja las marcas tal cual (p. ej. ENTRADA · SALIDA),
-                            # no hay nada que cambiar ni que anotar: sigue el camino de siempre.
-                            if _letras(nuevo_bloque) != _letras(consumidos_dia):
-                                bloque_p = nuevo_bloque
-                                orden_txt = ' · '.join({'E': 'ENTRADA', 'S': 'SALIDA'}.get(c, 'no se usa')
-                                                       for c in str(regla_dia.get('orden_marcas') or ''))
-                                obs_regla += (f"Regla de marcaciones ({sec_fmt}): se leyó en el orden indicado en la "
-                                              f"regla ({orden_txt}). " if por_orden else
-                                              f"Regla de marcaciones ({sec_fmt}): se leyó alternando ENTRADA y "
-                                              f"SALIDA por hora, como propone el sistema. " if alternada else
-                                              f"Regla de marcaciones ({sec_fmt}): se leyó con la primera marca "
-                                              f"como ENTRADA y la última como SALIDA. ")
-                        if regla_dia.get('colacion') == 'NINGUNA':
-                            descuento_col_auto = False
-                            minutos_col_auto = 0
-                        if regla_dia.get('accion') == 'CALCULA_Y_REVISA':
-                            obs_regla += marcador
+        bloque_p, descuento_col_auto, minutos_col_auto, obs_regla, regla_dia, reglas_marcas, secuencia_dia = cls._reglas_de_marcaciones(
+            bloque_p, segment_res, marcas_disponibles, marcas_consumidas_ids, fecha, dt_fecha, es_nocturno, es_libre_dia,
+            horas_teoricas, is_holiday, hora_ent_teo, hora_sal_teo, is_bolsa, tipo_prog, descuento_col_auto, minutos_col_auto)
 
         # Resultado base
         res: Dict[str, Any] = {

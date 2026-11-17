@@ -588,6 +588,21 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 - **Ensayos:** con el respaldo, **idéntico**. Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos** (referencia hecha justo antes con el código anterior).
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
 
+**La sección 4 se separa en dos pasos (17-11-2026).** Tiene partes distintas:
+- Las reglas de marcaciones (paso 3g).
+- El día sin marcas (paso 3h).
+- La segmentación en bloques y las observaciones del resultado, que son cortas y se quedan en `_solve_core`.
+
+**Avance (17-11-2026): paso 3g hecho.** Las reglas de marcaciones (71 líneas) pasaron a `_reglas_de_marcaciones`, con el mismo texto (comparado línea por línea).
+- Arma la secuencia del día, busca la regla encendida y aplica su lectura y su colación.
+- Devuelve las marcas a usar, la colación, las observaciones de la regla, la regla y la secuencia del día.
+- La regla en ensayo de la pantalla Reglas de marcaciones se sigue leyendo igual (variable de contexto).
+- `_solve_core` bajó a 313 líneas.
+- **Ensayos:**
+  - Con el respaldo: **idéntico**. La referencia tiene 304 observaciones de reglas de marcaciones, así que las reglas se probaron con casos reales.
+  - Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**.
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan

@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1443,
+  "total": 1444,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -159,14 +159,14 @@
     "lineas": 451
    },
    {
-    "funcion": "_solve_core",
-    "archivo": "backend/services/quantum_matrix_engine.py",
-    "lineas": 381
-   },
-   {
     "funcion": "_calcular_filas",
     "archivo": "backend/services/report_service.py",
     "lineas": 316
+   },
+   {
+    "funcion": "_solve_core",
+    "archivo": "backend/services/quantum_matrix_engine.py",
+    "lineas": 313
    },
    {
     "funcion": "get_bulk_context",
@@ -212,7 +212,7 @@
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
-   "lineas": 2891
+   "lineas": 2908
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",
