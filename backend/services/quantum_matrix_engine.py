@@ -2354,6 +2354,86 @@ class QuantumMatrixEngine:
         return res
 
 
+    @staticmethod
+    def _atrasos_y_salidas(res: Dict[str, Any], r_ent_dt: datetime, r_sal_dt: datetime, hora_ent_teo, hora_sal_teo,
+                           dt_ent_teo, dt_sal_teo, anclaje_entrada: int, anclaje_salida: int, is_bolsa: bool,
+                           todos_ciclos_dia, tolerancia_alerta: int, tolerancia_descuento: int,
+                           tolerancia_salida: int) -> None:
+        """Sección 11 de _solve_core: atraso y salida adelantada contra el horario del día, con las tolerancias del turno
+        y la «jornada corrida» (llegó tarde y se quedó lo mismo, o llegó antes y salió antes). Anota en el resultado que
+        recibe. Mismo código que estaba en _solve_core."""
+        # ─────────────────────────────────────────────────────────────────────
+        # 11. EJE DISCIPLINARIO (Atrasos y Salidas Adelantadas con Anclajes de UI)
+        # Las tolerancias salen solo del turno (Tolerancia Atraso Real, Tolerancia Atraso Visual y Tolerancia
+        # Salida Adelantada); con 0, todo atraso o salida antes de la hora se marca, aunque sean segundos.
+        # ─────────────────────────────────────────────────────────────────────
+        diff_ent = 0.0
+        diff_sal = 0.0
+        llegada_temprana = 0.0
+        salida_tardia = 0.0
+
+        # Se mide con la fecha y la hora, no en un reloj de 24 h: llegar a las 07:00 a un ciclo que empieza a las 23:00 es llegar
+        # 16 h antes, no 8 h tarde.
+        if hora_ent_teo:
+            if dt_ent_teo is not None:
+                delta_in = (r_ent_dt - dt_ent_teo).total_seconds() / 60.0
+            else:
+                delta_in = QuantumPhaseTopology.circular_distance(QuantumPhaseTopology.time_to_phase(hora_ent_teo),
+                                                                  QuantumPhaseTopology.time_to_phase(r_ent_dt))
+
+            if delta_in > 0.0:
+                diff_ent = delta_in
+            elif delta_in < 0.0:
+                anticip_in = abs(delta_in)
+                if anclaje_entrada > 0 and anticip_in > anclaje_entrada:
+                    res['observaciones'] += f"Llegada anticipada {res['hora_entrada_real'][:5]} ({int(anticip_in)} min). "
+                # Fuera del «Rango anticipación entrada» la marca no se ajusta: esos minutos se cuentan como trabajados.
+                if anticip_in > anclaje_entrada:
+                    llegada_temprana = anticip_in
+
+        if hora_sal_teo:
+            if dt_sal_teo is not None:
+                delta_out = (dt_sal_teo - r_sal_dt).total_seconds() / 60.0
+            else:
+                delta_out = QuantumPhaseTopology.circular_distance(QuantumPhaseTopology.time_to_phase(r_sal_dt),
+                                                                   QuantumPhaseTopology.time_to_phase(hora_sal_teo))
+
+            if delta_out > 0.0:
+                diff_sal = delta_out
+            elif delta_out < 0.0:
+                extra_out = abs(delta_out)
+                # Fuera del «Rango demora salida» la marca no se ajusta a la hora del horario: esos minutos se cuentan.
+                if extra_out > anclaje_salida:
+                    salida_tardia = extra_out
+                if anclaje_salida > 0 and extra_out > anclaje_salida:
+                    res['observaciones'] += f"Salida extendida {res['hora_salida_real'][:5]} (+{int(extra_out)} min). "
+
+        # En un horario con dos o más ciclos ese día el jefe puede pedir entrar entre dos ciclos: si llegó después de la hora de
+        # su ciclo y se quedó después de la salida al menos lo mismo, la jornada se corrió y no es atraso; si no cumple las horas,
+        # queda la deuda. En los demás horarios llegar tarde es siempre atraso (orden del dueño, 27-10-2026).
+        ciclos_del_dia = [c for c in (todos_ciclos_dia or []) if c and not _flag(c.get('es_libre')) and c.get('hora_entrada')]
+        if not is_bolsa and diff_ent > tolerancia_descuento and len(ciclos_del_dia) >= 2 and salida_tardia >= diff_ent:
+            res['observaciones'] += (f"Jornada corrida: llegó {int(round(diff_ent))} min después de su horario y salió "
+                                     f"{int(round(salida_tardia))} min después; no es atraso. ")
+        elif diff_ent > tolerancia_descuento:
+            res['minutos_atraso'] = round(diff_ent, 2)
+            res['tiene_atraso'] = 1
+            res['estado'] = 'ATRASO'
+        elif diff_ent > tolerancia_alerta:
+            res['alerta_atraso'] = True
+
+        # Llegó antes de su ciclo y salió antes: la jornada se corrió (el jefe puede pedir entrar antes o entre dos ciclos).
+        # Solo es salida adelantada si salió más temprano de lo que llegó temprano; las horas no cambian (orden del dueño, 27-10-2026).
+        if not is_bolsa and tolerancia_salida < diff_sal <= llegada_temprana:   # Bolsa Flexible no tiene horario fijo
+            res['observaciones'] += (f"Jornada corrida: llegó {int(round(llegada_temprana))} min antes de su horario y salió "
+                                     f"{int(round(diff_sal))} min antes; no es salida adelantada. ")
+        elif diff_sal > tolerancia_salida:
+            res['minutos_salida_adelantada'] = round(diff_sal, 2)
+            res['tiene_salida_adelantada'] = 1
+            if res['estado'] == 'OK':
+                res['estado'] = 'SALIDA_ADELANTADA'
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2728,76 +2808,9 @@ class QuantumMatrixEngine:
             )
             return res
 
-        # ─────────────────────────────────────────────────────────────────────
-        # 11. EJE DISCIPLINARIO (Atrasos y Salidas Adelantadas con Anclajes de UI)
-        # Las tolerancias salen solo del turno (Tolerancia Atraso Real, Tolerancia Atraso Visual y Tolerancia
-        # Salida Adelantada); con 0, todo atraso o salida antes de la hora se marca, aunque sean segundos.
-        # ─────────────────────────────────────────────────────────────────────
-        diff_ent = 0.0
-        diff_sal = 0.0
-        llegada_temprana = 0.0
-        salida_tardia = 0.0
-
-        # Se mide con la fecha y la hora, no en un reloj de 24 h: llegar a las 07:00 a un ciclo que empieza a las 23:00 es llegar
-        # 16 h antes, no 8 h tarde.
-        if hora_ent_teo:
-            if dt_ent_teo is not None:
-                delta_in = (r_ent_dt - dt_ent_teo).total_seconds() / 60.0
-            else:
-                delta_in = QuantumPhaseTopology.circular_distance(QuantumPhaseTopology.time_to_phase(hora_ent_teo),
-                                                                  QuantumPhaseTopology.time_to_phase(r_ent_dt))
-
-            if delta_in > 0.0:
-                diff_ent = delta_in
-            elif delta_in < 0.0:
-                anticip_in = abs(delta_in)
-                if anclaje_entrada > 0 and anticip_in > anclaje_entrada:
-                    res['observaciones'] += f"Llegada anticipada {res['hora_entrada_real'][:5]} ({int(anticip_in)} min). "
-                # Fuera del «Rango anticipación entrada» la marca no se ajusta: esos minutos se cuentan como trabajados.
-                if anticip_in > anclaje_entrada:
-                    llegada_temprana = anticip_in
-
-        if hora_sal_teo:
-            if dt_sal_teo is not None:
-                delta_out = (dt_sal_teo - r_sal_dt).total_seconds() / 60.0
-            else:
-                delta_out = QuantumPhaseTopology.circular_distance(QuantumPhaseTopology.time_to_phase(r_sal_dt),
-                                                                   QuantumPhaseTopology.time_to_phase(hora_sal_teo))
-
-            if delta_out > 0.0:
-                diff_sal = delta_out
-            elif delta_out < 0.0:
-                extra_out = abs(delta_out)
-                # Fuera del «Rango demora salida» la marca no se ajusta a la hora del horario: esos minutos se cuentan.
-                if extra_out > anclaje_salida:
-                    salida_tardia = extra_out
-                if anclaje_salida > 0 and extra_out > anclaje_salida:
-                    res['observaciones'] += f"Salida extendida {res['hora_salida_real'][:5]} (+{int(extra_out)} min). "
-
-        # En un horario con dos o más ciclos ese día el jefe puede pedir entrar entre dos ciclos: si llegó después de la hora de
-        # su ciclo y se quedó después de la salida al menos lo mismo, la jornada se corrió y no es atraso; si no cumple las horas,
-        # queda la deuda. En los demás horarios llegar tarde es siempre atraso (orden del dueño, 27-10-2026).
-        ciclos_del_dia = [c for c in (todos_ciclos_dia or []) if c and not _flag(c.get('es_libre')) and c.get('hora_entrada')]
-        if not is_bolsa and diff_ent > tolerancia_descuento and len(ciclos_del_dia) >= 2 and salida_tardia >= diff_ent:
-            res['observaciones'] += (f"Jornada corrida: llegó {int(round(diff_ent))} min después de su horario y salió "
-                                     f"{int(round(salida_tardia))} min después; no es atraso. ")
-        elif diff_ent > tolerancia_descuento:
-            res['minutos_atraso'] = round(diff_ent, 2)
-            res['tiene_atraso'] = 1
-            res['estado'] = 'ATRASO'
-        elif diff_ent > tolerancia_alerta:
-            res['alerta_atraso'] = True
-
-        # Llegó antes de su ciclo y salió antes: la jornada se corrió (el jefe puede pedir entrar antes o entre dos ciclos).
-        # Solo es salida adelantada si salió más temprano de lo que llegó temprano; las horas no cambian (orden del dueño, 27-10-2026).
-        if not is_bolsa and tolerancia_salida < diff_sal <= llegada_temprana:   # Bolsa Flexible no tiene horario fijo
-            res['observaciones'] += (f"Jornada corrida: llegó {int(round(llegada_temprana))} min antes de su horario y salió "
-                                     f"{int(round(diff_sal))} min antes; no es salida adelantada. ")
-        elif diff_sal > tolerancia_salida:
-            res['minutos_salida_adelantada'] = round(diff_sal, 2)
-            res['tiene_salida_adelantada'] = 1
-            if res['estado'] == 'OK':
-                res['estado'] = 'SALIDA_ADELANTADA'
+        cls._atrasos_y_salidas(res, r_ent_dt, r_sal_dt, hora_ent_teo, hora_sal_teo, dt_ent_teo, dt_sal_teo, anclaje_entrada,
+                               anclaje_salida, is_bolsa, todos_ciclos_dia, tolerancia_alerta, tolerancia_descuento,
+                               tolerancia_salida)
 
         # ─────────────────────────────────────────────────────────────────────
         # 12. EJE FINANCIERO: BOLSA FLEXIBLE LOCAL VS TURNOS ORDINARIOS

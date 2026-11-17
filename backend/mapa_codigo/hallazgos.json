@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1441,
+  "total": 1442,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -149,11 +149,6 @@
     "lineas": 558
    },
    {
-    "funcion": "_solve_core",
-    "archivo": "backend/services/quantum_matrix_engine.py",
-    "lineas": 508
-   },
-   {
     "funcion": "init_tables",
     "archivo": "backend/repositories/configuracion.py",
     "lineas": 451
@@ -162,6 +157,11 @@
     "funcion": "get_matrix_data_with_projections",
     "archivo": "backend/services/asistencia_service.py",
     "lineas": 451
+   },
+   {
+    "funcion": "_solve_core",
+    "archivo": "backend/services/quantum_matrix_engine.py",
+    "lineas": 441
    },
    {
     "funcion": "_calcular_filas",
@@ -212,7 +212,7 @@
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
-   "lineas": 2866
+   "lineas": 2879
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",

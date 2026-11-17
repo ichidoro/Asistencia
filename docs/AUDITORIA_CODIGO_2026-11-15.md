@@ -571,6 +571,15 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
   - El de la parte 12 dio distinto porque pasaron las horas: a las 17:54 el día de hoy, sin marcas, pasó a inasistencia. Se rehízo su referencia en ese momento con el código anterior y dio **idéntico**.
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
 
+**Avance (17-11-2026): paso 3e hecho.** Atrasos y salidas adelantadas (sección 11, 70 líneas) pasó a `_atrasos_y_salidas`, con el mismo texto (comparado línea por línea).
+- Calcula el atraso y la salida adelantada contra el horario del día, con las tolerancias del turno y la «jornada corrida».
+- Solo anota en el mismo resultado que recibe; no devuelve nada.
+- `_solve_core` bajó a 441 líneas.
+- **Ensayos:**
+  - Con el respaldo: **idéntico**.
+  - Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**. Desde este paso, su referencia se hace justo antes con el código anterior, para que no influya la hora del día.
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan
