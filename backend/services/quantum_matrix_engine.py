@@ -2434,6 +2434,78 @@ class QuantumMatrixEngine:
                 res['estado'] = 'SALIDA_ADELANTADA'
 
 
+    @staticmethod
+    def _bolsa_y_turnos_ordinarios(res: Dict[str, Any], is_bolsa: bool, horas_netas: float, horas_teoricas: float,
+                                   hourly_justs, minimo_he_min: float, max_he_ordinarias_min: float,
+                                   tolerancia_descuento: int, tolerancia_salida: int) -> None:
+        """Sección 12 de _solve_core: en Bolsa no hay deuda, horas extra ni atraso diario (se mide en el tramo). En los
+        turnos ordinarios, la hora extra o la deuda del día contra las horas teóricas, el +2 por cobertura y los permisos
+        por horas, que cubren primero el atraso y luego la salida adelantada. Anota en el resultado que recibe.
+        Mismo código que estaba en _solve_core."""
+        # ─────────────────────────────────────────────────────────────────────
+        # 12. EJE FINANCIERO: BOLSA FLEXIBLE LOCAL VS TURNOS ORDINARIOS
+        # ─────────────────────────────────────────────────────────────────────
+        if is_bolsa:
+            # Bolsa Local presencial: anula deuda diaria y atraso punitivo diario
+            res['minutos_deuda'] = 0.0
+            res['minutos_extra_bruto'] = 0.0
+            res['minutos_atraso'] = 0.0
+            res['minutos_salida_adelantada'] = 0.0
+            res['tiene_atraso'] = 0
+            res['tiene_salida_adelantada'] = 0
+            res['estado'] = 'OK'
+        else:
+            min_trab = horas_netas * 60.0
+            min_teo = horas_teoricas * 60.0
+
+            # Permisos por horas (reglas del tipo de justificación, resueltas en el resolutor único)
+            min_permiso_comp, min_permiso_deuda, obs_permisos = JustificationTensorResolver.hourly_effect(hourly_justs or [])
+            if obs_permisos:
+                res['observaciones'] += ' '.join(obs_permisos) + ' '
+                res['tiene_permiso'] = 1
+            if min_permiso_deuda > 0:
+                res['minutos_permiso_personal_deuda'] = int(round(min_permiso_deuda))
+
+            diff_extra = min_trab - min_teo
+            # Hora extra: al menos un segundo (resolución del reloj) y lo que pida el «Mínimo para contar hora extra»
+            if round(diff_extra * 60.0) > 0 and diff_extra >= minimo_he_min:
+                # Todo lo trabajado de más va a las horas extra del día, por aprobar (dueño, 10-11-2026). El «límite de horas
+                # extra» ya no decide cómo se paga, solo cómo se llama: si se pasa seguido, ese exceso es un +2 por cobertura y
+                # las horas extra del día lo dicen aparte (minutos_extra_mas2).
+                res['minutos_extra_bruto'] = round(diff_extra, 2)
+                res['minutos_deuda'] = 0.0
+                if max_he_ordinarias_min > 0 and diff_extra > max_he_ordinarias_min and horas_teoricas > 0:
+                    res['minutos_extra_mas2'] = round(float(res.get('minutos_extra_mas2') or 0.0) + diff_extra, 2)
+                    res['observaciones'] += (f"[Cobertura de Turno (+2): {round(diff_extra / 60.0, 1)}h netas, "
+                                             f"a las horas extra por aprobar] ")
+            else:
+                deuda_calculada = max(0.0, min_teo - min_trab - min_permiso_comp)
+                res['minutos_deuda'] = round(deuda_calculada, 2)
+                res['minutos_extra_bruto'] = 0.0
+
+            # Los minutos de permiso justificado cubren primero el atraso y luego la salida adelantada
+            if min_permiso_comp > 0:
+                restante = min_permiso_comp
+                atr = float(res.get('minutos_atraso') or 0.0)
+                cub_atr = min(atr, restante)
+                res['minutos_atraso'] = round(atr - cub_atr, 2)
+                restante -= cub_atr
+                sal = float(res.get('minutos_salida_adelantada') or 0.0)
+                cub_sal = min(sal, restante)
+                res['minutos_salida_adelantada'] = round(sal - cub_sal, 2)
+                if res['minutos_atraso'] <= tolerancia_descuento:
+                    res['tiene_atraso'] = 0
+                if res['minutos_salida_adelantada'] <= tolerancia_salida:
+                    res['tiene_salida_adelantada'] = 0
+                if res.get('estado') in ('ATRASO', 'SALIDA_ADELANTADA'):
+                    if res['tiene_atraso']:
+                        res['estado'] = 'ATRASO'
+                    elif res['tiene_salida_adelantada']:
+                        res['estado'] = 'SALIDA_ADELANTADA'
+                    else:
+                        res['estado'] = 'OK'
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2812,67 +2884,7 @@ class QuantumMatrixEngine:
                                anclaje_salida, is_bolsa, todos_ciclos_dia, tolerancia_alerta, tolerancia_descuento,
                                tolerancia_salida)
 
-        # ─────────────────────────────────────────────────────────────────────
-        # 12. EJE FINANCIERO: BOLSA FLEXIBLE LOCAL VS TURNOS ORDINARIOS
-        # ─────────────────────────────────────────────────────────────────────
-        if is_bolsa:
-            # Bolsa Local presencial: anula deuda diaria y atraso punitivo diario
-            res['minutos_deuda'] = 0.0
-            res['minutos_extra_bruto'] = 0.0
-            res['minutos_atraso'] = 0.0
-            res['minutos_salida_adelantada'] = 0.0
-            res['tiene_atraso'] = 0
-            res['tiene_salida_adelantada'] = 0
-            res['estado'] = 'OK'
-        else:
-            min_trab = horas_netas * 60.0
-            min_teo = horas_teoricas * 60.0
-
-            # Permisos por horas (reglas del tipo de justificación, resueltas en el resolutor único)
-            min_permiso_comp, min_permiso_deuda, obs_permisos = JustificationTensorResolver.hourly_effect(hourly_justs or [])
-            if obs_permisos:
-                res['observaciones'] += ' '.join(obs_permisos) + ' '
-                res['tiene_permiso'] = 1
-            if min_permiso_deuda > 0:
-                res['minutos_permiso_personal_deuda'] = int(round(min_permiso_deuda))
-
-            diff_extra = min_trab - min_teo
-            # Hora extra: al menos un segundo (resolución del reloj) y lo que pida el «Mínimo para contar hora extra»
-            if round(diff_extra * 60.0) > 0 and diff_extra >= minimo_he_min:
-                # Todo lo trabajado de más va a las horas extra del día, por aprobar (dueño, 10-11-2026). El «límite de horas
-                # extra» ya no decide cómo se paga, solo cómo se llama: si se pasa seguido, ese exceso es un +2 por cobertura y
-                # las horas extra del día lo dicen aparte (minutos_extra_mas2).
-                res['minutos_extra_bruto'] = round(diff_extra, 2)
-                res['minutos_deuda'] = 0.0
-                if max_he_ordinarias_min > 0 and diff_extra > max_he_ordinarias_min and horas_teoricas > 0:
-                    res['minutos_extra_mas2'] = round(float(res.get('minutos_extra_mas2') or 0.0) + diff_extra, 2)
-                    res['observaciones'] += (f"[Cobertura de Turno (+2): {round(diff_extra / 60.0, 1)}h netas, "
-                                             f"a las horas extra por aprobar] ")
-            else:
-                deuda_calculada = max(0.0, min_teo - min_trab - min_permiso_comp)
-                res['minutos_deuda'] = round(deuda_calculada, 2)
-                res['minutos_extra_bruto'] = 0.0
-
-            # Los minutos de permiso justificado cubren primero el atraso y luego la salida adelantada
-            if min_permiso_comp > 0:
-                restante = min_permiso_comp
-                atr = float(res.get('minutos_atraso') or 0.0)
-                cub_atr = min(atr, restante)
-                res['minutos_atraso'] = round(atr - cub_atr, 2)
-                restante -= cub_atr
-                sal = float(res.get('minutos_salida_adelantada') or 0.0)
-                cub_sal = min(sal, restante)
-                res['minutos_salida_adelantada'] = round(sal - cub_sal, 2)
-                if res['minutos_atraso'] <= tolerancia_descuento:
-                    res['tiene_atraso'] = 0
-                if res['minutos_salida_adelantada'] <= tolerancia_salida:
-                    res['tiene_salida_adelantada'] = 0
-                if res.get('estado') in ('ATRASO', 'SALIDA_ADELANTADA'):
-                    if res['tiene_atraso']:
-                        res['estado'] = 'ATRASO'
-                    elif res['tiene_salida_adelantada']:
-                        res['estado'] = 'SALIDA_ADELANTADA'
-                    else:
-                        res['estado'] = 'OK'
+        cls._bolsa_y_turnos_ordinarios(res, is_bolsa, horas_netas, horas_teoricas, hourly_justs, minimo_he_min,
+                                       max_he_ordinarias_min, tolerancia_descuento, tolerancia_salida)
 
         return res

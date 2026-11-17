@@ -580,6 +580,14 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
   - Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**. Desde este paso, su referencia se hace justo antes con el código anterior, para que no influya la hora del día.
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
 
+**Avance (17-11-2026): paso 3f hecho.** Bolsa y turnos ordinarios (sección 12, 62 líneas) pasó a `_bolsa_y_turnos_ordinarios`, con el mismo texto (comparado línea por línea).
+- En Bolsa no hay deuda, horas extra ni atraso diario.
+- En los turnos ordinarios calcula la hora extra o la deuda del día, el +2 por cobertura y los permisos por horas.
+- Solo anota en el mismo resultado; el `return res` final quedó en `_solve_core`.
+- `_solve_core` bajó a 381 líneas.
+- **Ensayos:** con el respaldo, **idéntico**. Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos** (referencia hecha justo antes con el código anterior).
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan
