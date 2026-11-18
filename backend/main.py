@@ -144,6 +144,33 @@ class _TiempoPeticionMiddleware:
 import os as _os
 app.add_middleware(_TiempoPeticionMiddleware, umbral_ms=int(_os.environ.get("SLOW_REQUEST_MS", "700")))
 
+# Cabeceras de seguridad en TODA respuesta (ASGI puro, sin costo). Sin CSP a propósito: la app usa scripts y estilos en línea.
+_CABECERAS_SEGURIDAD = [
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"SAMEORIGIN"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"strict-transport-security", b"max-age=31536000"),  # el navegador la ignora sobre http (solo vale en https)
+]
+
+class _CabecerasSeguridadMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def send_wrap(message):
+            if message["type"] == "http.response.start":
+                existentes = {k.lower() for k, _ in message.get("headers", [])}
+                extra = [h for h in _CABECERAS_SEGURIDAD if h[0] not in existentes]
+                message = {**message, "headers": list(message.get("headers", [])) + extra}
+            await send(message)
+
+        await self.app(scope, receive, send_wrap)
+
+app.add_middleware(_CabecerasSeguridadMiddleware)
+
 # Montar frontend (archivos estáticos)
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
