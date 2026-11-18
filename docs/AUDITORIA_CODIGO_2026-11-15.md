@@ -434,7 +434,7 @@ Quedan para otra parte, porque el servidor se conecta antes a Nexacol o a BioAlb
   - Con el código anterior dio lo mismo en dos corridas; con el nuevo, **idéntico**. También el ensayo de la parte 13.
   - Pasan las 577 pruebas: una menos, la del guardián por función.
 
-### Etapa 5: partir las funciones gigantes del cálculo (la más delicada)
+### Etapa 5: partir las funciones gigantes del cálculo (**hecha**)
 
 `_solve_core`, `reprocesar_periodo_empleado` y `procesar_empleado_dia`, en pasos con nombre, sin cambiar ningún resultado. Es el punto #9 de `docs/AUDITORIA_GRAFO.md`.
 
@@ -615,6 +615,15 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
   - Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**.
   - Docker se apagó a mitad del primer intento y el ensayo de la parte 13 dejó su empleado de ensayo; se borró solo al volver a correr ese ensayo. Los de las partes 10 y 12 se rehicieron completos después de eso.
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
+**Cierre de la etapa 5 (18-11-2026).** Los tres pasos están en GitHub y el servidor quedó funcionando con cada uno.
+- **Resultado:**
+  - El recálculo de un período bajó de 646 a 244 líneas.
+  - El recálculo de un día bajó de 563 a 215 líneas.
+  - El cálculo de un día (`_solve_core`) bajó de 820 a 265 líneas.
+  - Cada pieza se movió con el mismo texto, sin cambiar ninguna regla.
+- **Ensayos:** en cada pieza, el ensayo con el respaldo dio **idéntico** en los 16.756 días del 26-04 al 15-11. También dieron idénticos los ensayos que guardan en la copia de práctica.
+- **Copia del respaldo borrada del PC:** se borraron la base de ensayo, su volumen y la carpeta con el respaldo, su clave y las pasadas de ensayo. La copia de práctica (2 empleados de ejemplo) sigue igual.
 
 ---
 
