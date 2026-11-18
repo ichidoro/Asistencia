@@ -603,6 +603,19 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
   - Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**.
 - Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
 
+**Avance (17-11-2026): paso 3h hecho; con él, el paso 3 completo.** El día sin marcas en el bloque principal (50 líneas) pasó a `_dia_sin_marcas`, con el mismo texto (cuatro espacios menos de sangría; comparado línea por línea).
+- Puede quedar como feriado o día libre.
+- Un día futuro no genera registro.
+- Si es hoy y el turno sigue (más la «Espera para marcar inasistencia»), todavía no es inasistencia. Si no, es inasistencia.
+- Ese bloque siempre terminaba el día, así que `_solve_core` devuelve lo que entrega la función nueva.
+- **Tamaño:** `_solve_core` bajó de 820 a 265 líneas. Quedan en ella los ajustes y la configuración del día, la separación en bloques, las observaciones de esa separación y la llamada ordenada a sus nueve piezas.
+- **Ensayos:**
+  - Con el respaldo: **idéntico**.
+  - Se repitió con el reloj fijo al 13-11 a las 10:00, para pasar por «hoy, todavía en turno» y por los días futuros. Con el código anterior y con el nuevo: **idéntico**.
+  - Guardando en la copia de práctica, los de las partes 10, 12, 13 y 14: **idénticos**.
+  - Docker se apagó a mitad del primer intento y el ensayo de la parte 13 dejó su empleado de ensayo; se borró solo al volver a correr ese ensayo. Los de las partes 10 y 12 se rehicieron completos después de eso.
+- Pasan las 577 pruebas, incluida la prueba guardiana de valores fijos.
+
 ---
 
 ## 7. Lo que no promete este plan

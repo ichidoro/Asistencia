@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1444,
+  "total": 1445,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -164,11 +164,6 @@
     "lineas": 316
    },
    {
-    "funcion": "_solve_core",
-    "archivo": "backend/services/quantum_matrix_engine.py",
-    "lineas": 313
-   },
-   {
     "funcion": "get_bulk_context",
     "archivo": "backend/services/asistencia_service.py",
     "lineas": 312
@@ -182,6 +177,11 @@
     "funcion": "_sync_empleado",
     "archivo": "backend/services/sync_service.py",
     "lineas": 275
+   },
+   {
+    "funcion": "calcular_haberes_debitos",
+    "archivo": "backend/services/cierre_service.py",
+    "lineas": 274
    }
   ]
  },
@@ -212,7 +212,7 @@
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
-   "lineas": 2908
+   "lineas": 2920
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",

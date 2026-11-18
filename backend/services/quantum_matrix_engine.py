@@ -2591,6 +2591,66 @@ class QuantumMatrixEngine:
         return bloque_p, descuento_col_auto, minutos_col_auto, obs_regla, regla_dia, reglas_marcas, secuencia_dia
 
 
+    @staticmethod
+    def _dia_sin_marcas(res: Dict[str, Any], fecha: str, today_str: str, now_local: datetime, is_holiday: bool,
+                        holiday_desc, es_libre_dia: bool, is_bolsa: bool, hora_limite_ficticia, dt_sal_teo, dt_ent_teo,
+                        horas_teoricas: float, espera_inasistencia_min: int) -> Optional[Dict[str, Any]]:
+        """Parte de la sección 4 de _solve_core: el día sin marcas en el bloque principal. Feriado o día libre según el
+        calendario y el turno; un día futuro no genera registro; hoy no es inasistencia mientras el turno siga (la «Espera
+        para marcar inasistencia» del turno después de la salida); si no, inasistencia. Devuelve el resultado o nada.
+        Mismo código que estaba en _solve_core."""
+        # Sin marcas no hubo jornada ni colación (antes quedaba la del horario: 30 min en una licencia o una inasistencia)
+        res['minutos_colacion_auto'] = 0
+        if is_holiday:
+            res['estado'] = 'FERIADO'
+            res['observaciones'] = holiday_desc or 'Feriado Nacional'
+            res['origen'] = 'FERIADO'
+            return res
+
+        # Las justificaciones de día completo se resuelven en la capa 2 (JustificationTensorResolver)
+
+        if es_libre_dia:
+            res['estado'] = 'LIBRE'
+            res['origen'] = 'TURNO'
+            return res
+
+        # Días futuros sin marcas no generan registro
+        if fecha > today_str:
+            return None
+
+        # Día de hoy sin marcas: no presumir inasistencia mientras el turno o jornada esté en transcurso
+        if fecha == today_str:
+            if is_bolsa:
+                if hora_limite_ficticia:
+                    try:
+                        limite_dt = datetime.strptime(f"{fecha} {str(hora_limite_ficticia).strip()[:5]}", "%Y-%m-%d %H:%M")
+                        if now_local < limite_dt:
+                            return None
+                    except Exception:
+                        pass
+                else:
+                    return None
+            elif dt_sal_teo:
+                # Sin marcas: la inasistencia aparece la «Espera para marcar inasistencia» del turno después de la salida
+                limite_sal_dt = dt_sal_teo + timedelta(minutes=espera_inasistencia_min)
+                if now_local < limite_sal_dt:
+                    return None
+            elif dt_ent_teo and horas_teoricas > 0:
+                est_sal_dt = dt_ent_teo + timedelta(hours=horas_teoricas, minutes=espera_inasistencia_min)
+                if now_local < est_sal_dt:
+                    return None
+            else:
+                return None
+
+        # Día sin marcas (día pasado o hoy superada la hora límite sin actividad):
+        res['estado'] = 'INASISTENCIA'
+        res['observaciones'] += 'Inasistencia detectada (Día hábil sin marcas). '
+        res['horas_trabajadas'] = 0.0
+        res['horas_teoricas'] = 0.0 if is_bolsa else horas_teoricas
+        res['minutos_deuda'] = 0.0  # [REGLA CANÓNICA]: Las inasistencias descuentan remuneración/día, jamás generan deuda horaria para compensar
+        return res
+
+
     @classmethod
     def _solve_core(
         cls,
@@ -2799,56 +2859,8 @@ class QuantumMatrixEngine:
         today_str = now_local.strftime("%Y-%m-%d")
 
         if not bloque_p:
-            # Sin marcas no hubo jornada ni colación (antes quedaba la del horario: 30 min en una licencia o una inasistencia)
-            res['minutos_colacion_auto'] = 0
-            if is_holiday:
-                res['estado'] = 'FERIADO'
-                res['observaciones'] = holiday_desc or 'Feriado Nacional'
-                res['origen'] = 'FERIADO'
-                return res
-
-            # Las justificaciones de día completo se resuelven en la capa 2 (JustificationTensorResolver)
-
-            if es_libre_dia:
-                res['estado'] = 'LIBRE'
-                res['origen'] = 'TURNO'
-                return res
-
-            # Días futuros sin marcas no generan registro
-            if fecha > today_str:
-                return None
-
-            # Día de hoy sin marcas: no presumir inasistencia mientras el turno o jornada esté en transcurso
-            if fecha == today_str:
-                if is_bolsa:
-                    if hora_limite_ficticia:
-                        try:
-                            limite_dt = datetime.strptime(f"{fecha} {str(hora_limite_ficticia).strip()[:5]}", "%Y-%m-%d %H:%M")
-                            if now_local < limite_dt:
-                                return None
-                        except Exception:
-                            pass
-                    else:
-                        return None
-                elif dt_sal_teo:
-                    # Sin marcas: la inasistencia aparece la «Espera para marcar inasistencia» del turno después de la salida
-                    limite_sal_dt = dt_sal_teo + timedelta(minutes=espera_inasistencia_min)
-                    if now_local < limite_sal_dt:
-                        return None
-                elif dt_ent_teo and horas_teoricas > 0:
-                    est_sal_dt = dt_ent_teo + timedelta(hours=horas_teoricas, minutes=espera_inasistencia_min)
-                    if now_local < est_sal_dt:
-                        return None
-                else:
-                    return None
-
-            # Día sin marcas (día pasado o hoy superada la hora límite sin actividad):
-            res['estado'] = 'INASISTENCIA'
-            res['observaciones'] += 'Inasistencia detectada (Día hábil sin marcas). '
-            res['horas_trabajadas'] = 0.0
-            res['horas_teoricas'] = 0.0 if is_bolsa else horas_teoricas
-            res['minutos_deuda'] = 0.0  # [REGLA CANÓNICA]: Las inasistencias descuentan remuneración/día, jamás generan deuda horaria para compensar
-            return res
+            return cls._dia_sin_marcas(res, fecha, today_str, now_local, is_holiday, holiday_desc, es_libre_dia, is_bolsa,
+                                       hora_limite_ficticia, dt_sal_teo, dt_ent_teo, horas_teoricas, espera_inasistencia_min)
 
         # 5. Extraer timestamps del bloque principal
         dt_list: List[datetime] = []
