@@ -640,7 +640,8 @@ class ReportService:
                 ("Acumulado", "acumulado")
             ]
             
-            logo_path = os.path.join(settings.BASE_DIR, "frontend", "assets", "img", "logo.jpg")
+            # El mismo logo que muestra la aplicación (antes buscaba logo.jpg, que no existe, y el Excel salía sin logo)
+            logo_path = os.path.join(settings.BASE_DIR, "frontend", "assets", "img", "logo-aguacol.png")
 
             for sheet_title, view_mode in pestañas:
                 ws = wb.create_sheet(title=sheet_title)
@@ -650,7 +651,8 @@ class ReportService:
                 if os.path.exists(logo_path):
                     try:
                         img_header = Image(logo_path)
-                        img_header.height = 75
+                        # Ancho de antes, alto según la proporción del propio logo (no se deforma)
+                        img_header.height = round(170 * img_header.height / img_header.width)
                         img_header.width = 170
                         ws.add_image(img_header, 'A1')
                     except Exception as ex:

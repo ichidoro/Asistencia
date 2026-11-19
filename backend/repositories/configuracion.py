@@ -1118,22 +1118,36 @@ class ConfiguracionRepository:
         auto-arreglo de períodos antes de leer)."""
         return await self.db.fetch_one("SELECT fecha_inicio, fecha_fin FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
 
+    async def get_otro_periodo_reabierto(self, fecha_inicio: str, fecha_fin: str, hoy: str) -> Optional[Dict[str, Any]]:
+        """Otro período abierto que no es el del día de hoy ni el que se quiere reabrir: un período ya reabierto (o uno
+        que terminó y todavía no se cierra). Decisión de la persona dueña (18-11-2026): se reabre un período a la vez."""
+        return await self.db.fetch_one(
+            """
+            SELECT mes_cierre, fecha_inicio, fecha_fin FROM periodos_rrhh
+            WHERE estado = 'abierto'
+              AND NOT (fecha_inicio = ? AND fecha_fin = ?)
+              AND NOT (? BETWEEN fecha_inicio AND fecha_fin)
+            ORDER BY fecha_inicio LIMIT 1
+            """,
+            (fecha_inicio, fecha_fin, hoy)
+        )
+
     async def reabrir_periodo_rrhh(self, fecha_inicio: str, fecha_fin: str) -> None:
-        """Al reabrir un cierre: vuelve el período de esas fechas a «abierto» y lo marca vigente.
-        Se movió del router de Cierre sin cambios (etapa 4 de la auditoría): no desactiva los demás períodos,
-        a diferencia de set_periodo_rrhh_activo."""
+        """Al reabrir un cierre: vuelve el período de esas fechas a «abierto» y lo deja como el único vigente.
+        Decisión de la persona dueña (18-11-2026): al reabrir, solo queda vigente el período que se reabre. Al volver
+        a cerrarlo, el cierre pasa la vigencia al período abierto más antiguo (el mes en curso)."""
         await self.db.execute(
             "UPDATE periodos_rrhh SET estado = 'abierto' WHERE fecha_inicio = ? AND fecha_fin = ?",
             (fecha_inicio, fecha_fin)
         )
 
-        # Desactivar solo el periodo específico que se está reabriendo y reactivarlo
         periodo_row = await self.db.fetch_one(
             "SELECT id FROM periodos_rrhh WHERE fecha_inicio = ? AND fecha_fin = ?",
             (fecha_inicio, fecha_fin)
         )
         if periodo_row:
-            await self.db.execute("UPDATE periodos_rrhh SET activo = 0 WHERE id = ?", (periodo_row['id'],))
+            ConfiguracionRepository._last_auto_heal_time = 0.0
+            await self.db.execute("UPDATE periodos_rrhh SET activo = 0 WHERE id != ?", (periodo_row['id'],))
             await self.db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (periodo_row['id'],))
 
     async def set_periodo_rrhh_activo(self, id: int) -> bool:

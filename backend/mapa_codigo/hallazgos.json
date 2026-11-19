@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1445,
+  "total": 1449,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -141,7 +141,7 @@
    {
     "funcion": "_generate_excel_workbook",
     "archivo": "backend/services/report_service.py",
-    "lineas": 560
+    "lineas": 562
    },
    {
     "funcion": "init_tables",

@@ -1,6 +1,6 @@
 # Lo pendiente en Asistencia
 
-Actualizado el 15-11-2026 con datos leídos de producción ese mismo día (solo lectura). Reemplaza la versión del 7-11-2026. Los números cambian a medida que se trabaja: antes de decidir algo, conviene volver a medirlo.
+Actualizado el 15-11-2026 con datos leídos de producción ese mismo día (solo lectura); decisiones del 18-11-2026 agregadas. Reemplaza la versión del 7-11-2026. Los números cambian a medida que se trabaja: antes de decidir algo, conviene volver a medirlo.
 
 > **Cómo se nombra a las personas en este documento.** Este archivo va a GitHub, así que no lleva nombres. Cada persona aparece con sus iniciales (primer nombre, apellido paterno y apellido materno) y el nombre de su horario entre paréntesis. La versión con nombres completos es `docs/PLAN_PENDIENTE_local.md`, que queda solo en el PC de la persona dueña y no se sube.
 
@@ -35,7 +35,7 @@ Se cerraron porque el cierre todavía no revisaba las jornadas especiales (ya se
 | 05-07 | J.G.G. (Planta Mantencion 2) | Día libre | 287 |
 | 16-07 | O.C.E. (Planta Mantencion 2) | Feriado | 390 |
 
-**Decisión de la persona dueña:** dejarlas así o reabrir Junio y Julio de Mantención para validarlas.
+**Decisión de la persona dueña (18-11-2026): validarlas.** Las cinco caen en el período Julio 2026 (26-06 al 25-07), así que basta reabrir ese período solo para Mantención, validarlas y volver a cerrarlo. Falta hacerlo desde la aplicación; antes conviene un ensayo, porque al validar, el día se vuelve a calcular.
 
 ### 2.2 Horarios
 
@@ -46,7 +46,7 @@ Se cerraron porque el cierre todavía no revisaba las jornadas especiales (ya se
 
 ### 2.3 Correo del cierre
 
-Los destinatarios del informe de cierre están vacíos a propósito mientras se probaba con los meses pasados. Falta cargarlos en Configuración. El mensaje del cierre ya dice si el correo se envió.
+Los destinatarios del informe de cierre los carga la persona dueña en Configuración (18-11-2026: es tarea suya, no del desarrollo). El mensaje del cierre ya dice si el correo se envió.
 
 ### 2.4 Preinforme con señales para los jefes de área
 
@@ -58,16 +58,16 @@ De la auditoría `docs/AUDITORIA_GRAFO.md` (7-11). Se dejó para después de los
 
 - **#3:** repartir `routers/asistencia.py` por tema, sin cambiar las URL.
 - **#5:** sacar de `AsistenciaService` lo que no es cálculo (la tabla de Marcaciones y el cierre).
-- **#9:** partir `_solve_core`, `procesar_empleado_dia` y `reprocesar_periodo_empleado`. Es lo más delicado: va al final, en pasos chicos, con la prueba guardiana en verde.
+- **#9: hecho** (16 al 18-11-2026, etapa 5 de `docs/AUDITORIA_CODIGO_2026-11-15.md`): las tres funciones quedaron en piezas con nombre y el resultado no cambió.
 - **#4:** las «capas al revés», solo explicado.
 
 No arregla errores visibles: da orden para cambiar el código con menos riesgo.
 
 ### 2.6 Deudas técnicas
 
-- El Excel de cierre busca `frontend/assets/img/logo.jpg`, que no existe (hay `logo.png`): sale sin logo.
+- **Hecho (18-11-2026):** el Excel de cierre buscaba `logo.jpg`, que no existe, y salía sin logo. Ahora usa el mismo logo que muestra la aplicación (`logo-aguacol.png`), sin deformarlo.
 - En el servidor no está definido `DEBUG` y el valor por defecto es verdadero: ante un error, la app muestra el detalle técnico.
-- La clave inicial del usuario admin está escrita en `backend/repositories/seguridad.py` (solo se usa si el admin no existe).
+- La clave inicial del usuario admin está escrita en `backend/repositories/seguridad.py` (solo se usa si el admin no existe). **Se deja así** para emergencias (decisión de la persona dueña, 18-11-2026).
 
 ### 2.7 Auditoría del código del 15-11-2026
 
@@ -117,7 +117,11 @@ Etapa 5 (16-11-2026): plan en 16 piezas en docs/AUDITORIA_CODIGO_2026-11-15.md; 
 
 **Rutas sin sesión (16-11-2026):** el historial de sincronizaciones respondía sin iniciar sesión (fechas y cantidades, sin nombres ni RUT); ahora pide sesión y el permiso de ver Configuración o de sincronizar. Una prueba (`test_rutas_con_sesion.py`) revisa todas las rutas: cada una pública lleva su motivo. La prueba de conexión con BioAlba (`/api/sync/test/`), que también respondía sin sesión, ahora pide el permiso de sincronizar (decisión de la persona dueña, 16-11-2026).
 
-**Para decidir (visto en el ensayo de Cierre, sin cambiar nada):** al reabrir un período cerrado, la app lo marca vigente pero no desactiva los demás. En la copia de práctica, después de reabrir dos meses quedaron tres períodos vigentes a la vez. ¿Es lo que se quiere o al reabrir solo debería quedar vigente el período reabierto (o el mes en curso)?
+**Reabrir un período: arreglado el 18-11-2026** (decisión de la persona dueña). Antes, al reabrir un período la app no desactivaba los demás: en la copia de práctica, después de reabrir dos meses quedaron tres vigentes a la vez. Ahora:
+- Al reabrir, solo queda vigente el período que se reabre. Al volver a cerrarlo, la vigencia pasa al mes en curso.
+- Se reabre un período a la vez: si ya hay otro abierto que no es el del día de hoy, la app avisa que hay que cerrarlo antes.
+- La reapertura sigue siendo por área: otra área del mismo período sí se puede reabrir.
+- Prueba: `test_reabrir_un_periodo.py` (falla con el código anterior).
 
 ### 2.7 bis Limpieza de restos del desarrollo (15-11-2026, hecha)
 

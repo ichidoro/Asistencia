@@ -111,7 +111,16 @@ async def reabrir_cierre(
         cierre = await AsistenciaRepository(db).get_cierre_by_id(cierre_id)
         if not cierre:
             raise HTTPException(status_code=404, detail="Registro de cierre no encontrado.")
-            
+
+        # Se reabre un período a la vez (decisión de la persona dueña, 18-11-2026). Otra área del mismo período sí
+        # se puede reabrir: la reapertura es por área.
+        otro = await ConfiguracionRepository(db).get_otro_periodo_reabierto(
+            cierre['fecha_inicio'], cierre['fecha_fin'], datetime.now().strftime("%Y-%m-%d"))
+        if otro:
+            raise HTTPException(
+                status_code=409,
+                detail=f"El período {otro['mes_cierre']} ya está abierto. Ciérralo antes de reabrir otro período.")
+
         # Registrar en auditoría
         await SeguridadRepository(db).log_auditoria(
             current_user.user_id,
