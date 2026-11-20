@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1449,
+  "total": 1455,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -196,7 +196,7 @@
   },
   {
    "archivo": "backend/routers/asistencia.py",
-   "lineas": 3799
+   "lineas": 3857
   },
   {
    "archivo": "backend/services/asistencia_service.py",
@@ -228,8 +228,13 @@
   }
  ],
  "sql_en_routers": {
-  "total": 0,
-  "top": []
+  "total": 1,
+  "top": [
+   {
+    "archivo": "backend/routers/asistencia.py",
+    "consultas": 1
+   }
+  ]
  },
  "sin_uso": [],
  "ciclos": []

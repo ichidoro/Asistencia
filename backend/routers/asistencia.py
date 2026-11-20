@@ -1352,6 +1352,7 @@ def _marca_en_el_futuro(fecha_hora: str, ahora: datetime) -> bool:
 
 
 _TIPOS_ENTRADA = ('entrada', 'entry', 'e', 'in', '1')
+_TIPOS_SALIDA = ('salida', 'exit', 's', 'out', '2')
 
 
 async def _hora_de_entrada_sin_cerrar(db, empleado_id: int, fecha: str) -> Optional[str]:
@@ -1360,6 +1361,24 @@ async def _hora_de_entrada_sin_cerrar(db, empleado_id: int, fecha: str) -> Optio
     if ultima and str(ultima["tipo"] or "").strip().lower() in _TIPOS_ENTRADA:
         return str(ultima["fecha_hora"])[11:19]
     return None
+
+
+def _rellena_un_hueco(marcas: List[Dict[str, Any]], fecha_hora: str, tipo: str) -> bool:
+    """True si una marca suelta cae ENTRE dos marcas del día que la piden: una SALIDA entre dos Entradas (faltó la
+    salida a colación) o una ENTRADA entre dos Salidas (faltó la vuelta de colación). No pisa al reloj: completa la
+    secuencia, igual que la propuesta de la regla en la ventana. Antes de la primera marca o después de la última no
+    cuenta, así no sirve para borrar un atraso o una salida adelantada (para eso está el Perdonazo)."""
+    t = str(tipo or "").strip().lower()
+    if t not in ("entrada", "salida"):
+        return False
+    opuesto = _TIPOS_SALIDA if t == "entrada" else _TIPOS_ENTRADA
+    fh = str(fecha_hora)[:19]
+    antes = [m for m in marcas if str(m["fecha_hora"])[:19] < fh]
+    despues = [m for m in marcas if str(m["fecha_hora"])[:19] > fh]
+    if not antes or not despues:
+        return False
+    return (str(antes[-1]["tipo"] or "").strip().lower() in opuesto
+            and str(despues[0]["tipo"] or "").strip().lower() in opuesto)
 
 
 def _duracion_texto(fh_desde: str, fh_hasta: str) -> str:
@@ -1409,7 +1428,13 @@ async def agregar_marcacion_manual(
         # completa la marca que falta, así que se permite aunque el reloj ya tenga Entrada y Salida ese día.
         solo_salida = bool((hora_salida and not hora_entrada) or (tipo == "Salida" and hora and not hora_entrada and not hora_salida))
         cierra_entrada = solo_salida and bool(await _hora_de_entrada_sin_cerrar(db, empleado_id, fecha))
-        if has_bio_in and has_bio_out and not cierra_entrada and not getattr(current_user, 'is_superuser', False):
+        # Una marca suelta que rellena un hueco entre dos marcas (la propuesta de la regla en «Corregir marcas del día»,
+        # caso 19-11-2026: Entrada · Entrada · Salida, faltaba la salida a colación) tampoco pisa al reloj.
+        rellena_hueco = False
+        if has_bio_in and has_bio_out and not cierra_entrada and tipo and hora and not hora_entrada and not hora_salida:
+            rellena_hueco = _rellena_un_hueco(await AsistenciaRepository(db).get_marcas_del_dia_en_orden(empleado_id, fecha),
+                                              f"{fecha} {_hora_con_segundos(hora)}", tipo)
+        if has_bio_in and has_bio_out and not cierra_entrada and not rellena_hueco and not getattr(current_user, 'is_superuser', False):
             raise HTTPException(
                 status_code=400,
                 detail="Esta jornada ya cuenta con marcaciones biométricas válidas de Entrada y Salida en el reloj. Si desea condonar un atraso o salida anticipada, utilice la función oficial de Perdonazo."

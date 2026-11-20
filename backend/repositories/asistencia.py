@@ -978,6 +978,12 @@ class AsistenciaRepository:
             f"SELECT fecha_hora, tipo FROM {LOGS_CON_TIPO_CORREGIDO} WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? "
             "ORDER BY fecha_hora DESC LIMIT 1", (empleado_id, fecha))
 
+    async def get_marcas_del_dia_en_orden(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
+        """Las marcas de un día en orden, con el tipo ya corregido por una persona (sin las que «No se usa»)."""
+        return await self.db.fetch_all(
+            f"SELECT fecha_hora, tipo FROM {LOGS_CON_TIPO_CORREGIDO} WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? "
+            "ORDER BY fecha_hora", (empleado_id, fecha))
+
     async def get_marcas_del_reloj_del_dia(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
         """Las marcas del reloj (no manuales) de un día."""
         return await self.db.fetch_all(
