@@ -3494,7 +3494,38 @@ async def exceso_velocidad(
     return {"success": True, "limite": limite, "segundos": dict(await asyncio.gather(*(uno(p) for p in pares)))}
 
 
-_VEL_CHOFERES: Dict[Any, Any] = {}   # (desde, hasta) -> (momento, filas de Nexacol): la grilla pide el mismo mes varias veces seguidas
+async def _velocidad_de_libreta(db: Database, choferes: List[Dict[str, Any]], por_emp: Dict[str, Dict[str, Dict[str, Any]]], desde: str, hasta: str) -> None:
+    """Agrega a `por_emp` la velocidad del camión de la libreta para los días con camión y sin velocidad. Solo patentes con GPS; si Nexacol falla en un día, ese día queda sin dato."""
+    import asyncio
+    ids = [int(c["id"]) for c in choferes]
+    if not ids:
+        return
+    marcas = ",".join("?" for _ in ids)
+    filas = await db.fetch_all(
+        f"SELECT empleado_id, fecha, patente FROM libreta_art25bis_dias WHERE empleado_id IN ({marcas}) AND fecha >= ? AND fecha <= ? AND COALESCE(patente,'') <> ''",
+        (*ids, desde, hasta))
+    faltan = [(str(f["empleado_id"]), str(f["fecha"])[:10], str(f["patente"])) for f in filas
+              if str(f["fecha"])[:10] not in por_emp.get(str(f["empleado_id"]), {})]
+    if not faltan:
+        return
+    hoy = datetime.now().date().isoformat()
+    sem = asyncio.Semaphore(4)
+
+    async def uno(pat: str, fecha: str):
+        async with sem:
+            try:
+                return await gps_nexacol.vel_camion_dia(pat, fecha, fecha < hoy)
+            except gps_nexacol.GpsNexacolError:
+                return None
+    pares = list(dict.fromkeys((p, f) for _, f, p in faltan))[:60]   # tope por consulta: un mes normal trae unos pocos
+    res = dict(zip(pares, await asyncio.gather(*(uno(p, f) for p, f in pares))))
+    for emp, fecha, pat in faltan:
+        r = res.get((pat, fecha))
+        if r:
+            por_emp.setdefault(emp, {})[fecha] = {"vel": r["vel"], "hora": r["hora"], "patente": pat, "comparte": False}
+
+
+_VEL_CHOFERES: Dict[Any, Any] = {}  # (desde, hasta) -> (momento, filas de Nexacol): la grilla pide el mismo mes varias veces seguidas
 
 
 @router.get("/gps/velocidades-choferes/")
@@ -3526,6 +3557,8 @@ async def velocidades_choferes(
     filas = await EmpleadoRepository(db).get_choferes_logistica_tradicional()
     choferes = [dict(r) for r in filas]
     por_emp, sin_calzar = calzar_choferes(dias, choferes)
+    # Respaldo (20-11-2026): un día con camión en la libreta pero sin velocidad del plan (Despacho Diario no trae al chofer ese día) se completa con el GPS del camión de la libreta.
+    await _velocidad_de_libreta(db, choferes, por_emp, desde, hasta)
     # Nombre y RUT de quienes tienen velocidades: el reporte semanal los imprime junto a la firma del chofer.
     personas = {
         str(c["id"]): {"nombre": " ".join(str(c.get(k) or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(c.get(k) or "").strip()), "rut": rut_visible(c.get("rut"))}

@@ -69,3 +69,9 @@ def test_segundos_sobre_limite_cuenta_solo_lo_que_iba_sobre_el_limite():
     assert segundos_sobre_limite(pts, 120) == 0
     # un hueco enorme sin reportar no cuenta entero
     assert segundos_sobre_limite([{"s": 0, "v": 100}, {"s": 7200, "v": 100}], 90) == 15 * 60
+
+
+def test_vel_max_de_puntos_respaldo_de_libreta():
+    from backend.services.gps_nexacol import vel_max_de_puntos
+    assert vel_max_de_puntos([]) is None
+    assert vel_max_de_puntos([{"v": 40.4, "t": "10:05:00"}, {"v": 87.6, "t": "11:30:12"}, {"t": "12:00:00"}]) == {"vel": 88, "hora": "11:30"}

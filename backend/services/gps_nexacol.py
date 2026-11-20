@@ -173,6 +173,38 @@ async def ruta_velocidad(patente: str, fecha: str) -> Dict[str, Any]:
     return {"success": True, "patente": veh["patente"], "fecha": fecha, "puntos": puntos, "punto_max": mx, "km": (data.get("resumen") or {}).get("km")}
 
 
+def vel_max_de_puntos(puntos: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Velocidad máxima de los puntos de un día ({vel, hora}); None si no hay puntos con velocidad."""
+    con_v = [p for p in puntos if isinstance(p.get("v"), (int, float))]
+    if not con_v:
+        return None
+    m = max(con_v, key=lambda p: p["v"])
+    return {"vel": int(round(m["v"])), "hora": str(m.get("t") or "")[:5] or None}
+
+
+_vel_dia_cache: Dict[Any, Any] = {}
+
+
+async def vel_camion_dia(patente: str, fecha: str, cerrado: bool) -> Optional[Dict[str, Any]]:
+    """Velocidad máxima del GPS de un camión (por patente) en un día, sin pasar por el plan de Despacho Diario: respaldo cuando el plan no trae al chofer
+    pero la libreta sí tiene su camión. Usa los mismos puntos de la ruta (Nexacol ya deja fuera lo que pasa dentro de la casa matriz). Un día cerrado con dato se recuerda."""
+    pat = re.sub(r"[^A-Z0-9]", "", str(patente).upper())
+    k = (pat, fecha)
+    if k in _vel_dia_cache:
+        return _vel_dia_cache[k]
+    if time.time() - _veh_cache["t"] > 600:
+        _veh_cache["v"] = await vehiculos()
+        _veh_cache["t"] = time.time()
+    veh = next((v for v in _veh_cache["v"] if re.sub(r"[^A-Z0-9]", "", v["patente"].upper()) == pat), None)
+    if not veh:
+        return None
+    data = await _get("/api/reports/camiones-gps-ruta", {"id": veh["id"], "fecha": fecha, "parada_min": str(PARADA_MIN_ASISTENCIA)})
+    res = vel_max_de_puntos(data.get("puntos") or [])
+    if res and cerrado:
+        _vel_dia_cache[k] = res
+    return res
+
+
 def segundos_sobre_limite(puntos: List[Dict[str, Any]], limite: float) -> int:
     """Segundos del día en que el camión iba a más de `limite` km/h: cada reporte sobre el límite cuenta hasta el siguiente (como mucho HUECO_MAX: más allá no hay dato)."""
     pts = sorted((p for p in puntos if isinstance(p.get("s"), (int, float)) and isinstance(p.get("v"), (int, float))), key=lambda p: p["s"])
