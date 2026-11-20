@@ -978,6 +978,14 @@ class AsistenciaRepository:
             f"SELECT fecha_hora, tipo FROM {LOGS_CON_TIPO_CORREGIDO} WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? "
             "ORDER BY fecha_hora DESC LIMIT 1", (empleado_id, fecha))
 
+    async def get_patentes_de_libreta(self, ids: List[int], desde: str, hasta: str) -> List[Dict[str, Any]]:
+        """Los días con camión anotado en la libreta del Art. 25 bis, de esos choferes y en ese tramo (para la velocidad
+        del GPS de su camión en la grilla). Se movió del router de Asistencia sin cambios."""
+        marcas = ",".join("?" for _ in ids)
+        return await self.db.fetch_all(
+            f"SELECT empleado_id, fecha, patente FROM libreta_art25bis_dias WHERE empleado_id IN ({marcas}) AND fecha >= ? AND fecha <= ? AND COALESCE(patente,'') <> ''",
+            (*ids, desde, hasta))
+
     async def get_marcas_del_dia_en_orden(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
         """Las marcas de un día en orden, con el tipo ya corregido por una persona (sin las que «No se usa»)."""
         return await self.db.fetch_all(

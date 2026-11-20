@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-20T19:27:21+00:00",
- "publicado": "2026-11-20T19:27:21+00:00",
- "commit": "4d0d7a3",
+ "armado": "2026-11-20T19:38:34+00:00",
+ "publicado": "2026-11-20T19:38:34+00:00",
+ "commit": "9d632ca",
  "archivos_leidos": 263,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -25,7 +25,7 @@
   "backend/repositories/__init__.py": "c022ff3139527163507482e3ee457625",
   "backend/repositories/area.py": "1b3d2c68db2157e4900f029b47dac767",
   "backend/repositories/articulo22.py": "5c681019e69e8e8c1c80db0e4768b716",
-  "backend/repositories/asistencia.py": "90cccb51d41af211127408c3343df0ef",
+  "backend/repositories/asistencia.py": "3fd551c4f810e541e22b47d1fab728e0",
   "backend/repositories/calendario.py": "795bf66d9b8e15c473d82b1853b8ec49",
   "backend/repositories/cargo.py": "6d37afcbe438f8b0f598706e0d161d4f",
   "backend/repositories/configuracion.py": "ebd988727a5d70a55f19bfc6dfd2ab62",
@@ -43,7 +43,7 @@
   "backend/repositories/visitas.py": "07f3b8e7b3c1fc961c4656771739135f",
   "backend/routers/__init__.py": "f10bd7b1a3754d543fe6bb55394d032f",
   "backend/routers/articulo22.py": "9674ed10c7e519b1ae5f150a0db74574",
-  "backend/routers/asistencia.py": "a1525d0ac7a07aef6624f175ca4d73d3",
+  "backend/routers/asistencia.py": "19fde41617acbac7fe7a1d729cc4ddd1",
   "backend/routers/auth.py": "c774a32e178c6e270e16d5c31791d320",
   "backend/routers/cierre.py": "105eebd3353b3d7daf79647854fd9fc3",
   "backend/routers/configuracion.py": "ad3418fba5f981978df733547ef23abd",

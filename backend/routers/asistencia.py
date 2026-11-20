@@ -3525,10 +3525,7 @@ async def _velocidad_de_libreta(db: Database, choferes: List[Dict[str, Any]], po
     ids = [int(c["id"]) for c in choferes]
     if not ids:
         return
-    marcas = ",".join("?" for _ in ids)
-    filas = await db.fetch_all(
-        f"SELECT empleado_id, fecha, patente FROM libreta_art25bis_dias WHERE empleado_id IN ({marcas}) AND fecha >= ? AND fecha <= ? AND COALESCE(patente,'') <> ''",
-        (*ids, desde, hasta))
+    filas = await AsistenciaRepository(db).get_patentes_de_libreta(ids, desde, hasta)
     faltan = [(str(f["empleado_id"]), str(f["fecha"])[:10], str(f["patente"])) for f in filas
               if str(f["fecha"])[:10] not in por_emp.get(str(f["empleado_id"]), {})]
     if not faltan:
