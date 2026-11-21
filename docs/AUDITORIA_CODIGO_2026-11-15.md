@@ -700,6 +700,13 @@ con el mismo texto y en el mismo orden (comparado línea por línea).
   disponibles; intercambios y compensaciones piden sus datos (422 sin ellos), igual que antes.
 - Pasan las 590 pruebas con la copia de práctica encendida.
 
+**Avance (21-11-2026): paso 6d hecho.** El período de RR.HH. (5 rutas, 105 líneas: resumen de una persona y global,
+último cierre, historial y cerrar) pasó a `routers/asistencia_periodo.py`, con el mismo texto (comparado línea por línea).
+`asistencia.py` bajó a 2.288 líneas.
+- **Comprobación:** las 289 rutas y el documento `openapi.json`, idénticos antes y después. En la copia de práctica, con
+  sesión iniciada, respondieron bien las cuatro consultas del período.
+- Pasan las 590 pruebas con la copia de práctica encendida.
+
 ---
 
 ## 7. Lo que no promete este plan
