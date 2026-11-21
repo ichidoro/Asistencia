@@ -627,6 +627,49 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 
 ---
 
+### Etapa 6: repartir `routers/asistencia.py` por tema (#3 de la auditoría del grafo)
+
+Plan del 21-11-2026; la persona dueña pidió hacerlo si no daña la aplicación. No cambia ninguna dirección, permiso ni
+resultado: solo cambia en qué archivo está cada función.
+
+**Por qué.** `backend/routers/asistencia.py` tiene 3.853 líneas y 65 rutas de temas distintos. Dos personas que cambian
+cosas distintas chocan en el mismo archivo, como pasó el 20-11-2026.
+
+**Cómo, sin cambiar las direcciones.**
+- `asistencia.py` sigue creando el router `/asistencia`, y `main.py` no cambia.
+- Cada tema pasa a su propio archivo con un router sin prefijo. `asistencia.py` lo incluye al final, así que todas las
+  rutas quedan bajo `/api/asistencia/...` como hoy.
+- Los nombres que usan las pruebas se siguen pudiendo importar desde `asistencia.py`.
+- Lo que comparten varios temas (el servicio de asistencia, el alias del motor) va a un archivo común.
+- Ninguna ruta del archivo depende del orden: no hay rutas del tipo `/{x}` que se tapen entre sí.
+
+**Pasos, del tema más independiente al más usado** (cada paso es un commit aparte):
+
+| Paso | Tema | Rutas | Líneas aprox. | Archivo nuevo |
+|---|---|---:|---:|---|
+| 6a | GPS y velocidades | 7 | 230 | `asistencia_gps.py` |
+| 6b | Libreta del Art. 25 bis | 10 | 750 | `asistencia_libreta.py` |
+| 6c | Intercambios, compensaciones y deuda | 12 | 485 | `asistencia_compensaciones.py` |
+| 6d | Período de RR.HH. | 5 | 105 | `asistencia_periodo.py` |
+| 6e | Jornadas especiales y horas extra | 3 | 155 | `asistencia_jornada.py` |
+| 6f | Marcas manuales y marcas del día | 6 | 885 | `asistencia_marcas.py` |
+| 6g | Asignaciones, reprocesos y avance | 11 | 760 | `asistencia_reprocesos.py` |
+| — | Grilla, consultas y filtros (se quedan) | 11 | 470 | `asistencia.py` |
+
+**Cómo se prueba cada paso.**
+1. El texto movido es el mismo (se compara línea por línea).
+2. La lista completa de rutas de la aplicación queda igual: método, dirección, nombre, permiso que exige y forma de los
+   datos. Se compara la lista y el documento `openapi.json` de antes y después; tienen que ser idénticos.
+3. Pasan todas las pruebas, también con la copia de práctica encendida (pantallas y arañas de consultas).
+4. Las pruebas que leen el archivo como texto o reemplazan una pieza dentro de él (`EmpleadoRepository`, `_motor`) se
+   ajustan para mirar el archivo nuevo. Se revisa que sigan fallando con un error puesto a propósito.
+
+**Riesgo y cómo se cubre.** Lo delicado es que una función movida use un nombre que quedó en el otro archivo. Se revisa
+con la prueba de nombres definidos y con el arranque de la aplicación en la copia de práctica, que abre todas las
+pantallas.
+
+---
+
 ## 7. Lo que no promete este plan
 
 - No asegura que no haya fallas de cálculo: eso lo cuidan las pruebas del cálculo, la prueba guardiana y los ensayos con datos reales.

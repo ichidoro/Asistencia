@@ -35,13 +35,19 @@ Se cerraron porque el cierre todavía no revisaba las jornadas especiales (ya se
 | 05-07 | J.G.G. (Planta Mantencion 2) | Día libre | 287 |
 | 16-07 | O.C.E. (Planta Mantencion 2) | Feriado | 390 |
 
-**Decisión de la persona dueña (18-11-2026): validarlas.** Las cinco caen en el período Julio 2026 (26-06 al 25-07), así que basta reabrir ese período solo para Mantención, validarlas y volver a cerrarlo. Falta hacerlo desde la aplicación; antes conviene un ensayo, porque al validar, el día se vuelve a calcular.
+**Decisión de la persona dueña (18-11-2026): validarlas.** Las cinco caen en el período Julio 2026 (26-06 al 25-07), así que basta reabrir ese período solo para Mantención, validarlas y volver a cerrarlo. Falta hacerlo desde la aplicación.
+
+**Ensayo del 21-11-2026** (con el respaldo de ese día, en una base aparte del PC que se borró al terminar). Se reabrió Julio de Mantención, se validaron las cinco y se volvió a cerrar, de las dos formas:
+- Como jornada EXTRA (monto fijo): solo cambian esas cinco jornadas, que pasan a EXTRA con sus minutos (900, 58, 123, 287 y 390).
+- Pasándolas a horas extra y aprobándolas completas: solo cambian esos cinco días, con sus horas extra aprobadas.
+- En las dos formas no cambia ningún otro día ni otra persona del mes, el cierre pasa sin frenos (pide aceptar 1 inasistencia sin justificar, como la primera vez) y al cerrar, Noviembre vuelve a quedar vigente.
+- Falta que la persona dueña elija la forma de pago de cada una.
 
 ### 2.2 Horarios
 
 | Horario | Qué falta |
 |---|---|
-| Tradicional Bodega | Evaluar un ciclo de mañana. Hoy tiene uno solo, de 11:30 a 20:00, y hay personas que trabajan de mañana. Antes de agregarlo, revisar los días reales. |
+| Tradicional Bodega | **No se cambia** (decisión de la persona dueña, 21-11-2026): trabajar de mañana son casos puntuales, cuando la jefatura cita a alguien algunos días. |
 | Planta Mantencion (el primero) | Está inactivo y sin personas (se usa Planta Mantencion 2): no hace falta tocarlo. |
 
 ### 2.3 Correo del cierre
@@ -50,13 +56,13 @@ Los destinatarios del informe de cierre los carga la persona dueña en Configura
 
 ### 2.4 Preinforme con señales para los jefes de área
 
-Las propuestas se descartaron. Queda esperando un ejemplo de la persona dueña: un caso real o una frase que le gustaría leer en el preinforme.
+Propuesta del 18-11-2026, aprobada para Ciclo Inteligente: una sección «Para coordinar antes del cierre» con quién debe horas (atrasos, salidas adelantadas) o tiene inasistencias sin justificar, y cómo recuperarlas antes del cierre. Para Bolsa Flexible se propuso el 21-11-2026 otra forma, porque en Bolsa las horas bajo la meta no se descuentan: quién va bajo la meta (horas que todavía se pueden programar) y quién ya la pasó (desde ahí se pagan como horas extra). Falta el visto bueno de la parte de Bolsa y programarlo.
 
 ### 2.5 Reorganizar el código grande
 
 De la auditoría `docs/AUDITORIA_GRAFO.md` (7-11). Se dejó para después de los cierres, y ese momento ya llegó:
 
-- **#3:** repartir `routers/asistencia.py` por tema, sin cambiar las URL.
+- **#3:** repartir `routers/asistencia.py` por tema, sin cambiar las URL. **Plan escrito el 21-11-2026** (etapa 6 de `docs/AUDITORIA_CODIGO_2026-11-15.md`, en 7 pasos con su ensayo).
 - **#5:** sacar de `AsistenciaService` lo que no es cálculo (la tabla de Marcaciones y el cierre).
 - **#9: hecho** (16 al 18-11-2026, etapa 5 de `docs/AUDITORIA_CODIGO_2026-11-15.md`): las tres funciones quedaron en piezas con nombre y el resultado no cambió.
 - **#4:** las «capas al revés», solo explicado.
@@ -66,7 +72,7 @@ No arregla errores visibles: da orden para cambiar el código con menos riesgo.
 ### 2.6 Deudas técnicas
 
 - **Hecho (18-11-2026):** el Excel de cierre buscaba `logo.jpg`, que no existe, y salía sin logo. Ahora usa el mismo logo que muestra la aplicación (`logo-aguacol.png`), sin deformarlo.
-- En el servidor no está definido `DEBUG` y el valor por defecto es verdadero: ante un error, la app muestra el detalle técnico.
+- **Hecho (21-11-2026):** en el servidor `DEBUG` estaba encendido (no estaba definido): ante un error la app mostraba el detalle técnico. Ahora está apagado en su configuración (`DEBUG=false`): muestra solo «ocurrió un error» y el detalle queda en el registro del servidor.
 - La clave inicial del usuario admin está escrita en `backend/repositories/seguridad.py` (solo se usa si el admin no existe). **Se deja así** para emergencias (decisión de la persona dueña, 18-11-2026).
 
 ### 2.7 Auditoría del código del 15-11-2026
