@@ -7,7 +7,7 @@ Antes de la primera o después de la última sigue bloqueada (no sirve para borr
 """
 from pathlib import Path
 
-from backend.routers.asistencia import _rellena_un_hueco
+from backend.routers.asistencia_marcas import _rellena_un_hueco
 
 RAIZ = Path(__file__).resolve().parents[2]
 DIA = [{"fecha_hora": "2026-11-19 06:33:37", "tipo": "Entrada"},
@@ -45,6 +45,6 @@ def test_una_marca_que_no_alterna_sigue_bloqueada():
 
 
 def test_el_router_usa_la_excepcion_en_el_bloqueo():
-    router = (RAIZ / "backend" / "routers" / "asistencia.py").read_text(encoding="utf-8")
+    router = (RAIZ / "backend" / "routers" / "asistencia_marcas.py").read_text(encoding="utf-8")
     assert "get_marcas_del_dia_en_orden(empleado_id, fecha)" in router
     assert "not cierra_entrada and not rellena_hueco" in router

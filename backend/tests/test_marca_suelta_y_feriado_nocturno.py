@@ -111,7 +111,7 @@ def test_la_salida_de_la_segunda_jornada_se_escribe_desde_el_ingreso_manual():
     # área (antes el servidor lo rechazaba porque el reloj ya tenía ENTRADA y SALIDA ese día, y el modal bloqueaba los campos).
     from pathlib import Path
     raiz = Path(__file__).resolve().parents[2]
-    router = (raiz / "backend" / "routers" / "asistencia.py").read_text(encoding="utf-8")
+    router = (raiz / "backend" / "routers" / "asistencia_marcas.py").read_text(encoding="utf-8")
     assert "cierra_entrada = solo_salida and bool(await _hora_de_entrada_sin_cerrar(db, empleado_id, fecha))" in router
     assert "has_bio_in and has_bio_out and not cierra_entrada and not rellena_hueco and not getattr(current_user, 'is_superuser', False)" in router
     modal = (raiz / "frontend" / "js" / "marcaciones_manuales.js").read_text(encoding="utf-8")

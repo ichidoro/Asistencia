@@ -323,7 +323,7 @@ def test_la_ventana_usa_las_opciones_de_la_regla_y_no_guarda_horas_del_horario()
     assert "_mmPermitirEscribirMarcas(caminos.some(o => o.startsWith('AGREGAR_')))" in js
     assert "b.classList.toggle('d-none', !permitir)" in js
     raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    with open(os.path.join(raiz, 'backend', 'routers', 'asistencia.py'), encoding='utf-8') as f:
+    with open(os.path.join(raiz, 'backend', 'routers', 'asistencia_marcas.py'), encoding='utf-8') as f:
         router = f.read()
     assert 'horario = {"entrada": (hd or {}).get("hora_entrada_teorica")' in router and '"horario": horario' in router
     # con una sola marca, la hora sale del ciclo que calza con el tipo de esa marca
@@ -355,7 +355,7 @@ def test_la_lectura_alternada_solo_vale_con_marcas_pares():
 
 def test_la_lectura_alternada_es_la_misma_propuesta_de_la_ventana():
     """Para cada secuencia par, el motor lee las marcas en el mismo orden que propone sugerir_clasificacion_marcas."""
-    from backend.routers.asistencia import sugerir_clasificacion_marcas
+    from backend.routers.asistencia_marcas import sugerir_clasificacion_marcas
     from backend.services.quantum_matrix_engine import _aplicar_alternada
     for sec in (s for s in SECUENCIAS if len(s) % 2 == 0):
         marcas = _marcas(sec)
@@ -410,7 +410,7 @@ def test_el_orden_se_acepta_solo_si_deja_el_dia_calculable():
 
 
 def test_la_propuesta_del_orden_es_la_de_la_ventana():
-    from backend.routers.asistencia import sugerir_clasificacion_marcas
+    from backend.routers.asistencia_marcas import sugerir_clasificacion_marcas
     from backend.services.reglas_marcas_def import orden_propuesto
     for sec in SECUENCIAS:
         marcas = _marcas(sec)
@@ -459,7 +459,7 @@ def test_con_una_marca_sola_se_propone_el_ciclo_que_calza_con_su_tipo():
     """Horario con tres ciclos el mismo día (como los de Mantención): Noche 23:00–07:00, Mañana 07:00–15:00,
     Tarde 15:00–23:00. Una SALIDA se compara con la salida de cada ciclo y una ENTRADA con la entrada,
     en el reloj de 24 horas."""
-    from backend.routers.asistencia import ciclo_para_marca_sola
+    from backend.routers.asistencia_marcas import ciclo_para_marca_sola
     ciclos = [{"hora_entrada": "23:00", "hora_salida": "07:00"},
               {"hora_entrada": "07:00", "hora_salida": "15:00"},
               {"hora_entrada": "15:00", "hora_salida": "23:00"}]
@@ -475,7 +475,7 @@ def test_con_una_marca_sola_se_propone_el_ciclo_que_calza_con_su_tipo():
 def test_ventana_marca_el_doble_toque_igual_que_el_calculo():
     """La ventana muestra como «no se usa» la marca que el cálculo deja fuera por doble toque (dos marcas a menos del
     rebote), aunque sean de distinto tipo: así ve las mismas marcas que la regla."""
-    from backend.routers.asistencia import marcas_doble_toque
+    from backend.routers.asistencia_marcas import marcas_doble_toque
     rows = [
         {"id": 1, "fecha_hora": "2026-08-31 06:58:08", "tipo": "Entrada", "manual": 0},
         {"id": 2, "fecha_hora": "2026-08-31 13:28:29", "tipo": "Salida", "manual": 0},
@@ -490,7 +490,7 @@ def test_ventana_marca_el_doble_toque_igual_que_el_calculo():
     assert list(marcas_doble_toque(rows, 180)) == [4]
     # Fuera del rebote no se descarta nada
     assert marcas_doble_toque(rows, 60) == {}
-    router = open(os.path.join(os.path.dirname(__file__), "..", "routers", "asistencia.py"), encoding="utf-8").read()
+    router = open(os.path.join(os.path.dirname(__file__), "..", "routers", "asistencia_marcas.py"), encoding="utf-8").read()
     assert '"doble_toque": doble_toque.get(r["id"])' in router
     js = open(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js", "marcaciones_manuales.js"), encoding="utf-8").read()
     assert "No se usa · doble toque" in js and "se usan " in js
@@ -604,7 +604,7 @@ def test_entrada_salida_salida_falta_la_vuelta_de_colacion():
     assert p(['2026-08-25 06:57:00', '2026-08-25 13:28:00', '2026-08-25 16:29:00'], '07:00', '16:30', 0) is None
     # En la ventana, la marca que no se usa arrastra su doble toque (si no, la descartada vuelve a contar)
     base = os.path.join(os.path.dirname(__file__), "..")
-    router = open(os.path.join(base, "routers", "asistencia.py"), encoding="utf-8").read()
+    router = open(os.path.join(base, "routers", "asistencia_marcas.py"), encoding="utf-8").read()
     assert "tipos_op[str(id_dt)] = TIPO_NO_SE_USA" in router and "doble_toque=None):" in router
 
 def test_cinco_marcas_sobra_una_y_queda_como_la_regla_2():
@@ -666,14 +666,14 @@ def test_propuesta_reglas_26_27_6_28_29():
     assert r['combinacion'] == 29 and resumen(r) == [('FALTA_ENTRADA', ['Salida'], '23:00')]
     assert propuesta_una_marca('2026-06-20 04:07:00', 'Salida', None, None) is None
     base = os.path.join(os.path.dirname(__file__), "..")
-    router = open(os.path.join(base, "routers", "asistencia.py"), encoding="utf-8").read()
+    router = open(os.path.join(base, "routers", "asistencia_marcas.py"), encoding="utf-8").read()
     assert "len(usadas) in (1, 3, 5)" in router and "propuesta_una_marca(fhs[0]" in router
 
 def test_ventana_de_tres_marcas_con_opciones_y_un_solo_guardar():
     """La ventana muestra las opciones completas (la primera elegida), lo que paga cada una, «Otra cosa» y un solo Guardar;
     la colación de su horario sale de las marcas reales (mediana), sin horas escritas en el código."""
     base = os.path.join(os.path.dirname(__file__), "..")
-    router = open(os.path.join(base, "routers", "asistencia.py"), encoding="utf-8").read()
+    router = open(os.path.join(base, "routers", "asistencia_marcas.py"), encoding="utf-8").read()
     assert "async def _colacion_tipica(" in router and "statistics.median(sale)" in router
     assert "transformar_logs=transformar" in router and "collect_only=True" in router
     assert "secuencia_en_revision(hd.get(\"observaciones\"))" in router   # solo en días en revisión
@@ -705,7 +705,7 @@ def test_ventana_ingreso_manual_en_dos_columnas_conserva_todo():
     assert 'onclick="saveManualEntry()"' in modal and 'onclick="closeManualEntryModal()"' in modal
     css = open(os.path.join(base, "css", "ventanas.css"), encoding="utf-8").read()
     assert "#modal-marcacion-manual .mm-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr)" in css
-    router = open(os.path.join(base, "..", "backend", "routers", "asistencia.py"), encoding="utf-8").read()
+    router = open(os.path.join(base, "..", "backend", "routers", "asistencia_marcas.py"), encoding="utf-8").read()
     assert '"calculo": ({"estado": hd.get("estado")' in router and '"colacion_tipica": tipica' in router
     assert '"/tramos/"' not in router
 
@@ -728,12 +728,12 @@ def test_el_calculo_no_lee_las_marcas_que_no_se_usan():
     from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO, LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO
     assert "<> 'No se usa'" in LOGS_CON_TIPO_CORREGIDO
     assert "No se usa" not in LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO
-    router = open(os.path.join(os.path.dirname(__file__), "..", "routers", "asistencia.py"), encoding="utf-8").read()
+    router = open(os.path.join(os.path.dirname(__file__), "..", "routers", "asistencia_marcas.py"), encoding="utf-8").read()
     # La ventana las muestra: la consulta vive en el repositorio desde la etapa 4 (16-11-2026) y _marcas_del_dia la usa
     import inspect
     from backend.repositories.asistencia import AsistenciaRepository
     assert "FROM {LOGS_CON_TIPO_CORREGIDO_Y_SIN_USO}" in inspect.getsource(AsistenciaRepository.get_marcas_entre)
-    from backend.routers import asistencia as R
+    from backend.routers import asistencia_marcas as R
     assert ".get_marcas_entre(" in inspect.getsource(R._marcas_del_dia)
     assert "La regla de este día no permite dejar una marca sin usar." in router
     assert "Una marca manual no se marca como «No se usa»" in router

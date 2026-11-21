@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 os.environ.setdefault("SECRET_KEY", "x" * 40)
 
-from backend.routers import asistencia as R  # noqa: E402
+from backend.routers import asistencia_marcas as R  # noqa: E402
 
 E, S = "Entrada", "Salida"
 

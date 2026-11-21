@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 os.environ.setdefault("SECRET_KEY", "x" * 40)
 
-from backend.routers import asistencia as R  # noqa: E402
+from backend.routers import asistencia_marcas as R  # noqa: E402
 from backend.services import quantum_matrix_engine as qme  # noqa: E402
 from backend.services.quantum_matrix_engine import QuantumMatrixEngine as Q  # noqa: E402
 from backend.services.quantum_matrix_engine import TensorMarkDeduplicator as D  # noqa: E402

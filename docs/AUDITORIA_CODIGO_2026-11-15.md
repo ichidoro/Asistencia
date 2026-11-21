@@ -717,6 +717,19 @@ mismo texto (comparado línea por línea). `asistencia.py` bajó a 2.125 líneas
   responde «Empleado no encontrado» y la aprobación en lote revisa la forma de sus datos, como antes.
 - Pasan las 590 pruebas con la copia de práctica encendida.
 
+**Avance (21-11-2026): paso 6f hecho.** Marcas manuales y marcas del día (6 rutas y sus funciones de apoyo, 887 líneas:
+agregar, quitar y borrar marcas manuales, ver las marcas de un día, elegir cuál es Entrada o Salida, y marcas masivas)
+pasaron a `routers/asistencia_marcas.py`, con el mismo texto (comparado línea por línea). `asistencia.py` bajó a 1.233
+líneas y dejó de importar lo que solo usaba esa parte (las propuestas de las reglas de marcaciones, entre otras).
+- Seis pruebas de marcas miran el archivo nuevo: importan sus funciones desde ahí, reemplazan `EmpleadoRepository` en
+  él y leen su texto. La del «50 %» también lo revisa.
+- **Error puesto a propósito:** con dos cambios falsos en el archivo nuevo (la marca que rellena un hueco y la Salida
+  del turno de noche) fallaron 9 de esas pruebas; al reponer el texto, pasaron todas.
+- **Comprobación:** las 289 rutas y el documento `openapi.json`, idénticos antes y después. En la copia de práctica, con
+  sesión iniciada y sin guardar nada: las marcas de un día responden bien; agregar una marca y reclasificar para una
+  persona que no existe responden «Empleado no encontrado»; las marcas masivas piden sus fechas, como antes.
+- Pasan las 590 pruebas con la copia de práctica encendida.
+
 ---
 
 ## 7. Lo que no promete este plan
