@@ -1,5 +1,5 @@
 {
- "archivos_revisados": 173,
+ "archivos_revisados": 174,
  "repetidas": {
   "total": 137,
   "top": [
@@ -216,7 +216,7 @@
   },
   {
    "archivo": "backend/routers/asistencia.py",
-   "lineas": 2289
+   "lineas": 2126
   },
   {
    "archivo": "frontend/js/productos_4.js",

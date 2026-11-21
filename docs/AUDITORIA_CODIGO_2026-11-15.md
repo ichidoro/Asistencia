@@ -707,6 +707,16 @@ con el mismo texto y en el mismo orden (comparado línea por línea).
   sesión iniciada, respondieron bien las cuatro consultas del período.
 - Pasan las 590 pruebas con la copia de práctica encendida.
 
+**Avance (21-11-2026): paso 6e hecho.** Validar una jornada especial y aprobar horas extra, una o varias (3 rutas), más
+`_cuando_cambio`, que solo usa la validación (161 líneas en dos partes), pasaron a `routers/asistencia_jornada.py`, con el
+mismo texto (comparado línea por línea). `asistencia.py` bajó a 2.125 líneas.
+- La prueba del aviso de la validación (`test_compensar_inasistencia.py`) lee el archivo nuevo, y la del «50 %»
+  también lo revisa.
+- **Comprobación:** las 289 rutas y el documento `openapi.json`, idénticos antes y después. En la copia de práctica, con
+  sesión iniciada y sin guardar nada: una acción que no existe responde «Acción no válida», una persona que no existe
+  responde «Empleado no encontrado» y la aprobación en lote revisa la forma de sus datos, como antes.
+- Pasan las 590 pruebas con la copia de práctica encendida.
+
 ---
 
 ## 7. Lo que no promete este plan
