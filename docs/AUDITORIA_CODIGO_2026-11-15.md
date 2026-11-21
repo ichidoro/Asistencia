@@ -627,7 +627,7 @@ Cada pieza es un cambio aparte, con su propio «¿Subo a GitHub?».
 
 ---
 
-### Etapa 6: repartir `routers/asistencia.py` por tema (#3 de la auditoría del grafo)
+### Etapa 6: repartir `routers/asistencia.py` por tema (#3 de la auditoría del grafo) (**hecha**)
 
 Plan del 21-11-2026; la persona dueña pidió hacerlo si no daña la aplicación. No cambia ninguna dirección, permiso ni
 resultado: solo cambia en qué archivo está cada función.
@@ -729,6 +729,22 @@ líneas y dejó de importar lo que solo usaba esa parte (las propuestas de las r
   sesión iniciada y sin guardar nada: las marcas de un día responden bien; agregar una marca y reclasificar para una
   persona que no existe responden «Empleado no encontrado»; las marcas masivas piden sus fechas, como antes.
 - Pasan las 590 pruebas con la copia de práctica encendida.
+
+**Avance (21-11-2026): paso 6g hecho.** Asignaciones de turno, procesar y reprocesar, avance de los trabajos de
+reproceso, recalcular la bolsa y reasignar un turno (11 rutas, 699 líneas en dos partes) pasaron a
+`routers/asistencia_reprocesos.py`, con el mismo texto (comparado línea por línea).
+- **Comprobación:** las 289 rutas y el documento `openapi.json`, idénticos antes y después. En la copia de práctica, con
+  sesión iniciada, respondieron bien el avance de los reprocesos y, de lo que queda en `asistencia.py`, la grilla y sus
+  filtros.
+- Pasan las 590 pruebas con la copia de práctica encendida.
+
+**Cierre de la etapa 6 (21-11-2026).** Los siete pasos están en GitHub y el servidor quedó funcionando con cada uno.
+- `routers/asistencia.py` bajó de 3.853 a 524 líneas: le quedan la grilla, las consultas y los filtros (11 rutas), y
+  al final incluye los siete archivos nuevos.
+- Archivos nuevos: `asistencia_gps.py` (250 líneas), `asistencia_libreta.py` (783), `asistencia_compensaciones.py`
+  (485), `asistencia_periodo.py` (121), `asistencia_jornada.py` (184), `asistencia_marcas.py` (913),
+  `asistencia_reprocesos.py` (725) y `asistencia_comun.py` (14), con lo que comparten.
+- En cada paso, las direcciones, los permisos y los datos de las 289 rutas quedaron idénticos.
 
 ---
 
