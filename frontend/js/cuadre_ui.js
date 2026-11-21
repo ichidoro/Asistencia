@@ -96,6 +96,10 @@
         const p = estado.data && estado.data.politica;
         if (!p || !estado.eleccion) return false;
         if (p.politica !== estado.eleccion) return false;
+        // Con horas extra por decidir (por ejemplo, las de un día libre o feriado que se pasaron a horas extra después de
+        // decidir), la misma decisión se puede confirmar otra vez para que el cuadre las reparta (dueño, 21-11-2026).
+        const L = estado.data && estado.data.libro;
+        if (L && Number(L.he_por_decidir) >= 1) return false;
         if (p.politica === 'CERO') return !guiaCambio(estado.data);
         if (p.politica !== 'PAGAR') return true;
         const pm = (p.minutos_a_pagar == null) ? null : Number(p.minutos_a_pagar);

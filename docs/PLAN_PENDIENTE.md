@@ -43,6 +43,8 @@ Se cerraron porque el cierre todavía no revisaba las jornadas especiales (ya se
 - En las dos formas no cambia ningún otro día ni otra persona del mes, el cierre pasa sin frenos (pide aceptar 1 inasistencia sin justificar, como la primera vez) y al cerrar, Noviembre vuelve a quedar vigente.
 - Falta que la persona dueña elija la forma de pago de cada una.
 
+**21-11-2026:** se validaron las cinco como horas extra. **Decisión de la persona dueña:** las horas extra de un día libre o feriado se tratan igual que cualquier hora extra: el cuadre las reparte (cubren deuda y se pagan hasta el tope de «Pagar hasta») y no se deciden aparte. Antes quedaban fuera del reparto y, al aprobarlas con ✓, se pagaban por fuera del tope. Ensayo con el respaldo: de 102 cuadres abiertos solo cambian las tres personas de Julio de Mantención. Con los topes que se decidieron antes, quedan sin pagar 00:50:29, 00:43:27 y 04:47:00. Si se quiere pagar más, hay que subir el tope en «Ver cuadre».
+
 ### 2.2 Horarios
 
 | Horario | Qué falta |

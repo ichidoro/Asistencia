@@ -5515,13 +5515,13 @@ window.cierrePaso3 = async function (content, btnNext, ev) {
             ? '<span class="text-nowrap">Trabajó de más <b style="color:#b7791f">' + hhmmss(f.he_trabajadas) + '</b></span>'
               + '<span class="text-nowrap">Debe <b style="color:#c53030">' + hhmmss(f.deuda_bruta) + '</b></span>'
             : '<span class="text-nowrap text-muted">' + (esTramo ? 'Bolsa Flexible: sin cuadre, se decide por día' : 'Rango sin período: se decide por día') + '</span>';
-        // Ya cuadrada y con días aún por decidir: son días que el cuadre no reparte (día libre, feriado o llamado sobre una
-        // jornada especial); se deciden aquí, día por día. «Cuadrar» de nuevo no los cambiaría.
+        // Ya cuadrada y con días aún por decidir: horas extra que llegaron después de decidir (por ejemplo, un día libre o
+        // feriado pasado a horas extra). Desde el 21-11-2026 el cuadre también las reparte: se confirma de nuevo en «Ver cuadre».
         const yaCuadrada = !!(f && f.politica);
         const accion = !f || !puedeHE ? ''
             : (yaCuadrada ? botonCuadrar(p.id, p.nombre, 'Ver cuadre', 'btn-outline-primary') : botonCuadrar(p.id, p.nombre, 'Cuadrar', 'btn-primary'));
         const nota = yaCuadrada ? '<li class="px-3 py-2 small text-secondary border-top">Cuadre ya decidido (' + etiquetaPol(f) + '). '
-            + 'Estos días son de una jornada especial o un llamado y el cuadre no los reparte: apruébalos o recházalos aquí.</li>' : '';
+            + 'Estas horas extra quedaron después de decidir: abre «Ver cuadre» y confirma de nuevo para que el cuadre las reparta, o decídelas aquí día por día.</li>' : '';
         return '<li class="border-bottom"><details' + (f && !yaCuadrada ? '' : ' open') + '>'
             + '<summary class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 px-3" style="cursor:pointer;list-style:none">'
             + '<span class="fw-bold text-dark text-nowrap">' + cierreEsc(nombreP(p.nombre)) + '</span>'
