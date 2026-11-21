@@ -56,7 +56,7 @@ Los destinatarios del informe de cierre los carga la persona dueña en Configura
 
 ### 2.4 Preinforme con señales para los jefes de área
 
-Propuesta del 18-11-2026, aprobada para Ciclo Inteligente: una sección «Para coordinar antes del cierre» con quién debe horas (atrasos, salidas adelantadas) o tiene inasistencias sin justificar, y cómo recuperarlas antes del cierre. Para Bolsa Flexible se propuso el 21-11-2026 otra forma, porque en Bolsa las horas bajo la meta no se descuentan: quién va bajo la meta (horas que todavía se pueden programar) y quién ya la pasó (desde ahí se pagan como horas extra). Falta el visto bueno de la parte de Bolsa y programarlo.
+Propuesta del 18-11-2026, aprobada para Ciclo Inteligente: una sección «Para coordinar antes del cierre» con quién debe horas (atrasos, salidas adelantadas) o tiene inasistencias sin justificar, y cómo recuperarlas antes del cierre. Para Bolsa Flexible se propuso el 21-11-2026 otra forma, porque en Bolsa las horas bajo la meta no se descuentan: quién va bajo la meta (horas que todavía se pueden programar) y quién ya la pasó (desde ahí se pagan como horas extra). **Programado el 21-11-2026** con las dos frases aprobadas: el preinforme trae al final la sección «Para coordinar antes del cierre»; el informe de cierre no la lleva.
 
 ### 2.5 Reorganizar el código grande
 

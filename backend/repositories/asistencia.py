@@ -855,9 +855,13 @@ class AsistenciaRepository:
         await self.db.execute("DELETE FROM cierres_periodos WHERE id = ?", (cierre_id,))
 
     async def get_cierres_historial(self, limit: int = 12) -> List[Dict[str, Any]]:
-        """Obtiene al historial de cierres para la tabla de administraciÃ³n"""
-        query = "SELECT * FROM cierres_periodos ORDER BY fecha_fin DESC LIMIT ?"
-        return await self.db.fetch_all(query, (limit,))
+        """El historial de cierres, del más nuevo al más antiguo, con el nombre de su período (mes_cierre, «Julio 2026»).
+        limit <= 0 trae todos (la ventana Historial de cierres los muestra todos, para poder reabrir cualquiera)."""
+        query = ("SELECT c.*, p.mes_cierre FROM cierres_periodos c LEFT JOIN periodos_rrhh p "
+                 "ON p.fecha_inicio = c.fecha_inicio AND p.fecha_fin = c.fecha_fin ORDER BY c.fecha_fin DESC, c.area")
+        if limit and limit > 0:
+            return await self.db.fetch_all(query + " LIMIT ?", (limit,))
+        return await self.db.fetch_all(query)
 
 
     async def check_fecha_cerrada(self, fecha: str, empleado_id: int = None) -> bool:

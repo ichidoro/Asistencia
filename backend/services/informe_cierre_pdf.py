@@ -529,6 +529,57 @@ def resumen(inf: Dict[str, Any]) -> List[tuple]:
     return out
 
 
+def _dm(fecha: str) -> str:
+    return f'{fecha[8:10]}-{fecha[5:7]}'
+
+
+def _cuantos(n: int, uno: str, varios: str) -> str:
+    return f'1 {uno}' if n == 1 else f'{n} {varios}'
+
+
+def para_coordinar(inf: Dict[str, Any], fecha_fin: str, hoy: str) -> List[str]:
+    """Avisos del preinforme para que la jefatura coordine con cada persona antes del cierre (frases aprobadas por la
+    persona dueña, 18 y 21-11-2026). Texto con <b> para el PDF; las cifras en HH:MM:SS.
+
+    Ciclo Inteligente: quién debe horas que se van a descontar (atrasos, salidas adelantadas…) y quién tiene
+    inasistencias sin justificar. Las horas extra del mismo tramo pagan primero la deuda.
+    Bolsa Flexible: las horas bajo la meta no se descuentan, así que el aviso es quién va bajo la meta (horas que todavía
+    se pueden programar) y quién ya la pasó (desde ahí se pagan como horas extra).
+    Quien no tiene nada que coordinar no aparece; las personas inactivas tampoco. `hoy` y `fecha_fin` en AAAA-MM-DD."""
+    from xml.sax.saxutils import escape
+    corte = min(hoy, fecha_fin)
+    fin = _dm(fecha_fin)
+    activos = [p for p in inf['personas'] if p.get('activo', True)]
+    quien = lambda p: f'<b>{escape(p["nombre"])}</b> ({escape(p["horario"])})'
+    out = []
+    if inf['tipo'] == 'BOLSA':
+        bajo = sorted((p for p in activos if p.get('meta') and p['acum'] < p['meta']), key=lambda p: p['acum'] - p['meta'])
+        sobre = sorted((p for p in activos if p.get('meta') and p['acum'] > p['meta']), key=lambda p: p['meta'] - p['acum'])
+        for p in bajo:
+            out.append(f'{quien(p)} lleva <b>{hms(p["acum"])}</b> de <b>{hms(p["meta"])}</b> al {_dm(corte)}. Le quedan '
+                       f'<b>{hms(p["meta"] - p["acum"])}</b> de bolsa hasta el {fin}, que se pueden programar con la persona.')
+        for p in sobre:
+            out.append(f'{quien(p)} ya pasó la meta: lleva <b>{hms(p["acum"])}</b> de <b>{hms(p["meta"])}</b>. Desde aquí, '
+                       'cada hora se paga como hora extra. Coordinar si hace falta.')
+        return out
+    for p in sorted((p for p in activos if p.get('descontar', 0) > 0), key=lambda p: -p['descontar']):
+        causas = [x for x in (_cuantos(p.get('n_atr', 0), 'atraso', 'atrasos') if p.get('n_atr') else '',
+                              _cuantos(p.get('n_sad', 0), 'salida adelantada', 'salidas adelantadas') if p.get('n_sad') else '') if x]
+        det = f' ({" y ".join(causas)})' if causas else ''
+        out.append(f'{quien(p)} debe <b>{hms(p["descontar"])}</b> al {_dm(corte)}{det}. Se recomienda coordinar con la '
+                   f'persona para que recupere esas horas antes del cierre del {fin}, quedándose después de su salida: '
+                   'esas horas extra pagan primero la deuda del tramo.')
+    for p in activos:
+        ina = sorted(k for k, clase in (p.get('dias_aus') or {}).items() if clase == 'ina')
+        if not ina:
+            continue
+        cuando = (f'una inasistencia el {_dm(ina[0])}' if len(ina) == 1
+                  else f'{len(ina)} inasistencias ({", ".join(_dm(k) for k in ina[:-1])} y {_dm(ina[-1])})')
+        out.append(f'{quien(p)} tiene {cuando} sin justificar. Se puede compensar con una jornada extra o con horas extra '
+                   'del mismo tramo, o justificar, antes del cierre.')
+    return out
+
+
 # ───────────────────────────── PDF (reportlab) ─────────────────────────────
 
 _FUENTES = False
@@ -776,6 +827,15 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
 
     historia = [enc, Spacer(1, 8), t_chips, Spacer(1, 6), tabla, Spacer(1, 7)]
     historia += [Paragraph(x, st_ley) for x in leyenda(inf, justif, cols)]
+    if preinforme:
+        avisos = para_coordinar(inf, fecha_fin, datetime.now().strftime('%Y-%m-%d'))
+        if avisos:
+            st_av_t = ParagraphStyle('avt', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY))
+            st_av = ParagraphStyle('av', fontName=_f('Barlow'), fontSize=8.3, leading=11, textColor=H(C_INK), leftIndent=8,
+                                   bulletIndent=0, spaceAfter=2.5)
+            historia += [Spacer(1, 12), KeepTogether([Paragraph('Para coordinar antes del cierre', st_av_t), Spacer(1, 4),
+                                                      Paragraph(avisos[0], st_av, bulletText='•')])]
+            historia += [Paragraph(x, st_av, bulletText='•') for x in avisos[1:]]
     if not preinforme:
         historia += [Spacer(1, 26), KeepTogether([firmas])]
 

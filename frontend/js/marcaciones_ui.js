@@ -5929,7 +5929,7 @@ window.descargarInformeCierre = async function (fIni, fFin, area, btn) {
 
 async function openHistorialCierresModal() {
     try {
-        const resp = await fetch('/api/asistencia/periodo-rrhh/historial/');
+        const resp = await fetch('/api/asistencia/periodo-rrhh/historial/?limit=0');   // todos: cualquiera se puede reabrir
         const historial = await resp.json();
 
         const user = AuthService.getUser();
@@ -5943,6 +5943,10 @@ async function openHistorialCierresModal() {
             if (a.length < 3 || b.length < 3) return esc((c.fecha_inicio || '') + ' al ' + (c.fecha_fin || ''));
             return a[2] + '-' + a[1] + ' al ' + b[2] + '-' + b[1] + (Number(b[0]) !== anioHoy ? '-' + b[0] : '');
         };
+        // El período por su nombre («Julio 2026»), con su tramo debajo, para saber cuál se reabre
+        const periodoTxt = (c) => c.mes_cierre
+            ? '<b>' + esc(c.mes_cierre) + '</b><div class="vn-sub">' + tramoTxt(c) + '</div>'
+            : tramoTxt(c);
         const cerradoTxt = (c) => {
             const d = new Date(c.created_at || c.fecha_cierre);
             return isNaN(d.getTime()) ? '—' : p2(d.getDate()) + '-' + p2(d.getMonth() + 1) + '-' + d.getFullYear() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
@@ -5965,17 +5969,17 @@ async function openHistorialCierresModal() {
             ? '<tr><td colspan="' + cols + '" class="vn-vacio">Todavía no hay cierres.</td></tr>'
             : historial.map((c) => {
                 const nota = notaTxt(c);
-                return '<tr><td class="vn-nw">' + tramoTxt(c) + '</td><td>' + esc(c.area || 'Todas') + '</td><td class="vn-nw">' + cerradoTxt(c) + '</td><td>' + esc(c.username || c.usuario_cierre || '—') + '</td>'
-                    + (isSuperAdmin ? '<td class="vn-acc"><button type="button" class="btn btn-light btn-sm" onclick="reabrirPeriodo(' + Number(c.id) + ', \'' + esc(c.fecha_inicio) + '\', \'' + esc(c.fecha_fin) + '\', \'' + esc(c.area) + '\')">Reabrir</button></td>' : '')
+                return '<tr><td class="vn-nw">' + periodoTxt(c) + '</td><td>' + esc(c.area || 'Todas') + '</td><td class="vn-nw">' + cerradoTxt(c) + '</td><td>' + esc(c.username || c.usuario_cierre || '—') + '</td>'
+                    + (isSuperAdmin ? '<td class="vn-acc"><button type="button" class="btn btn-light btn-sm" onclick="reabrirPeriodo(' + Number(c.id) + ', \'' + esc(c.fecha_inicio) + '\', \'' + esc(c.fecha_fin) + '\', \'' + esc(c.area) + '\', \'' + esc(c.mes_cierre || '') + '\')">Reabrir</button></td>' : '')
                     + '</tr>' + (nota ? '<tr class="vn-gp"><td colspan="' + cols + '">' + esc(nota) + '</td></tr>' : '');
             }).join('');
 
         const html = '<div class="modal fade" id="modal-historial-cierres" tabindex="-1" aria-labelledby="hc-titulo">'
             + '<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">'
             + '<div class="modal-header"><span class="vn-ico" aria-hidden="true"><i class="bi bi-clock-history"></i></span>'
-            + '<div class="vn-tit"><h5 class="modal-title" id="hc-titulo">Historial de cierres</h5><div class="vn-sub">Cada cierre con su área, fecha y usuario</div></div>'
+            + '<div class="vn-tit"><h5 class="modal-title" id="hc-titulo">Historial de cierres</h5><div class="vn-sub">Cada cierre con su período, área, fecha y usuario</div></div>'
             + '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>'
-            + '<div class="modal-body"><div class="vn-tbl-caja"><table class="vn-tbl"><thead><tr><th>Tramo</th><th>Área</th><th>Cerrado</th><th>Por</th>'
+            + '<div class="modal-body"><div class="vn-tbl-caja"><table class="vn-tbl"><thead><tr><th>Período</th><th>Área</th><th>Cerrado</th><th>Por</th>'
             + (isSuperAdmin ? '<th><span class="visually-hidden">Reabrir</span></th>' : '') + '</tr></thead><tbody>' + filas + '</tbody></table></div></div>'
             + '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>'
             + '</div></div></div>';
@@ -5993,8 +5997,8 @@ async function openHistorialCierresModal() {
     }
 }
 
-window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
-    if (!await uiConfirm(`¿Reabrir el período del ${(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaInicio) : fechaInicio)} al ${(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaFin) : fechaFin)}?`, { quien: area, items: ['Se quita el cierre: los días se pueden cambiar y recalcular.', 'Queda registrado quién lo reabrió.'], confirmText: 'Reabrir período', danger: true })) {
+window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area, mes) {
+    if (!await uiConfirm(`¿Reabrir ${mes ? mes + ', ' : ''}el período del ${(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaInicio) : fechaInicio)} al ${(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaFin) : fechaFin)}?`, { quien: area, items: ['Se quita el cierre: los días se pueden cambiar y recalcular.', 'Queda registrado quién lo reabrió.'], confirmText: 'Reabrir período', danger: true })) {
         return;
     }
     
