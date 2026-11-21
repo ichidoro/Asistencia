@@ -1,5 +1,5 @@
 {
- "archivos_revisados": 170,
+ "archivos_revisados": 171,
  "repetidas": {
   "total": 137,
   "top": [
@@ -195,10 +195,6 @@
    "lineas": 5169
   },
   {
-   "archivo": "backend/routers/asistencia.py",
-   "lineas": 3628
-  },
-  {
    "archivo": "backend/services/asistencia_service.py",
    "lineas": 3430
   },
@@ -213,6 +209,10 @@
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
    "lineas": 2920
+  },
+  {
+   "archivo": "backend/routers/asistencia.py",
+   "lineas": 2866
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",

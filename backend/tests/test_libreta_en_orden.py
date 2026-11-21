@@ -19,7 +19,7 @@ from fastapi import HTTPException
 
 os.environ.setdefault("SECRET_KEY", "x" * 40)
 
-from backend.routers import asistencia as asist  # noqa: E402
+from backend.routers import asistencia_libreta as asist  # noqa: E402  (etapa 6: la libreta tiene su archivo)
 from backend.schemas.asistencia import Libreta180hRequest  # noqa: E402
 from backend.services import libreta_orden  # noqa: E402
 from backend.services.velocidades_choferes import calzar_choferes, patentes_planificadas  # noqa: E402

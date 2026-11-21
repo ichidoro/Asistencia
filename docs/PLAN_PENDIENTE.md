@@ -62,7 +62,7 @@ Propuesta del 18-11-2026, aprobada para Ciclo Inteligente: una sección «Para c
 
 De la auditoría `docs/AUDITORIA_GRAFO.md` (7-11). Se dejó para después de los cierres, y ese momento ya llegó:
 
-- **#3:** repartir `routers/asistencia.py` por tema, sin cambiar las URL. **Plan escrito el 21-11-2026** (etapa 6 de `docs/AUDITORIA_CODIGO_2026-11-15.md`, en 7 pasos con su ensayo). Paso 6a hecho (21-11-2026): GPS y velocidades, rutas idénticas.
+- **#3:** repartir `routers/asistencia.py` por tema, sin cambiar las URL. **Plan escrito el 21-11-2026** (etapa 6 de `docs/AUDITORIA_CODIGO_2026-11-15.md`, en 7 pasos con su ensayo). Paso 6a hecho (21-11-2026): GPS y velocidades, rutas idénticas. Paso 6b hecho: la libreta del Art. 25 bis, rutas idénticas.
 - **#5:** sacar de `AsistenciaService` lo que no es cálculo (la tabla de Marcaciones y el cierre).
 - **#9: hecho** (16 al 18-11-2026, etapa 5 de `docs/AUDITORIA_CODIGO_2026-11-15.md`): las tres funciones quedaron en piezas con nombre y el resultado no cambió.
 - **#4:** las «capas al revés», solo explicado.

@@ -678,6 +678,17 @@ con el mismo texto (comparado línea por línea).
   y el documento `openapi.json` son idénticos antes y después.
 - Pasan las 590 pruebas con la copia de práctica encendida (pantallas y arañas de consultas incluidas).
 
+**Avance (21-11-2026): paso 6b hecho.** La libreta del Art. 25 bis (10 rutas, 757 líneas) pasó a
+`routers/asistencia_libreta.py`, con el mismo texto (comparado línea por línea).
+- `asistencia.py` ya no importa lo que solo usaba la libreta (la lectura de fotos, el orden de la libreta y los
+  archivos subidos). Bajó a 2.865 líneas.
+- La prueba de la libreta (`test_libreta_en_orden.py`) llama a sus funciones en el archivo nuevo, y la prueba que
+  prohíbe el «50 %» en las horas extra también revisa los dos archivos nuevos.
+- **Comprobación:** las 289 rutas y el documento `openapi.json`, idénticos antes y después. En la copia de práctica,
+  con sesión iniciada, respondieron bien la libreta de un día, el estado de la lectura de fotos, los camiones del GPS
+  y las velocidades de los choferes.
+- Pasan las 590 pruebas con la copia de práctica encendida.
+
 ---
 
 ## 7. Lo que no promete este plan
