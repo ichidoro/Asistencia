@@ -1,8 +1,8 @@
 {
- "armado": "2026-11-20T19:38:34+00:00",
- "publicado": "2026-11-20T19:38:34+00:00",
- "commit": "9d632ca",
- "archivos_leidos": 263,
+ "armado": "2026-11-21T15:03:07+00:00",
+ "publicado": "2026-11-21T15:03:07+00:00",
+ "commit": "d674cbf",
+ "archivos_leidos": 265,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
   "backend/assets/fonts/README.md": "a74973aaac0d5eed82e3e139c1627467",
@@ -43,7 +43,9 @@
   "backend/repositories/visitas.py": "07f3b8e7b3c1fc961c4656771739135f",
   "backend/routers/__init__.py": "f10bd7b1a3754d543fe6bb55394d032f",
   "backend/routers/articulo22.py": "9674ed10c7e519b1ae5f150a0db74574",
-  "backend/routers/asistencia.py": "19fde41617acbac7fe7a1d729cc4ddd1",
+  "backend/routers/asistencia.py": "3b3244b2bd9b2f5338fd7473e3a291e7",
+  "backend/routers/asistencia_comun.py": "5635d05b884eead70fb6d5c36c0af6f1",
+  "backend/routers/asistencia_gps.py": "12dbcd672a7bc9f5f40005c70fdb68a2",
   "backend/routers/auth.py": "c774a32e178c6e270e16d5c31791d320",
   "backend/routers/cierre.py": "105eebd3353b3d7daf79647854fd9fc3",
   "backend/routers/configuracion.py": "ad3418fba5f981978df733547ef23abd",

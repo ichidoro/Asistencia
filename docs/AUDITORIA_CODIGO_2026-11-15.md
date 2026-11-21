@@ -668,6 +668,16 @@ cosas distintas chocan en el mismo archivo, como pasó el 20-11-2026.
 con la prueba de nombres definidos y con el arranque de la aplicación en la copia de práctica, que abre todas las
 pantallas.
 
+**Avance (21-11-2026): paso 6a hecho.** GPS y velocidades (7 rutas, 227 líneas) pasaron a `routers/asistencia_gps.py`,
+con el mismo texto (comparado línea por línea).
+- `get_asistencia_service` pasó a `routers/asistencia_comun.py`, para que los dos archivos lo usen sin importarse en
+  círculo; `asistencia.py` lo sigue ofreciendo con el mismo nombre.
+- `asistencia.py` incluye el router nuevo al final y ya no importa `gps_nexacol`, que solo usaba esa parte. Bajó de
+  3.853 a 3.628 líneas.
+- **Comprobación:** la lista de las 289 rutas de la aplicación (método, dirección, nombre, permiso y datos que reciben)
+  y el documento `openapi.json` son idénticos antes y después.
+- Pasan las 590 pruebas con la copia de práctica encendida (pantallas y arañas de consultas incluidas).
+
 ---
 
 ## 7. Lo que no promete este plan
