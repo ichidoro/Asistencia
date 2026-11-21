@@ -105,7 +105,7 @@ def test_compensar_se_asigna_por_rol_con_un_solo_permiso():
     roles = (RAIZ / "frontend" / "js" / "seguridad_ui.js").read_text(encoding="utf-8")
     assert "'marcaciones.compensar':     { module: 'MARCACIONES', action: 'Compensar Inasistencias'" in roles
     assert "action: 'Días Compensatorios'" not in roles
-    router = (RAIZ / "backend" / "routers" / "asistencia.py").read_text(encoding="utf-8")
+    router = (RAIZ / "backend" / "routers" / "asistencia_compensaciones.py").read_text(encoding="utf-8")
     for ruta in ('@router.get("/compensar-inasistencia/opciones/")', '@router.post("/compensar-inasistencia/")',
                  '@router.delete("/compensar-inasistencia/")'):
         bloque = router[router.index(ruta):router.index(ruta) + 700]

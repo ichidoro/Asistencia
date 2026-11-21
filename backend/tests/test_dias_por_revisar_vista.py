@@ -150,7 +150,7 @@ def test_horas_extra_sin_50_por_ciento():
     import re
     raiz = os.path.join(os.path.dirname(__file__), '..', '..')
     for rel in ("frontend/js/marcaciones_manuales.js", "frontend/js/marcaciones_ui.js", "frontend/js/tarjeta_dia.js", "backend/routers/asistencia.py",
-                "backend/routers/asistencia_gps.py", "backend/routers/asistencia_libreta.py",   # etapa 6: partes del mismo router
+                "backend/routers/asistencia_gps.py", "backend/routers/asistencia_libreta.py", "backend/routers/asistencia_compensaciones.py",   # etapa 6: partes del mismo router
                 "backend/services/asistencia_service.py", "backend/services/cierre_service.py"):
         txt = open(os.path.join(raiz, rel), encoding='utf-8').read()
         assert not re.search(r'(?i)extras?\W{0,12}(al\s*)?50\s*%|recargo\s*(al\s*)?50\s*%', txt), f"queda «50 %» en {rel}"

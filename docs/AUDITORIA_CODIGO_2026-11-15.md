@@ -689,6 +689,17 @@ con el mismo texto (comparado línea por línea).
   y las velocidades de los choferes.
 - Pasan las 590 pruebas con la copia de práctica encendida.
 
+**Avance (21-11-2026): paso 6c hecho.** Intercambios, compensaciones, compensar una inasistencia, perdonazo de deuda e
+inasistencias disponibles (12 rutas, 460 líneas en tres partes del archivo) pasaron a `routers/asistencia_compensaciones.py`,
+con el mismo texto y en el mismo orden (comparado línea por línea).
+- `asistencia.py` dejó de importar lo que ya no usa: los modelos de esas rutas y cuatro imports que ya estaban sin uso.
+  Bajó a 2.393 líneas.
+- La prueba de los permisos de compensar lee el archivo nuevo, y la del «50 %» también lo revisa.
+- **Comprobación:** las 289 rutas y el documento `openapi.json`, idénticos antes y después. En la copia de práctica, con
+  sesión iniciada, respondieron bien la bolsa de horas extra, las opciones para compensar y las inasistencias
+  disponibles; intercambios y compensaciones piden sus datos (422 sin ellos), igual que antes.
+- Pasan las 590 pruebas con la copia de práctica encendida.
+
 ---
 
 ## 7. Lo que no promete este plan
