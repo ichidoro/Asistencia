@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1456,
+  "total": 1460,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -161,7 +161,7 @@
    {
     "funcion": "_calcular_filas",
     "archivo": "backend/services/report_service.py",
-    "lineas": 316
+    "lineas": 319
    },
    {
     "funcion": "get_bulk_context",
@@ -188,7 +188,7 @@
  "archivos_grandes": [
   {
    "archivo": "frontend/js/marcaciones_ui.js",
-   "lineas": 9909
+   "lineas": 10014
   },
   {
    "archivo": "frontend/js/marcaciones_manuales.js",

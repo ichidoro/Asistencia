@@ -284,8 +284,11 @@ async def get_asistencia_matrix(
         asistencias = data.get("data", [])
         justificaciones = data.get("justificaciones", [])
         matrix_data = data.get("matrix", {})
+        # El mismo tramo que trae la matriz de esta vista
+        periodo = data.get("periodo") or {}
         bonos_eval = await bono_service.evaluar_bonos_directo(
-            empleados, asistencias, justificaciones, matrix_data, mes, anio
+            empleados, asistencias, justificaciones, matrix_data,
+            fecha_inicio=periodo.get("inicio"), fecha_fin=periodo.get("fin")
         )
         data["bonos_evaluacion"] = bonos_eval
 
@@ -337,19 +340,10 @@ async def get_matriz_asistencia(
         justificaciones = data.get("justificaciones", [])
         matrix_data = data.get("matrix", {})
         
-        mes_eval = None
-        anio_eval = None
-        if fecha_inicio:
-            try:
-                from datetime import datetime as _dt
-                dt_start = _dt.strptime(fecha_inicio, "%Y-%m-%d")
-                mes_eval = dt_start.month
-                anio_eval = dt_start.year
-            except Exception:
-                pass
-
+        # Con las fechas del período que muestra la grilla (etapa B1 del plan de bonos): antes usaba el mes de la
+        # fecha de inicio y comparaba días de dos tramos distintos
         bonos_eval = await bono_service.evaluar_bonos_directo(
-            empleados, asistencias, justificaciones, matrix_data, mes_eval, anio_eval
+            empleados, asistencias, justificaciones, matrix_data, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
         )
         data["bonos_evaluacion"] = bonos_eval
 

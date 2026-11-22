@@ -192,11 +192,14 @@ class ReportService:
         # Evaluar bonos desde el backend
         from backend.services.bono_service import BonoService
         bono_srv = BonoService(self.asistencia_service.repository.db)
+        # Con las fechas del período (etapa B1 del plan de bonos): antes, sin fechas, usaba el mes de hoy
         bonos_eval = await bono_srv.evaluar_bonos_directo(
-            empleados, 
-            matrix_data.get("data", []), 
-            matrix_data.get("justificaciones", []), 
-            matrix_data.get("matrix", {})
+            empleados,
+            matrix_data.get("data", []),
+            matrix_data.get("justificaciones", []),
+            matrix_data.get("matrix", {}),
+            fecha_inicio=rango_dias[0].isoformat(),
+            fecha_fin=rango_dias[-1].isoformat(),
         )
         
         todos_bonos = set()

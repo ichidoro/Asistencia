@@ -89,7 +89,8 @@ class Productos4Service:
         
         # Cargar feriados para el motor
         feriados_rows = await self.db.fetch_all(
-            "SELECT fecha FROM feriados WHERE fecha LIKE ?", (f"{anio}-%",)
+            # Por las fechas del período, que puede cruzar el año (etapa B1 del plan de bonos)
+            "SELECT fecha FROM feriados WHERE fecha BETWEEN ? AND ?", (fecha_inicio, fecha_fin)
         )
         feriados_set = {r['fecha'] for r in feriados_rows}
         hoy_str = datetime.now().strftime("%Y-%m-%d")

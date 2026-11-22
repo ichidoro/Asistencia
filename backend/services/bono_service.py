@@ -1,4 +1,3 @@
-import calendar
 from typing import List, Dict, Any, Optional
 from datetime import date, datetime
 from loguru import logger
@@ -37,17 +36,19 @@ class BonoService:
         asistencias_list:   List[Dict[str, Any]],
         justificaciones_list: List[Dict[str, Any]],
         matrix_data:        Dict[int, Any] = None,
-        mes:  int = None,
-        anio: int = None,
+        *,
+        fecha_inicio: str,
+        fecha_fin:    str,
     ) -> Dict[int, Dict[str, Any]]:
-        """Versión optimizada que recibe los datos ya cargados."""
+        """Evalúa los bonos con los datos ya cargados, para el período de cierre [fecha_inicio, fecha_fin] (AAAA-MM-DD),
+        las fechas de la tabla de períodos, sean las que sean (etapa B1 del plan de bonos, 22-11-2026: antes usaba el
+        mes calendario)."""
         bonos = await self.config_repo.get_all_bonos()
         bonos_activos = [b for b in bonos if b.get("activo")]
 
-        # Query feriados for the year to avoid counting holiday days as laborable during justifications
-        anio_real = anio or datetime.now().year
+        # Feriados del período (puede cruzar el año), para no contar como de turno un feriado dentro de una justificación
         feriados_rows = await self.db.fetch_all(
-            "SELECT fecha FROM feriados WHERE fecha LIKE ?", (f"{anio_real}-%",)
+            "SELECT fecha FROM feriados WHERE fecha BETWEEN ? AND ?", (fecha_inicio, fecha_fin)
         )
         feriados_set = {r['fecha'] for r in feriados_rows}
 
@@ -60,12 +61,7 @@ class BonoService:
         for j in justificaciones_list:
             just_map.setdefault(j["empleado_id"], []).append(j)
 
-        # Contexto temporal
-        hoy_str   = datetime.now().strftime("%Y-%m-%d")
-        mes_real  = mes  or datetime.now().month
-        last_day  = calendar.monthrange(anio_real, mes_real)[1]
-        mes_inicio = f"{anio_real}-{mes_real:02d}-01"
-        mes_fin    = f"{anio_real}-{mes_real:02d}-{last_day:02d}"
+        hoy_str = datetime.now().strftime("%Y-%m-%d")
 
         resultados: Dict[int, Dict[str, Any]] = {}
         for emp in empleados:
@@ -78,8 +74,8 @@ class BonoService:
                     just_map.get(emp_id, []),
                     matrix_data.get(emp_id) if matrix_data else None,
                     hoy_str,
-                    mes_inicio,
-                    mes_fin,
+                    fecha_inicio,
+                    fecha_fin,
                     feriados_set,
                 )
                 for bono in bonos_activos
@@ -98,8 +94,8 @@ class BonoService:
         justificaciones: List[Dict[str, Any]],
         emp_matrix_data: Optional[Dict[str, Any]],
         hoy_str:   str,
-        mes_inicio: str,
-        mes_fin:    str,
+        periodo_inicio: str,
+        periodo_fin:    str,
         feriados_set: Optional[set] = None,
     ) -> Dict[str, Any]:
         """
@@ -108,7 +104,7 @@ class BonoService:
           • Solo lo PIERDE por:
               1. Inasistencia injustificada.
               2. Justificación sin goce de sueldo (o pagador externo).
-          • Ingreso a mitad de mes → monto proporcional a sus días asignados.
+          • Ingreso o salida a mitad del período → monto proporcional a sus días de turno en el período.
           • TRANSPORTE (es_proporcional=1) → siempre proporcional, nunca pérdida total.
         """
 
@@ -148,11 +144,12 @@ class BonoService:
         es_proporcional_bono = bool(regla_activa.get("es_proporcional", 0))
         monto_completo = regla_activa.get("monto", 0)
 
-        # ── 2. Determinar desde qué fecha aplica el empleado este mes ─────
-        #    Si ingresó después del 1° del mes, solo se evalúan sus días.
-        fecha_ingreso_emp = empleado.get("fecha_ingreso") or mes_inicio
-        # Clamp: si ingresó antes del mes, tomamos el 1° del mes
-        fecha_desde = max(fecha_ingreso_emp[:10], mes_inicio)
+        # ── 2. Días del período que le corresponden: desde su ingreso y hasta su salida ─────
+        fecha_desde = max((empleado.get("fecha_ingreso") or periodo_inicio)[:10], periodo_inicio)
+        # La salida cuenta solo si la persona ya está inactiva (igual que la grilla): en una activa es el término de su
+        # contrato, que puede renovarse
+        salida = empleado.get("fecha_salida") if not empleado.get("activo", 1) else None
+        fecha_hasta = min((salida or periodo_fin)[:10], periodo_fin)
 
         # ── 3. Si no hay matrix_data → fallback simplificado ──────────────
         if not emp_matrix_data:
@@ -161,7 +158,7 @@ class BonoService:
                 f"para empleado {empleado['id']} — usando fallback"
             )
             for a in asistencias:
-                if a["fecha"] >= fecha_desde and a["estado"] in ("FALTA", "INASISTENCIA"):
+                if fecha_desde <= a["fecha"] <= fecha_hasta and a["estado"] in ("FALTA", "INASISTENCIA"):
                     j_dia = next(
                         (j for j in justificaciones
                          if j["fecha_inicio"] <= a["fecha"] <= j["fecha_fin"]), None
@@ -173,15 +170,16 @@ class BonoService:
             return {"aplica": True, "califica": True, "monto": monto_completo,
                     "proporcional": False, "motivo": "OK (Fallback sin proyecciones)"}
 
-        # ── 4. Recorrer días del mes en la matriz ─────────────────────────
-        #    Solo días dentro del rango [fecha_desde .. hoy] (o fin de mes)
-        dias_laborables  = 0
+        # ── 4. Recorrer los días del período en la matriz ─────────────────
+        #    La matriz puede traer días fuera del período: no cuentan.
+        dias_laborables  = 0   # días de turno ya transcurridos (hasta hoy) que le corresponden: se revisan
         dias_asistidos   = 0
-        dias_mes_completo = 0  # para calcular factor proporcional de ingreso
+        dias_asignados   = 0   # días de turno del período que le corresponden (desde su ingreso, hasta su salida)
+        dias_periodo     = 0   # días de turno de todo el período (para el proporcional por ingreso o salida)
         motivo_perdida   = ""
 
         for fecha, dia_data in emp_matrix_data.items():
-            if fecha == "info":
+            if fecha == "info" or not (periodo_inicio <= fecha <= periodo_fin):
                 continue
 
             info = emp_matrix_data.get('info', {})
@@ -221,12 +219,13 @@ class BonoService:
             if not es_laborable_turno:
                 continue
 
-            # Contar días laborables del mes completo (para factor proporcional)
-            if mes_inicio <= fecha <= mes_fin:
-                dias_mes_completo += 1
+            dias_periodo += 1
+            if fecha < fecha_desde or fecha > fecha_hasta:
+                continue
+            dias_asignados += 1
 
-            # Solo evaluar días desde el ingreso y hasta hoy
-            if fecha < fecha_desde or fecha > hoy_str:
+            # Solo se revisan los días que ya pasaron
+            if fecha > hoy_str:
                 continue
 
             dias_laborables += 1
@@ -260,7 +259,7 @@ class BonoService:
 
         # ── 5. Calcular resultado ─────────────────────────────────────────
         if dias_laborables == 0:
-            # El mes no ha comenzado aún o todos los días son libres hasta hoy
+            # El período no ha comenzado aún o todos los días son libres hasta hoy
             # → proyectamos como "califica" con monto 0 (aún sin datos)
             return {
                 "aplica": True, "califica": True, "monto": 0,
@@ -268,10 +267,9 @@ class BonoService:
                 "motivo": "Pendiente: sin días laborables registrados aún."
             }
 
-        # Factor de proporcionalidad por ingreso a mitad de mes
-        if dias_mes_completo > 0 and dias_mes_completo != dias_laborables:
-            # Empleado no estuvo todo el mes → proporcional
-            factor_ingreso = dias_laborables / dias_mes_completo
+        # Factor de proporcionalidad por ingreso o salida a mitad del período
+        if dias_periodo > 0 and dias_asignados != dias_periodo:
+            factor_ingreso = dias_asignados / dias_periodo
         else:
             factor_ingreso = 1.0
 
@@ -294,10 +292,12 @@ class BonoService:
                 "proporcional": es_ingreso_parcial,
                 "factor": round(factor_ingreso, 4),
                 "dias_laborables": dias_laborables,
-                "dias_mes_completo": dias_mes_completo,
+                "dias_asignados": dias_asignados,
+                "dias_periodo": dias_periodo,
                 "motivo": (
-                    f"Proporcional {dias_laborables}/{dias_mes_completo} días "
-                    f"(ingreso {empleado.get('fecha_ingreso', '?')[:10]})"
+                    f"Proporcional {dias_asignados}/{dias_periodo} días de turno del período "
+                    f"(ingreso {(empleado.get('fecha_ingreso') or '?')[:10]}"
+                    f"{', salida ' + salida[:10] if salida else ''})"
                     if es_ingreso_parcial
                     else f"Asistencia completa {dias_asistidos}/{dias_laborables}"
                 ),
@@ -318,10 +318,11 @@ class BonoService:
             "factor": round(factor_total, 4),
             "dias_asistidos": dias_asistidos,
             "dias_laborables": dias_laborables,
-            "dias_mes_completo": dias_mes_completo,
+            "dias_asignados": dias_asignados,
+            "dias_periodo": dias_periodo,
             "motivo": (
                 f"Transporte proporcional: {dias_asistidos}/{dias_laborables} días "
-                f"asistidos × factor ingreso {factor_ingreso:.2f} "
+                f"asistidos × factor ingreso o salida {factor_ingreso:.2f} "
                 f"= ${monto_final:,.0f}"
             ),
         }

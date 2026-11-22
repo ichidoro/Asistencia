@@ -71,6 +71,10 @@ De la auditoría `docs/AUDITORIA_GRAFO.md` (7-11). Se dejó para después de los
 
 No arregla errores visibles: da orden para cambiar el código con menos riesgo.
 
+### 2.5 bis Bonos
+
+Revisión del 21-11-2026: el cálculo de bonos usa el mes calendario y no las fechas del período de cierre (los informes de los meses cerrados salen con todos «califica»), el informe no muestra montos, las licencias no se pueden distinguir por bono y el cargo no tiene historial con fecha. Plan por etapas en `docs/PLAN_BONOS.md`, en conversación con la persona dueña. El 22-11-2026 la persona dueña decidió: cualquier justificación se configura por bono; la inasistencia sin justificar hace perder el bono y también se configura; el cambio de labor a mitad de período se paga en proporción a los días en cada labor y se avisa por correo; Mayo a Octubre no se tocan; Productos 4 pasa a ser un bono configurable. Ese mismo día decidió también: se quita la asistencia mínima; el cargo es único (se unen los repetidos y los nombres se ven completos); el informe de cada área muestra todos los bonos que corresponden a sus personas; el correo del cambio de labor va a «Avisos generales». No quedan dudas abiertas. **Hecho (22-11-2026):** con autorización expresa de la persona dueña y respaldo previo, se unificaron en la base los cargos repetidos: queda «AYUDANTE DE BODEGA» y «ASISTENTE FACTURA»; los nombres anteriores quedaron como alias y el cambio está en la auditoría. Los cargos cortados a 20 letras por BioAlba se dejan así. **Etapa B1 hecha (22-11-2026, falta subir):** los bonos se calculan con las fechas del período de cierre en la grilla, el Excel y el informe; el ensayo con el respaldo confirmó que antes el informe de los meses cerrados daba todos «califica» con monto 0 y la grilla inflaba los montos.
+
 ### 2.6 Deudas técnicas
 
 - **Hecho (18-11-2026):** el Excel de cierre buscaba `logo.jpg`, que no existe, y salía sin logo. Ahora usa el mismo logo que muestra la aplicación (`logo-aguacol.png`), sin deformarlo.
