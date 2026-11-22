@@ -178,6 +178,31 @@ def horas_bolsa(fila: Dict[str, Any]) -> Dict[str, int]:
             'pagar': max(saldo, 0) + _seg(fila.get('he_apr'))}
 
 
+def pesos(n) -> str:
+    """Monto en pesos chilenos: $70.000."""
+    return '$' + f'{int(round(n or 0)):,}'.replace(',', '.')
+
+
+def bonos_persona(ev: Dict[str, Any]):
+    """Del resultado del cálculo de bonos de una persona (etapa B2 del plan de bonos, 22-11-2026):
+    montos = {bono: monto a pagar, 0 si no se paga}, solo los bonos que le corresponden por sus reglas;
+    detalle = {bono: {califica, monto, completo, parcial (días del período), asistidos (días asistidos), perdidos}}."""
+    montos, detalle = {}, {}
+    for b, v in (ev or {}).items():
+        if not v or v.get('aplica') is False:
+            continue
+        califica = bool(v.get('califica'))
+        m = int(round(v.get('monto') or 0)) if califica else 0
+        asig, per = v.get('dias_asignados'), v.get('dias_periodo')
+        asis, lab = v.get('dias_asistidos'), v.get('dias_laborables')
+        montos[b] = m
+        detalle[b] = {'califica': califica, 'monto': m, 'completo': int(round(v.get('monto_completo') or m)),
+                      'parcial': (asig, per) if califica and per and asig is not None and asig != per else None,
+                      'asistidos': (asis, lab) if califica and lab and asis is not None and asis != lab else None,
+                      'perdidos': list(v.get('perdidos') or [])}
+    return montos, detalle
+
+
 def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Una persona por fila del resumen del período, con sus días, horas y bonos."""
     md = datos['matrix_data']
@@ -194,7 +219,8 @@ def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]
              'horario': e.get('turno') or 'Sin horario asignado',
              'horas': float(e['meta_horas_semanales']) if e.get('turno') and e.get('meta_horas_semanales') is not None else None,
              'n_atr': int(r.get('cnt_atr') or 0), 'n_sad': int(r.get('cnt_sad') or 0),
-             'bonos': {b: bool(v and v.get('aplica') is not False and v.get('califica')) for b, v in (r.get('bonos') or {}).items()}}
+             }
+        p['bonos'], p['bonos_det'] = bonos_persona(r.get('bonos'))
         p.update(dias_persona(dd, datos['rango_dias'], es_bolsa, etiqueta, justif))
         p.update(horas_bolsa(r) if es_bolsa else horas_ciclo(r.get('libro') or {}))
         if not es_bolsa:
@@ -481,13 +507,19 @@ def columnas(inf: Dict[str, Any], justif: List[Dict[str, Any]], bonos: List[str]
         C.append(col(g, 'Cubren descuentos', lambda p: -p['cubren'], 'h', 'cp'))
         C += [col('A cargar', 'Descontar', lambda p: p['descontar'], 'h', 'tot', True),
               col('A cargar', 'Pagar', lambda p: p['pagar'], 'h', 'he', True)]
-    for b in bonos:
-        C.append(col('Bonos', b, (lambda b: lambda p: p['bonos'].get(b, False))(b), 'b'))
+    # Bonos (etapa B2 del plan de bonos): el monto a pagar de cada bono que le corresponde a alguien del informe, según
+    # las reglas de cada bono (decisión de la persona dueña, 22-11-2026: «que se muestre todo lo que corresponde»)
+    bonos_inf = [b for b in bonos if any(b in p['bonos'] for p in ps)]
+    for b in bonos_inf:
+        C.append(dict(col('Bonos', b, (lambda b: lambda p: p['bonos'].get(b))(b), 'm'), bono=b))
+    if bonos_inf:
+        C.append(col('Bonos', 'Total', lambda p: sum(p['bonos'].values()) if p['bonos'] else None, 'm', 'bal', True))
     return C
 
 
 def leyenda(inf: Dict[str, Any], justif: List[Dict[str, Any]], cols: List[Dict[str, Any]]) -> List[str]:
     titulos = {c['titulo'] for c in cols}
+    hay_bonos = any(c['fmt'] == 'm' for c in cols)
     usados = {c for p in inf['personas'] for c in p['aus']}
     partes = [f"<b>{(t.get('nomenclatura') or t.get('nombre') or '').strip().upper()}</b> {t.get('nombre')}" for t in justif
               if (t.get('nomenclatura') or t.get('nombre') or '').strip().upper() in usados]
@@ -508,7 +540,10 @@ def leyenda(inf: Dict[str, Any], justif: List[Dict[str, Any]], cols: List[Dict[s
               + (' <b>Otros</b>: jornada incompleta que no es atraso, salida, colación ni permiso.' if 'Otros' in titulos else '')
               + (' <b>De +2 y EME</b>: parte de las horas extra trabajadas que viene de un +2 o de un llamado de emergencia '
                  '(no se resta, ya está dentro de ellas).' if 'De +2 y EME' in titulos else ''))
-    return [l1, l2 + ' El detalle día a día está en el Excel del cierre, que se descarga desde la aplicación.']
+    out = [l1, l2 + ' El detalle día a día está en el Excel del cierre, que se descarga desde la aplicación.']
+    if hay_bonos:
+        out = list(out) + ['<b>Bonos</b> en pesos: el monto a pagar; <b>—</b> no se paga (el motivo va en el detalle de bonos); en blanco, no le corresponde.']
+    return out
 
 
 def resumen(inf: Dict[str, Any]) -> List[tuple]:
@@ -523,10 +558,44 @@ def resumen(inf: Dict[str, Any]) -> List[tuple]:
                 ('Horas extra que cubren descuentos ', hms(T('cubren')), '', False)]
         if T('he_decidir'):
             out.append(('', hms(T('he_decidir')), ' de horas extra sin decidir', True))
+    if any(p.get('bonos') for p in ps):
+        out.append(('Bonos a pagar ', pesos(sum(sum(p['bonos'].values()) for p in ps)), '', False))
     ano = T('ano')
     if ano:
         out.append(('', str(ano), ' jornada sin resolver' if ano == 1 else ' jornadas sin resolver', True))
     return out
+
+
+def _y(nombres: List[str]) -> str:
+    return nombres[0] if len(nombres) == 1 else ', '.join(nombres[:-1]) + ' y ' + nombres[-1]
+
+
+def detalle_bonos(inf: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Detalle de bonos del informe (etapa B2): por persona, los que no se pagan con su motivo (causa y días) y los que
+    se pagan en parte, con los días que cuentan. Texto con <b> para el PDF."""
+    no_pagados, en_parte = [], []
+    for p in inf['personas']:
+        det = p.get('bonos_det') or {}
+        por_motivo = OrderedDict()
+        for b, d in det.items():
+            if d['califica']:
+                continue
+            causas = OrderedDict()
+            for x in d['perdidos']:
+                causas.setdefault(x['causa'], []).append(_dm(x['fecha']))
+            motivo = '; '.join(f'{c} el {_y(f)}' for c, f in causas.items()) or 'sin días que cuenten'
+            por_motivo.setdefault(motivo, []).append(b)
+        for motivo, bs in por_motivo.items():
+            no_pagados.append(f'<b>{p["nombre"]}</b>: {_y(bs)}. {motivo[0].upper() + motivo[1:]}.')
+        for b, d in det.items():
+            if d['califica'] and (d['parcial'] or d['asistidos']):
+                partes = []
+                if d['parcial']:
+                    partes.append(f'{d["parcial"][0]} de {d["parcial"][1]} días de turno del período')
+                if d['asistidos']:
+                    partes.append(f'{d["asistidos"][0]} de {d["asistidos"][1]} días asistidos')
+                en_parte.append(f'<b>{p["nombre"]}</b>: {b} {pesos(d["monto"])} de {pesos(d["completo"])}, por {" y ".join(partes)}.')
+    return {'no_pagados': no_pagados, 'en_parte': en_parte}
 
 
 def _dm(fecha: str) -> str:
@@ -661,11 +730,16 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
             return bool(v)
         if c['fmt'] == 'h':
             return hms(v)
+        if c['fmt'] == 'm':
+            return '' if v is None else ('—' if not v else pesos(v))
         return '—' if not v else str(v)
 
     def txt_total(c):
         if c['fmt'] == 'b':
             return str(sum(1 for p in ps if c['valor'](p)))
+        if c['fmt'] == 'm':
+            s = sum(c['valor'](p) or 0 for p in ps)
+            return pesos(s) if s else '—'
         s = sum(c['valor'](p) for p in ps)
         return hms(s) if c['fmt'] == 'h' else ('—' if not s else str(s))
 
@@ -757,7 +831,10 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
                         estilo.append(('TEXTCOLOR', (x, fila), (x, fila), H(C_CERO)))
                     continue
                 celdas.append(t)
-                if t == '—':
+                no_pagado = c.get('bono') and not ((p.get('bonos_det') or {}).get(c['bono']) or {}).get('califica', True)
+                if no_pagado:
+                    estilo += [('TEXTCOLOR', (x, fila), (x, fila), H(C_PINK)), ('FONT', (x, fila), (x, fila), _f('Barlow-Bold'), cuerpo)]
+                elif t == '—':
                     estilo.append(('TEXTCOLOR', (x, fila), (x, fila), H(C_CERO)))
                 elif c['color']:
                     estilo.append(('TEXTCOLOR', (x, fila), (x, fila), H(colores[c['color']])))
@@ -827,6 +904,17 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
 
     historia = [enc, Spacer(1, 8), t_chips, Spacer(1, 6), tabla, Spacer(1, 7)]
     historia += [Paragraph(x, st_ley) for x in leyenda(inf, justif, cols)]
+    det_b = detalle_bonos(inf)
+    if det_b['no_pagados'] or det_b['en_parte']:
+        st_db_t = ParagraphStyle('dbt', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY))
+        st_db_s = ParagraphStyle('dbs', fontName=_f('Barlow-SemiBold'), fontSize=8.3, leading=11, textColor=H(C_INK))
+        st_db = ParagraphStyle('db', fontName=_f('Barlow'), fontSize=8.3, leading=11, textColor=H(C_INK), leftIndent=8,
+                               bulletIndent=0, spaceAfter=2)
+        historia += [Spacer(1, 10), Paragraph('Detalle de bonos', st_db_t), Spacer(1, 3)]
+        for titulo_db, lineas in (('No se pagan', det_b['no_pagados']), ('Se pagan en parte', det_b['en_parte'])):
+            if lineas:
+                historia += [KeepTogether([Paragraph(titulo_db, st_db_s), Paragraph(lineas[0], st_db, bulletText='•')])]
+                historia += [Paragraph(x, st_db, bulletText='•') for x in lineas[1:]]
     if preinforme:
         avisos = para_coordinar(inf, fecha_fin, datetime.now().strftime('%Y-%m-%d'))
         if avisos:
@@ -867,9 +955,8 @@ async def _personas_del_area(db, asistencia_service, fecha_inicio: str, fecha_fi
     rs = ReportService(asistencia_service)
     datos = await rs.datos_periodo(fecha_inicio, fecha_fin, area)
     justif = [dict(r) for r in await db.fetch_all('SELECT nombre, nomenclatura FROM justificacion_tipos ORDER BY id')]
-    bonos = [r['nombre'] for r in await db.fetch_all(
-        'SELECT b.nombre FROM area_bonos ab JOIN bonos b ON b.id = ab.bono_id JOIN areas a ON a.id = ab.area_id '
-        'WHERE a.nombre = ? ORDER BY b.id', (area,))] if area else []
+    # Todos los bonos activos, en su orden; el informe muestra los que les corresponden a sus personas (etapa B2)
+    bonos = [r['nombre'] for r in await db.fetch_all('SELECT nombre FROM bonos WHERE activo = 1 ORDER BY id')]
     if not bonos:
         bonos = list(datos.get('lista_bonos') or [])
     return armar_personas(datos, rs._format_concepto_cell, justif), justif, bonos

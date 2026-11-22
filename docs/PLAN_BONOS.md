@@ -184,7 +184,7 @@ Cada etapa es un cambio aparte, con pruebas, ensayo y la pregunta «¿Subo a Git
   anterior, monto de la grilla), que fallen con el código de hoy; y una con un período de fechas distintas a 26–25
   para asegurar que se usan las del período.
 - **Ensayo:** copia del respaldo; bonos de cada período antes y después.
-- **Hecho (22-11-2026, falta subir):** el cálculo recibe la fecha de inicio y de fin del período en la grilla, el
+- **Hecho (22-11-2026, commit b118d0e):** el cálculo recibe la fecha de inicio y de fin del período en la grilla, el
   Excel y el informe de cierre (Productos 4 ya pasaba las fechas del período; ahora también lee sus feriados por esas
   fechas). La matriz puede traer días fuera del período: no cuentan. Los feriados se leen por las fechas del período
   (puede cruzar el año). El proporcional por ingreso o salida usa los días de turno del período; la salida cuenta solo
@@ -208,6 +208,18 @@ Cada etapa es un cambio aparte, con pruebas, ensayo y la pregunta «¿Subo a Git
 - Bono perdido: «—» y, en el detalle, el motivo (por ejemplo «inasistencia sin justificar el 08-10»).
 - El resumen de arriba del informe suma lo que se paga en bonos.
 - Depende de B1 (si el cálculo está mal, el monto también).
+- **Hecho (22-11-2026, falta subir):**
+  - Informe PDF: el monto de cada bono por persona (en pesos), una columna «Total» por persona, la fila de total por
+    bono, «Bonos a pagar» en el resumen de arriba y una sección «Detalle de bonos» con los que no se pagan (causa y
+    días, por ejemplo «Inasistencia sin justificar el 08-10; Licencia Común el 15-10 y 16-10») y los que se pagan en
+    parte (por ejemplo «10 de 22 días de turno del período»). Un bono no pagado va en rosado con «—»; en blanco, no le
+    corresponde.
+  - Columnas (B3.8 adelantado): el informe muestra los bonos que les corresponden a sus personas según las reglas de
+    cada bono, no las áreas marcadas en el bono. Así Operador Línea, Retail y Supervisor salen en Producción.
+  - Excel de cierre: el monto en vez de «SÍ», «NO» si no se paga, una columna «Total bonos» y la suma en la fila de
+    totales.
+  - El cálculo entrega los días perdidos con su causa (para el detalle).
+  - Pruebas nuevas `test_bonos_montos_en_informe.py` (7 casos que fallan con el código anterior); 625 pruebas en verde.
 
 ### Etapa B3 · Configuración ampliada de cada bono (corrige D, E, F, L, M, O, P, Q)
 
@@ -251,7 +263,7 @@ Todo se agrega a la pantalla de Configuración → Bonos; el cálculo solo lee l
    sus propias reglas y su fila en «Efecto en los bonos» de cada justificación. Productos 4 lee el resultado de ese
    bono por su identificador, no por un nombre escrito en el código. Al crearlo se llena con lo que hace hoy (cualquier
    cargo y contrato, mismas faltas que Compromiso), así nada cambia hasta que alguien lo cambie.
-8. **Columnas del informe (O):** el informe de cierre de un área muestra todos los bonos que corresponden a las
+8. **Columnas del informe (O), hecho en B2:** el informe de cierre de un área muestra todos los bonos que corresponden a las
    personas de esa área según las reglas de cada bono, y no muestra un bono que nadie del área tiene (decisión de la
    persona dueña, 22-11-2026: «que se muestre todo lo que corresponde»; el cierre es por área). Así Operador Línea,
    Retail y Supervisor salen en el informe de Producción.

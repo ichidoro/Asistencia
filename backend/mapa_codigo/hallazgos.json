@@ -1,7 +1,7 @@
 {
  "archivos_revisados": 176,
  "repetidas": {
-  "total": 137,
+  "total": 138,
   "top": [
    {
     "nombre": "esc",
@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1460,
+  "total": 1465,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -141,7 +141,7 @@
    {
     "funcion": "_generate_excel_workbook",
     "archivo": "backend/services/report_service.py",
-    "lineas": 562
+    "lineas": 577
    },
    {
     "funcion": "init_tables",
@@ -161,7 +161,7 @@
    {
     "funcion": "_calcular_filas",
     "archivo": "backend/services/report_service.py",
-    "lineas": 319
+    "lineas": 320
    },
    {
     "funcion": "get_bulk_context",

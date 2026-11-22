@@ -76,6 +76,8 @@ def test_periodo_cerrado_sacado_despues_revisa_sus_dias():
     r, _ = _evaluar("2026-09-26", "2026-10-25", _matriz("2026-09-26", "2026-10-25", faltas={"2026-10-08"}))
     assert r["Compromiso"]["califica"] is False
     assert "2026-10-08" in r["Compromiso"]["motivo"]
+    # El día perdido con su causa, para el detalle de bonos del informe (etapa B2)
+    assert r["Compromiso"]["perdidos"] == [{"fecha": "2026-10-08", "causa": "Inasistencia sin justificar"}]
     turno = _dias_turno("2026-09-26", "2026-10-25")
     assert r["Transporte"]["monto"] == round(30000 * (turno - 1) / turno)
 

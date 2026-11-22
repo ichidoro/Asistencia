@@ -166,6 +166,7 @@ class BonoService:
                     if not j_dia:
                         return {"aplica": True, "califica": False, "monto": 0,
                                 "proporcional": False,
+                                "perdidos": [{"fecha": a["fecha"], "causa": "Inasistencia sin justificar"}],
                                 "motivo": f"Inasistencia injustificada el {a['fecha']}"}
             return {"aplica": True, "califica": True, "monto": monto_completo,
                     "proporcional": False, "motivo": "OK (Fallback sin proyecciones)"}
@@ -177,6 +178,7 @@ class BonoService:
         dias_asignados   = 0   # días de turno del período que le corresponden (desde su ingreso, hasta su salida)
         dias_periodo     = 0   # días de turno de todo el período (para el proporcional por ingreso o salida)
         motivo_perdida   = ""
+        perdidos         = []  # días que no cuentan como asistidos, con su causa (para el informe de cierre)
 
         for fecha, dia_data in emp_matrix_data.items():
             if fecha == "info" or not (periodo_inicio <= fecha <= periodo_fin):
@@ -254,8 +256,10 @@ class BonoService:
                     label    = j_dia.get("tipo_nombre", estado)
                     pagador  = j_dia.get("pagador", "")
                     motivo_perdida += f"{fecha}: {label} (pagador: {pagador}). "
+                    perdidos.append({"fecha": fecha, "causa": label})
                 else:
                     motivo_perdida += f"{fecha}: Inasistencia injustificada. "
+                    perdidos.append({"fecha": fecha, "causa": "Inasistencia sin justificar"})
 
         # ── 5. Calcular resultado ─────────────────────────────────────────
         if dias_laborables == 0:
@@ -281,6 +285,7 @@ class BonoService:
                 return {
                     "aplica": True, "califica": False, "monto": 0,
                     "proporcional": False,
+                    "perdidos": sorted(perdidos, key=lambda d: d["fecha"]),
                     "motivo": motivo_perdida.strip(),
                 }
             # 100% de asistencia → otorgar (proporcional si ingresó tarde)
@@ -320,8 +325,9 @@ class BonoService:
             "dias_laborables": dias_laborables,
             "dias_asignados": dias_asignados,
             "dias_periodo": dias_periodo,
+            "perdidos": sorted(perdidos, key=lambda d: d["fecha"]),
             "motivo": (
-                f"Transporte proporcional: {dias_asistidos}/{dias_laborables} días "
+                f"Proporcional: {dias_asistidos}/{dias_laborables} días "
                 f"asistidos × factor ingreso o salida {factor_ingreso:.2f} "
                 f"= ${monto_final:,.0f}"
             ),

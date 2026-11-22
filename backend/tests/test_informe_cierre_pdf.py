@@ -77,7 +77,7 @@ def _persona(tipo, horario, horas, aus=None, otros=0, bonos=None):
 
 
 def test_un_informe_por_tipo_de_horario_y_columnas_segun_datos():
-    ps = [_persona('CICLO', 'Horario B', 42.0, {'VAC': 1}, bonos={'Bono 1': True}),
+    ps = [_persona('CICLO', 'Horario B', 42.0, {'VAC': 1}, bonos={'Bono 1': 70000}),
           _persona('CICLO', 'Horario A', 42.0), _persona('BOLSA', 'Horario C', 180.0)]
     infs = icp.separar_informes(ps)
     assert [(i['tipo'], i['titulo_horas']) for i in infs] == [('CICLO', '42 horas'), ('BOLSA', '180 horas')]
@@ -87,7 +87,8 @@ def test_un_informe_por_tipo_de_horario_y_columnas_segun_datos():
     dias = [c['titulo'] for c in cols if c['grupo'].startswith('Jornadas')]
     assert dias[0] == 'Programadas' and dias[-1] == 'Trabajadas' and 'VAC' in dias and 'DFHI' not in dias
     assert 'Otros' not in tit and 'Perdonado' not in tit and 'No aprobadas' not in tit
-    assert tit[-4:] == ['Descontar', 'Pagar', 'Bono 1', 'Bono 2']
+    # Bonos en pesos (etapa B2 del plan de bonos): solo los que le corresponden a alguien del informe, y su total
+    assert tit[-4:] == ['Descontar', 'Pagar', 'Bono 1', 'Total']
     assert not any('50' in t for t in tit)
     bolsa = [c['titulo'] for c in icp.columnas(infs[1], JUSTIF, [])]
     assert 'No usadas' in bolsa and 'Descontar' not in bolsa

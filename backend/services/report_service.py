@@ -183,6 +183,15 @@ class ReportService:
             logger.error(f"Error en generate_excel_custom_range: {e}")
             raise
 
+    @staticmethod
+    def _bonos_a_pagar(fila: dict, bono: Optional[str] = None) -> int:
+        """Lo que se paga en bonos a una persona: de un bono, o de todos si no se nombra ninguno."""
+        total = 0
+        for b, v in (fila.get("bonos") or {}).items():
+            if (bono is None or b == bono) and v and v.get("aplica") is not False and v.get("califica"):
+                total += int(round(v.get("monto") or 0))
+        return total
+
     async def _calcular_filas(self, matrix_data: dict, rango_dias: List[date]) -> Dict[str, Any]:
         """Resumen por persona del período (réplica de la grilla analítica): lo usan el Excel y el informe PDF de
         cierre, para que los dos documentos escriban las mismas cifras."""
@@ -202,9 +211,10 @@ class ReportService:
             fecha_fin=rango_dias[-1].isoformat(),
         )
         
+        # Los bonos que le corresponden a alguien del área según sus reglas (etapa B2 del plan de bonos)
         todos_bonos = set()
         for emp_bonos in bonos_eval.values():
-            todos_bonos.update(emp_bonos.keys())
+            todos_bonos.update(b for b, v in emp_bonos.items() if v and v.get("aplica") is not False)
         lista_bonos = sorted(list(todos_bonos))
 
         # 1. Calcular resumen completo de cada empleado (réplica exacta de la grilla analítica)
@@ -579,6 +589,8 @@ class ReportService:
             ]
             for b in lista_bonos:
                 columns_def.append(("Bonos", b, f"bono_{b}"))
+            if lista_bonos:
+                columns_def.append(("Bonos", "Total bonos", "bonos_total"))
                 
             columns_def.extend([
                 ("Incidencias", "PER", "cnt_per"),
@@ -769,14 +781,20 @@ class ReportService:
                         elif key.startswith("bono_"):
                             b_name = key.replace("bono_", "")
                             b_res = r["bonos"].get(b_name)
+                            # El monto a pagar (etapa B2 del plan de bonos); «NO» si no se paga, «-» si no le corresponde
                             if not b_res or b_res.get("aplica") is False:
                                 val = "-"
+                            elif b_res.get("califica"):
+                                val = int(round(b_res.get("monto") or 0))
+                                cell.number_format = '"$"#,##0'
+                                cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
                             else:
-                                val = "SÍ" if b_res.get("califica") else "NO"
-                                if val == "SÍ":
-                                    cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
-                                else:
-                                    cell.font = Font(name="Segoe UI", size=9, color="FF0000")
+                                val = "NO"
+                                cell.font = Font(name="Segoe UI", size=9, color="FF0000")
+                        elif key == "bonos_total":
+                            val = self._bonos_a_pagar(r)
+                            cell.number_format = '"$"#,##0'
+                            cell.font = Font(name="Segoe UI", size=9, bold=True)
                         # Incidencias
                         elif key == "cnt_per": val = r["cnt_per"] if r["cnt_per"] > 0 else ""
                         elif key == "cnt_atr": val = r["cnt_atr"] if r["cnt_atr"] > 0 else ""
@@ -992,7 +1010,14 @@ class ReportService:
                     if key == "Identificador":
                         val = "TOTALES"
                         cell.alignment = Alignment(horizontal='left', vertical='center')
-                    elif key in ["RUT", "Empleado", "Activo"] or key.startswith("bono_"):
+                    elif key.startswith("bono_"):
+                        b_name = key.replace("bono_", "")
+                        val = sum(self._bonos_a_pagar(r, b_name) for r in rows_calc)
+                        cell.number_format = '"$"#,##0'
+                    elif key == "bonos_total":
+                        val = sum(self._bonos_a_pagar(r) for r in rows_calc)
+                        cell.number_format = '"$"#,##0'
+                    elif key in ["RUT", "Empleado", "Activo"]:
                         val = ""
                     elif key == "cnt_per":
                         s_val = sum(r["cnt_per"] for r in rows_calc)
