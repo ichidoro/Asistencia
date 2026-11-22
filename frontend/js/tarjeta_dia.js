@@ -158,6 +158,16 @@
         if (ja && ja.origen === 'COBERTURA_TURNO') {
             return '<div class="td-ctx he"><i class="bi bi-stopwatch"></i><span><b>+2 de ' + hhmm(ja.hora_entrada) + ' a ' + hhmm(ja.hora_salida) + ' · ' + hMin(ja.minutos_trabajados) + '.</b> ' + estadoJornada(ja) + '</span></div>';
         }
+        // +2 de la misma jornada (desde el 10-11-2026 va directo a las horas extra del día, sin jornada aparte): se muestran
+        // las dos partes, la jornada del turno y el +2, para que no se lea todo como una sola jornada (caso 18-07-2026).
+        const mas2 = Number(di.minutos_extra_mas2) || 0;
+        if (!ja && mas2 >= 1 && Number(di.horas_trabajadas) > 0) {
+            const hms = (m) => (typeof window.formatExactMinutesToTime === 'function' ? window.formatExactMinutesToTime(m) : hMin(m));
+            const total = Number(di.horas_trabajadas) * 60, turno = Math.max(0, total - mas2);
+            const he = di.estado_he === 'APROBADO' ? 'aprobadas' : (di.estado_he === 'RECHAZADO' ? 'rechazadas' : 'por aprobar');
+            return '<div class="td-ctx he"><i class="bi bi-stopwatch"></i><span><b>Jornada ' + hms(turno) + ' + jornada +2 ' + hms(mas2)
+                + ' = ' + hms(total) + '.</b> El +2 va a las horas extra del día (' + he + ').</span></div>';
+        }
         if (ja && (ja.origen === 'FERIADO' || ja.origen === 'DIA_LIBRE')) {
             return '<div class="td-ctx he"><i class="bi bi-stopwatch"></i><span><b>' + (ja.origen === 'FERIADO' ? 'Feriado' : 'Día libre') + ' trabajado · ' + hMin(ja.minutos_trabajados) + '.</b> ' + estadoJornada(ja) + '</span></div>';
         }

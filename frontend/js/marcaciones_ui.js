@@ -9378,6 +9378,16 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     if (heBruta > 0) {
         if (!e.horas_teoricas || isFer || e.estado === 'LIBRE' || e.estado === 'JORNADA_ESPECIAL') {
             heBreakdownRows.push(`<div style="${rowStyles}"><span style="${labelStyles}">Día Inhábil/Libre:</span> ${valMins(heBruta, 'var(--success-color, #10b981)')}</div>`);
+        } else if ((Number(e.minutos_extra_mas2) || 0) + (Number(e.minutos_extra_llamado) || 0) + (Number(e.minutos_extra_esp) || 0) >= 1) {
+            // El día suma un +2, un llamado o un día libre o feriado pasado a horas extra: cada parte por su nombre, y lo que
+            // queda son las horas extra del propio turno. Antes la tarjeta restaba las horas de entrada y salida al turno y,
+            // en una jornada corrida con +2, mostraba «Salida posterior» por toda la diferencia (caso 18-07-2026).
+            const deMas2 = Number(e.minutos_extra_mas2) || 0, deLlam = Number(e.minutos_extra_llamado) || 0, deEsp = Number(e.minutos_extra_esp) || 0;
+            if (deMas2 >= 1) heBreakdownRows.push(`<div style="${rowStyles}"><span style="${labelStyles}">+2 · cobertura de turno:</span> ${valMins(deMas2, 'var(--success-color, #10b981)')}</div>`);
+            if (deLlam >= 1) heBreakdownRows.push(`<div style="${rowStyles}"><span style="${labelStyles}">Llamado de emergencia:</span> ${valMins(deLlam, 'var(--success-color, #10b981)')}</div>`);
+            if (deEsp >= 1) heBreakdownRows.push(`<div style="${rowStyles}"><span style="${labelStyles}">Día libre o feriado:</span> ${valMins(deEsp, 'var(--success-color, #10b981)')}</div>`);
+            const delTurno = heBruta - deMas2 - deLlam - deEsp;
+            if (delTurno >= 1) heBreakdownRows.push(`<div style="${rowStyles}"><span style="${labelStyles}">Del turno:</span> ${valMins(delTurno, 'var(--success-color, #10b981)')}</div>`);
         } else {
             const timeToMins = (t) => {
                 if(!t) return 0;
@@ -9675,18 +9685,20 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         const L = (x) => (((x - lo) / span) * 100).toFixed(2);
         const W = (a, b) => (((b - a) / span) * 100).toFixed(2);
         const dEnt = rs - ps, dSal = re - pe;
+        // Llegar después del inicio no siempre es atraso: en una jornada corrida el cálculo no lo cuenta (minutos_atraso = 0)
+        const tarde = dEnt > 0.5 && (Number(e.minutos_atraso) || 0) > 0;
         const lab = (d) => (Math.abs(d) < 0.5 ? '' : ` <span style="opacity:.7">${d > 0 ? '+' : '−'}${Math.round(Math.abs(d))}m</span>`);
         stripHtml = `
         <div class="tp-sec"><div class="tp-lab"><span>Jornada vs. turno</span><span class="tp-mono" style="text-transform:none">${e.hora_entrada_teorica.substring(0,5)}–${e.hora_salida_teorica.substring(0,5)}</span></div>
             <div class="tp-tl"><div class="r"></div>
                 <div class="p" style="left:${L(ps)}%;width:${W(ps, pe)}%"></div>
-                ${dEnt > 0.5 ? `<div class="a" style="left:${L(ps)}%;width:${W(ps, rs)}%"></div>` : ''}
+                ${tarde ? `<div class="a" style="left:${L(ps)}%;width:${W(ps, rs)}%"></div>` : ''}
                 <div class="w" style="left:${L(Math.max(rs, ps))}%;width:${W(Math.max(rs, ps), re)}%"></div>
-                <i style="left:${L(rs)}%;--d:${dEnt > 0.5 ? '#f59e0b' : '#10b981'}"></i><i style="left:${L(re)}%;--d:${dSal < -0.5 ? '#f43f5e' : '#10b981'}"></i>
-                <u style="left:${L(rs)}%;color:${dEnt > 0.5 ? '#a35a00' : '#0f7a4f'}">${e.hora_entrada_real.substring(0,5)}${lab(dEnt)}</u>
+                <i style="left:${L(rs)}%;--d:${tarde ? '#f59e0b' : '#10b981'}"></i><i style="left:${L(re)}%;--d:${dSal < -0.5 ? '#f43f5e' : '#10b981'}"></i>
+                <u style="left:${L(rs)}%;color:${tarde ? '#a35a00' : '#0f7a4f'}">${e.hora_entrada_real.substring(0,5)}${lab(dEnt)}</u>
                 <u style="left:${L(re)}%;color:${dSal < -0.5 ? '#b3261e' : '#0f7a4f'}">${e.hora_salida_real.substring(0,5)}${lab(dSal)}</u>
             </div>
-            <div class="tp-key"><b style="background:#d5e0f7"></b>turno teórico &nbsp; <b style="background:#10b981"></b>trabajado${dEnt > 0.5 ? ' &nbsp; <b style="background:#f59e0b"></b>atraso' : ''}</div>
+            <div class="tp-key"><b style="background:#d5e0f7"></b>turno teórico &nbsp; <b style="background:#10b981"></b>trabajado${tarde ? ' &nbsp; <b style="background:#f59e0b"></b>atraso' : ''}</div>
         </div>`;
     }
     // Eventos: con la línea de tiempo solo se listan los intermedios (colación, permisos); sin ella, todos
