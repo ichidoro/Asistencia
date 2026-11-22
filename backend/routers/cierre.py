@@ -197,10 +197,12 @@ async def informe_pdf_archivo(
     fecha_fin: str = Query(..., description="Fecha fin (YYYY-MM-DD)"),
     area: str = Query(..., description="Área"),
     tipo: str = Query(..., description="CICLO o BOLSA"),
+    ver: bool = Query(False, description="true: para mostrarlo dentro de la aplicación (visor) en vez de descargarlo"),
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
 ):
-    """El PDF como archivo adjunto (igual que el Excel): el navegador lo descarga directo."""
+    """El PDF como archivo adjunto (igual que el Excel): el navegador lo descarga directo. Con ver=true va «inline»,
+    para el visor de la aplicación (botón Preinforme → Ver en la aplicación, 21-11-2026)."""
     from fastapi.responses import Response
     from backend.repositories.asistencia import AsistenciaRepository
     from backend.services.asistencia_service import AsistenciaService
@@ -214,7 +216,7 @@ async def informe_pdf_archivo(
             raise HTTPException(status_code=404, detail="El área no tiene personas de ese tipo de horario en el tramo.")
         a = res["archivos"][0]
         return Response(content=a["content"], media_type="application/pdf",
-                        headers={"Content-Disposition": f'attachment; filename="{a["filename"]}"'})
+                        headers={"Content-Disposition": f'{"inline" if ver else "attachment"}; filename="{a["filename"]}"'})
     except HTTPException:
         raise
     except Exception as e:

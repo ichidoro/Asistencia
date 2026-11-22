@@ -187,7 +187,7 @@ def test_la_descarga_la_entrega_el_servidor_como_adjunto():
     # Sin armar archivos en memoria (algunos navegadores lo bloquean sin avisar): marco oculto al adjunto del servidor
     assert "/api/cierre/informe-pdf/archivo?" in f and "createElement('iframe')" in f
     assert 'createObjectURL' not in f and 'atob(' not in f
-    assert '"/informe-pdf/archivo"' in rt and 'attachment; filename=' in rt and 'solo_lista=True' in rt
+    assert '"/informe-pdf/archivo"' in rt and '"inline" if ver else "attachment"}; filename=' in rt and 'solo_lista=True' in rt
 
 
 def test_generar_un_solo_tipo_o_solo_la_lista():

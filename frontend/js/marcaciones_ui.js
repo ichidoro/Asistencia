@@ -499,9 +499,16 @@ function renderMarcacionesToolbar(container) {
                     </button>
                     ` : ''}
                     ${(typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.cierre_periodo')) ? `
-                    <button class="btn btn-sm btn-outline-secondary bg-white text-nowrap" onclick="window.descargarPreinformeGrilla(this)" title="Informe de cierre del período y área elegidos, sin cerrar: un PDF por tipo de horario">
-                        <i class="bi bi-file-earmark-pdf text-danger"></i> Preinforme
-                    </button>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary bg-white text-nowrap dropdown-toggle" data-bs-toggle="dropdown"
+                                data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" title="Informe de cierre del período y área elegidos, sin cerrar: un PDF por tipo de horario">
+                            <i class="bi bi-file-earmark-pdf text-danger"></i> Preinforme
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-1" style="border-radius:8px;">
+                            <li><button type="button" class="dropdown-item rounded" onclick="window.verPreinformeGrilla(this)"><i class="bi bi-eye me-2 text-primary"></i>Ver en la aplicación</button></li>
+                            <li><button type="button" class="dropdown-item rounded" onclick="window.descargarPreinformeGrilla(this)"><i class="bi bi-download me-2 text-success"></i>Descargar PDF</button></li>
+                        </ul>
+                    </div>
                     ` : ''}
                     <button class="btn btn-sm btn-outline-secondary bg-white" onclick="window.print()" title="Imprimir Reporte">
                         <i class="bi bi-printer"></i>
@@ -5772,6 +5779,86 @@ window.descargarPreinformeGrilla = function (btn) {
         return;
     }
     return window.descargarInformeCierre(st.fechaInicioRRHH, st.fechaFinRRHH, area, btn);
+};
+
+// «Preinforme → Ver en la aplicación» (dueño, 21-11-2026): el mismo PDF en un visor dentro de la aplicación, sin
+// descargarlo. El visor es el del navegador (acercar, buscar, imprimir y descargar); con Ciclo y Bolsa, una pestaña por tipo.
+window.verPreinformeGrilla = function (btn) {
+    const uiArea = document.getElementById('marcacion-area');
+    const area = uiArea ? uiArea.value : '';
+    if (!area || area === 'Todas') {
+        Avisos.falta('Elija un área: el preinforme es por área (un PDF por tipo de horario).');
+        return;
+    }
+    const st = typeof stateMarcacionesApp !== 'undefined' ? stateMarcacionesApp : {};
+    if (!st.fechaInicioRRHH || !st.fechaFinRRHH) {
+        Avisos.falta('Elija un período de cierre para ver el preinforme.');
+        return;
+    }
+    return window.verInformeCierre(st.fechaInicioRRHH, st.fechaFinRRHH, area, btn);
+};
+
+window.verInformeCierre = async function (fIni, fFin, area, btn) {
+    if (btn) {
+        if (btn.disabled) return;
+        btn.disabled = true;
+    }
+    const esc = (s) => window.Ayuda.esc(s);
+    try {
+        showToast('Preparando el informe de cierre de ' + area + '…', 'info');
+        const resp = await fetch('/api/cierre/informe-pdf?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area), {
+            headers: { 'Authorization': 'Bearer ' + AuthService.getToken() }
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.detail || 'No se pudo generar el informe de cierre.');
+        const archivos = d.archivos || [];
+        if (!archivos.length) {
+            showToast('El área no tiene personas en ese tramo: no hay informe que mostrar.', 'warning');
+            return;
+        }
+        const token = AuthService.getToken();
+        const url = (a, ver) => '/api/cierre/informe-pdf/archivo?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area)
+            + '&tipo=' + encodeURIComponent(a.tipo) + (ver ? '&ver=true' : '') + (token ? '&token=' + encodeURIComponent(token) : '');
+        const que = d.preinforme ? 'Preinforme' : 'Informe';
+        const tabs = archivos.length > 1
+            ? '<div class="btn-group btn-group-sm vn-pdf-tabs" role="tablist">' + archivos.map((a, i) =>
+                '<button type="button" class="btn ' + (i ? 'btn-outline-primary' : 'btn-primary') + '" data-i="' + i + '" role="tab" aria-selected="' + (i ? 'false' : 'true') + '">'
+                + (a.tipo === 'BOLSA' ? 'Bolsa' : 'Ciclo') + ' · ' + esc(a.titulo) + '</button>').join('') + '</div>'
+            : '';
+        const html = '<div class="modal fade" id="modal-visor-informe" tabindex="-1" aria-labelledby="vi-titulo">'
+            + '<div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-lg-down"><div class="modal-content">'
+            + '<div class="modal-header"><span class="vn-ico" aria-hidden="true"><i class="bi bi-file-earmark-pdf"></i></span>'
+            + '<div class="vn-tit"><h5 class="modal-title" id="vi-titulo">' + que + ' de cierre · ' + esc(area) + '</h5>'
+            + '<div class="vn-sub">' + esc(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fIni) : fIni) + ' al '
+            + esc(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fFin) : fFin) + (d.preinforme ? ' · sin cerrar' : '') + '</div></div>'
+            + '<div class="ms-auto d-flex align-items-center gap-2">' + tabs
+            + '<a class="btn btn-sm btn-light" id="vi-descargar" href="' + esc(url(archivos[0], false)) + '"><i class="bi bi-download me-1"></i>Descargar</a></div>'
+            + '<button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>'
+            + '<div class="modal-body p-0" style="height:80vh"><iframe id="vi-pdf" title="' + que + ' de cierre en PDF" src="' + esc(url(archivos[0], true))
+            + '" style="width:100%;height:100%;border:0;display:block"></iframe></div>'
+            + '</div></div></div>';
+        const old = document.getElementById('modal-visor-informe');
+        if (old) old.remove();
+        document.body.insertAdjacentHTML('beforeend', html);
+        const el = document.getElementById('modal-visor-informe');
+        el.querySelectorAll('.vn-pdf-tabs button').forEach(b => b.addEventListener('click', () => {
+            const a = archivos[Number(b.dataset.i)];
+            el.querySelector('#vi-pdf').src = url(a, true);
+            el.querySelector('#vi-descargar').href = url(a, false);
+            el.querySelectorAll('.vn-pdf-tabs button').forEach(x => {
+                const sel = x === b;
+                x.classList.toggle('btn-primary', sel); x.classList.toggle('btn-outline-primary', !sel);
+                x.setAttribute('aria-selected', sel ? 'true' : 'false');
+            });
+        }));
+        el.addEventListener('hidden.bs.modal', () => el.remove());
+        new bootstrap.Modal(el).show();
+    } catch (e) {
+        console.error(e);
+        showToast(e.message || 'No se pudo generar el informe de cierre.', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 };
 
 // ── RESUMEN ANTES DE SELLAR (paso 5 del cierre) ─────────────────────────────
