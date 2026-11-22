@@ -21,6 +21,8 @@ def test_el_visor_muestra_el_pdf_en_la_aplicacion():
     assert "/api/cierre/informe-pdf/archivo?" in f and "'&ver=true'" in f and "<iframe id=\"vi-pdf\"" in f
     assert "vn-pdf-tabs" in f and "vi-descargar" in f        # una pestaña por tipo y el botón Descargar
     assert "createObjectURL" not in f                       # lo entrega el servidor, sin armar archivos en memoria
+    # pantalla completa y el PDF ajustado al ancho, sin miniaturas (21-11-2026: en ventana mediana se veía chico)
+    assert 'modal-dialog modal-fullscreen"' in f and "#view=FitH&navpanes=0" in f
 
 
 def test_el_servidor_lo_entrega_para_verlo_o_para_descargarlo():

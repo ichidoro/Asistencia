@@ -5818,7 +5818,8 @@ window.verInformeCierre = async function (fIni, fFin, area, btn) {
         }
         const token = AuthService.getToken();
         const url = (a, ver) => '/api/cierre/informe-pdf/archivo?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area)
-            + '&tipo=' + encodeURIComponent(a.tipo) + (ver ? '&ver=true' : '') + (token ? '&token=' + encodeURIComponent(token) : '');
+            + '&tipo=' + encodeURIComponent(a.tipo) + (ver ? '&ver=true' : '') + (token ? '&token=' + encodeURIComponent(token) : '')
+            + (ver ? '#view=FitH&navpanes=0' : '');   // en el visor: ajustado al ancho y sin la columna de miniaturas
         const que = d.preinforme ? 'Preinforme' : 'Informe';
         const tabs = archivos.length > 1
             ? '<div class="btn-group btn-group-sm vn-pdf-tabs" role="tablist">' + archivos.map((a, i) =>
@@ -5826,7 +5827,8 @@ window.verInformeCierre = async function (fIni, fFin, area, btn) {
                 + (a.tipo === 'BOLSA' ? 'Bolsa' : 'Ciclo') + ' · ' + esc(a.titulo) + '</button>').join('') + '</div>'
             : '';
         const html = '<div class="modal fade" id="modal-visor-informe" tabindex="-1" aria-labelledby="vi-titulo">'
-            + '<div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-lg-down"><div class="modal-content">'
+            // Pantalla completa (dueño, 21-11-2026: en una ventana mediana el PDF se veía chico)
+            + '<div class="modal-dialog modal-fullscreen"><div class="modal-content">'
             + '<div class="modal-header"><span class="vn-ico" aria-hidden="true"><i class="bi bi-file-earmark-pdf"></i></span>'
             + '<div class="vn-tit"><h5 class="modal-title" id="vi-titulo">' + que + ' de cierre · ' + esc(area) + '</h5>'
             + '<div class="vn-sub">' + esc(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fIni) : fIni) + ' al '
@@ -5834,7 +5836,7 @@ window.verInformeCierre = async function (fIni, fFin, area, btn) {
             + '<div class="ms-auto d-flex align-items-center gap-2">' + tabs
             + '<a class="btn btn-sm btn-light" id="vi-descargar" href="' + esc(url(archivos[0], false)) + '"><i class="bi bi-download me-1"></i>Descargar</a></div>'
             + '<button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>'
-            + '<div class="modal-body p-0" style="height:80vh"><iframe id="vi-pdf" title="' + que + ' de cierre en PDF" src="' + esc(url(archivos[0], true))
+            + '<div class="modal-body p-0" style="overflow:hidden"><iframe id="vi-pdf" title="' + que + ' de cierre en PDF" src="' + esc(url(archivos[0], true))
             + '" style="width:100%;height:100%;border:0;display:block"></iframe></div>'
             + '</div></div></div>';
         const old = document.getElementById('modal-visor-informe');
