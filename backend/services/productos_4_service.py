@@ -114,16 +114,46 @@ class Productos4Service:
         asignaciones_map = {a["empleado_id"]: a for a in asignaciones}
 
         resultado_evaluacion = []
-        
+        # Antigüedad desde el inicio del turno continuo vigente en el período, nunca desde la fecha de ingreso de la ficha,
+        # que es solo referencial (dueño, 23-11-2026; ver inicio_turno.py)
+        from backend.services.inicio_turno import inicios_de_turno
+        inicios_turno = await inicios_de_turno(self.db, [e.id for e in empleados], fecha_inicio, fecha_fin)
+
         for emp in empleados:
             emp_dict = (await bono_service.con_tramos_de_cargo([emp.to_dict()], fecha_inicio, fecha_fin))[0]
+            emp_dict["inicio_turno"] = inicios_turno.get(emp.id)
             emp_id = emp.id
             nombre = emp.nombre_completo
             
             # --- Regla 1: Antigüedad mínima, la configurada en el bono «4 Productos» (antes escrita en el código: el
-            # segundo mes). Meses desde el mes de ingreso hasta el mes del período. ---
+            # segundo mes). Meses desde el mes del inicio del turno hasta el mes del período. ---
             antig_min = int((bono_p4 or {}).get("antiguedad_meses") or 0)
-            fecha_ingreso_str = emp.fecha_ingreso
+            fecha_ingreso_str = emp_dict["inicio_turno"]
+            # Artículo 22 (excluidos de asistencia): no tienen turno y reciben siempre 4 Productos, salvo que se den de
+            # baja (dueño, 23-11-2026). No se mira la fecha de ingreso, ni el turno, ni la asistencia
+            if getattr(emp, "excluido_asistencia", 0):
+                from backend.services.bolsa_prorrateo import baja_del_periodo
+                baja = baja_del_periodo(emp.fecha_salida, emp.activo, getattr(emp, "decision_vencimiento", None),
+                                        fecha_inicio, fecha_fin)
+                prev_asig = asignaciones_map.get(emp_id)
+                resultado_evaluacion.append({
+                    "empleado_id": emp_id,
+                    "nombre": nombre,
+                    "rut": emp.rut_formateado,
+                    "cargo": emp.cargo or "Sin Cargo",
+                    "area": emp.area or "Sin Area",
+                    "califica": not baja,
+                    "motivo": f"Se da de baja el {baja[8:10]}-{baja[5:7]}-{baja[:4]}." if baja else "OK",
+                    "seleccion": {
+                        "p1": prev_asig.get("producto1_codigo"),
+                        "p2": prev_asig.get("producto2_codigo"),
+                        "p3": prev_asig.get("producto3_codigo"),
+                        "p4": prev_asig.get("producto4_codigo"),
+                        "observaciones": prev_asig.get("observaciones"),
+                        "updated_at": prev_asig.get("updated_at")
+                    } if prev_asig else None
+                })
+                continue
             if not fecha_ingreso_str:
                 resultado_evaluacion.append({
                     "empleado_id": emp_id,
@@ -132,7 +162,7 @@ class Productos4Service:
                     "cargo": emp.cargo or "Sin Cargo",
                     "area": emp.area or "Sin Area",
                     "califica": False,
-                    "motivo": "Fecha de ingreso no registrada en ficha del empleado.",
+                    "motivo": "Sin turno asignado en el período.",
                     "seleccion": None
                 })
                 continue
@@ -148,8 +178,8 @@ class Productos4Service:
                         "cargo": emp.cargo or "Sin Cargo",
                         "area": emp.area or "Sin Area",
                         "califica": False,
-                        "motivo": f"Antigüedad insuficiente. Ingresó el {fecha_ingreso_str[:10]}. Recibe desde {antig_min} "
-                                  f"{'mes' if antig_min == 1 else 'meses'} después del mes de ingreso.",
+                        "motivo": f"Antigüedad insuficiente. Turno desde el {fecha_ingreso_str[:10]}. Recibe desde {antig_min} "
+                                  f"{'mes' if antig_min == 1 else 'meses'} después del mes de inicio del turno.",
                         "seleccion": None
                     })
                     continue
@@ -161,7 +191,7 @@ class Productos4Service:
                     "cargo": emp.cargo or "Sin Cargo",
                     "area": emp.area or "Sin Area",
                     "califica": False,
-                    "motivo": f"Error evaluando fecha de ingreso ({fecha_ingreso_str}): {e}",
+                    "motivo": f"Error evaluando el inicio del turno ({fecha_ingreso_str}): {e}",
                     "seleccion": None
                 })
                 continue

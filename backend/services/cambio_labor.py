@@ -59,10 +59,18 @@ class CambioLaborService:
         return [{"cargo_id": f["cargo_id"], "desde": str(f["fecha_desde"])[:10],
                  "hasta": str(f["fecha_hasta"])[:10] if f["fecha_hasta"] else None} for f in filas]
 
+    async def _inicio_turno(self, empleado_id: int, fecha: str) -> Optional[str]:
+        """Inicio del turno continuo de la persona vigente en `fecha` (dueño, 23-11-2026: el historial de cargos parte
+        desde la asignación de turno, no desde la fecha de ingreso de la ficha, que es solo referencial)."""
+        from backend.services.inicio_turno import inicios_de_turno
+        return (await inicios_de_turno(self.db, [empleado_id], fecha, fecha)).get(empleado_id)
+
     async def _tramos_o_inicial(self, emp: Dict[str, Any]) -> List[Dict[str, Any]]:
         tramos = await self._tramos(emp["id"])
         if not tramos and emp.get("cargo_id"):
-            tramos = [{"cargo_id": emp["cargo_id"], "desde": str(emp.get("fecha_ingreso") or "2000-01-01")[:10], "hasta": None}]
+            hoy = datetime.now().strftime("%Y-%m-%d")
+            desde = await self._inicio_turno(emp["id"], hoy) or "2000-01-01"
+            tramos = [{"cargo_id": emp["cargo_id"], "desde": desde, "hasta": None}]
         return tramos
 
     async def validar(self, empleado_id: int, cargo_id: int, fecha: str) -> Dict[str, Any]:
@@ -75,9 +83,8 @@ class CambioLaborService:
         cargo = await self.db.fetch_one("SELECT id, nombre FROM cargos WHERE id = ?", (cargo_id,))
         if not cargo:
             raise HTTPException(status_code=400, detail="Elija un cargo de la lista.")
-        ingreso = str(emp.get("fecha_ingreso") or "")[:10]
-        if ingreso and fecha < ingreso:
-            raise HTTPException(status_code=400, detail="La fecha es anterior al ingreso de la persona.")
+        if not await self._inicio_turno(empleado_id, fecha):
+            raise HTTPException(status_code=400, detail="La persona no tiene turno asignado en esa fecha.")
         area = emp.get("area_nombre") or ""
         cerrado = await self.db.fetch_one(
             "SELECT fecha_inicio, fecha_fin FROM cierres_periodos WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ? LIMIT 1",
@@ -147,9 +154,9 @@ class CambioLaborService:
         hoy = datetime.now().strftime("%Y-%m-%d")
         async with self.db.transaction():
             if not await self._tramos(empleado_id) and emp.get("cargo_id"):
-                ingreso = str(emp.get("fecha_ingreso") or "2000-01-01")[:10]
+                desde = await self._inicio_turno(empleado_id, fecha) or "2000-01-01"
                 await self.db.execute("INSERT INTO historial_cargos (empleado_id, cargo_id, fecha_desde, motivo) VALUES (?, ?, ?, ?)",
-                                      (empleado_id, emp["cargo_id"], ingreso, "Cargo de la ficha al crear el historial"))
+                                      (empleado_id, emp["cargo_id"], desde, "Cargo de la ficha al crear el historial"))
             filas = await self.db.fetch_all(
                 "SELECT id, cargo_id, fecha_desde, fecha_hasta FROM historial_cargos WHERE empleado_id = ? ORDER BY fecha_desde", (empleado_id,))
             cubre = next((f for f in filas if str(f["fecha_desde"])[:10] <= fecha and (not f["fecha_hasta"] or fecha <= str(f["fecha_hasta"])[:10])), None)

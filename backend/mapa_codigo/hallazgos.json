@@ -1,5 +1,5 @@
 {
- "archivos_revisados": 177,
+ "archivos_revisados": 178,
  "repetidas": {
   "total": 139,
   "top": [
@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1525,
+  "total": 1530,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -156,17 +156,17 @@
    {
     "funcion": "get_matrix_data_with_projections",
     "archivo": "backend/services/asistencia_service.py",
-    "lineas": 454
+    "lineas": 459
+   },
+   {
+    "funcion": "render_pdf",
+    "archivo": "backend/services/informe_cierre_pdf.py",
+    "lineas": 392
    },
    {
     "funcion": "_calcular_filas",
     "archivo": "backend/services/report_service.py",
     "lineas": 327
-   },
-   {
-    "funcion": "render_pdf",
-    "archivo": "backend/services/informe_cierre_pdf.py",
-    "lineas": 317
    },
    {
     "funcion": "get_bulk_context",
@@ -196,7 +196,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3433
+   "lineas": 3438
   },
   {
    "archivo": "frontend/js/sync_wizard.js",

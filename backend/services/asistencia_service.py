@@ -2692,6 +2692,10 @@ class AsistenciaService:
         ]
         
         asist_rows, jornadas_rows, asig_emp_rows, just_rows, feriados_raw, libretas_raw = await asyncio.gather(*tasks)
+        # Desde cuándo cuenta cada persona en el período: el inicio de su turno continuo, no la fecha de ingreso de la
+        # ficha (dueño, 23-11-2026; ver inicio_turno.py). Lo usan la meta de la Bolsa, los bonos y 4 Productos
+        from backend.services.inicio_turno import inicios_de_turno
+        inicios_turno = await inicios_de_turno(db, emp_ids, fecha_inicio, fecha_fin)
 
         libretas_map = {(r['empleado_id'], r['fecha']): dict(r) for r in (libretas_raw or [])}
 
@@ -2756,6 +2760,7 @@ class AsistenciaService:
             nm = emp.get('nombre', '') or ''
             apellidos = f"{ap} {am}".strip()
             emp['nombre_completo'] = f"{ap} {am} {nm}".strip().replace('  ', ' ')
+            emp['inicio_turno'] = inicios_turno.get(eid)
             # Baja del período (dueño, 23-11-2026): la grilla, el informe y el preinforme la cuentan aparte de la dotación
             emp['baja_periodo'] = baja_del_periodo(emp.get('fecha_salida'), emp.get('activo'),
                                                    emp.get('decision_vencimiento'), fecha_inicio, fecha_fin)
@@ -2778,7 +2783,7 @@ class AsistenciaService:
                     # resumen de cierre desde este único cálculo.
                     # El término de un contrato sin decidir no recorta la meta (dueño, 03-11-2026)
                     emp['bolsa_prorrateo'] = calcular_prorrateo_bolsa(
-                        emp.get('fecha_ingreso'),
+                        emp.get('inicio_turno'),
                         salida_decidida(emp.get('fecha_salida'), emp.get('activo'), emp.get('decision_vencimiento')),
                         fecha_inicio, fecha_fin
                     )

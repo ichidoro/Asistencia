@@ -72,7 +72,7 @@ def baja_del_periodo(fecha_salida: Any, activo: Any, decision_vencimiento: Any,
 
 
 def calcular_prorrateo_bolsa(
-    fecha_ingreso: Any,
+    fecha_ingreso: Any,   # el inicio del turno de la persona (inicio_turno.py), no la fecha de ingreso de la ficha (23-11-2026)
     fecha_salida: Any,
     tramo_inicio: Any,
     tramo_fin: Any,

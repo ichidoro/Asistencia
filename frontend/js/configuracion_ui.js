@@ -539,7 +539,7 @@ function renderBonos() {
                 + F.campo('En uso', '<span class="fcB-sw" aria-disabled="true"><input type="checkbox" disabled' + (b.activo ? ' checked' : '') + '><span aria-hidden="true"></span>' + (b.activo ? 'Se calcula' : 'No se calcula') + '</span>')
                 + F.campo('Inasistencia sin justificar', '<span>' + F.esc(b.efecto_inasistencia ? nombreEfecto(b.efecto_inasistencia) : 'Sin configurar') + '</span>')
                 + (b.tipo === 'beneficio' ? F.campo('Antigüedad mínima', '<span>' + F.esc(b.antiguedad_meses == null ? 'Sin configurar'
-                    : (b.antiguedad_meses === 0 ? 'Desde el mes de ingreso' : b.antiguedad_meses + (b.antiguedad_meses === 1 ? ' mes' : ' meses') + ' después del mes de ingreso')) + '</span>') : '')
+                    : (b.antiguedad_meses === 0 ? 'Desde el mes en que empieza su turno' : b.antiguedad_meses + (b.antiguedad_meses === 1 ? ' mes' : ' meses') + ' después del mes en que empieza su turno')) + '</span>') : '')
                 + F.seccion('Reglas de aplicación')
                 + (reglas || '<p class="fcB-nota">Este bono no tiene reglas: no se paga a nadie.</p>')
                 + F.seccion('Efecto de las justificaciones')

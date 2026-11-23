@@ -1756,7 +1756,7 @@ function renderReporteEmpleado(data, container) {
                                 const _fEs = iso => iso ? iso.split('-').reverse().join('-') : '';
                                 let partes = [];
                                 if (Number.isFinite(pb.factor) && pb.factor < 1) {
-                                    const motivo = [pb.fecha_ingreso ? 'ingreso el ' + _fEs(pb.fecha_ingreso) : '', pb.fecha_salida ? 'egreso el ' + _fEs(pb.fecha_salida) : ''].filter(Boolean).join(' y ');
+                                    const motivo = [pb.fecha_ingreso ? 'inicio del turno el ' + _fEs(pb.fecha_ingreso) : '', pb.fecha_salida ? 'egreso el ' + _fEs(pb.fecha_salida) : ''].filter(Boolean).join(' y ');
                                     partes.push('<small class="d-block text-muted" style="font-size:0.68rem;">Ajustada por ' + motivo + ' (' + pb.dias_disponibles + ' de ' + pb.dias_tramo + ' días)</small>');
                                 }
                                 if (pb.aviso_21_dias) {
@@ -7044,7 +7044,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                         const _fEs = iso => iso ? iso.split('-').reverse().join('-') : '';
                         let avisoLey = '';
                         if (prb && Number.isFinite(prb.factor) && prb.factor < 1) {
-                            const motivo = [prb.fecha_ingreso ? 'ingreso el ' + _fEs(prb.fecha_ingreso) : '', prb.fecha_salida ? 'egreso el ' + _fEs(prb.fecha_salida) : ''].filter(Boolean).join(' y ');
+                            const motivo = [prb.fecha_ingreso ? 'inicio del turno el ' + _fEs(prb.fecha_ingreso) : '', prb.fecha_salida ? 'egreso el ' + _fEs(prb.fecha_salida) : ''].filter(Boolean).join(' y ');
                             metaTooltip = 'Meta ajustada por ' + motivo + ': proporcional a ' + prb.dias_disponibles + ' de ' + prb.dias_tramo + ' días del tramo. ' + metaTooltip;
                         }
                         if (prb && prb.aviso_21_dias) {

@@ -217,6 +217,10 @@ class BonoService:
             for t in tramos:
                 if t["desde"] <= fecha and (t["hasta"] is None or fecha <= t["hasta"]):
                     return t["cargo_id"]
+            # Antes del primer tramo (el historial partió desde la fecha de ingreso de la ficha, que puede ser posterior al
+            # inicio del turno): el cargo de ese primer tramo, no el de hoy (23-11-2026)
+            if tramos and fecha < tramos[0]["desde"]:
+                return tramos[0]["cargo_id"]
             return empleado.get("cargo_id")
 
         if por_dia:
@@ -248,8 +252,11 @@ class BonoService:
                 return efecto_inas, "Inasistencia sin justificar"
             return "pierde", "Falta configurar el efecto de la inasistencia sin justificar en este bono"
 
-        # ── 2. Días del período que le corresponden: desde su ingreso y hasta su salida ─────
-        fecha_desde = max((empleado.get("fecha_ingreso") or periodo_inicio)[:10], periodo_inicio)
+        # ── 2. Días del período que le corresponden: desde el inicio de su turno y hasta su salida ─────
+        # Desde el inicio del turno continuo, no desde la fecha de ingreso de la ficha, que es solo referencial (dueño,
+        # 23-11-2026; ver inicio_turno.py). La grilla lo trae en «inicio_turno»
+        inicio = empleado.get("inicio_turno") if "inicio_turno" in empleado else empleado.get("fecha_ingreso")
+        fecha_desde = max((inicio or periodo_inicio)[:10], periodo_inicio)
         # La salida cuenta solo si la persona ya está inactiva (igual que la grilla): en una activa es el término de su
         # contrato, que puede renovarse
         salida = empleado.get("fecha_salida") if not empleado.get("activo", 1) else None
@@ -280,7 +287,7 @@ class BonoService:
         #    La matriz puede traer días fuera del período: no cuentan.
         dias_laborables  = 0   # días de turno ya transcurridos (hasta hoy) que le corresponden: se revisan
         dias_asistidos   = 0
-        dias_asignados   = 0   # días de turno del período que le corresponden (desde su ingreso, hasta su salida)
+        dias_asignados   = 0   # días de turno del período que le corresponden (desde el inicio de su turno, hasta su salida)
         dias_periodo     = 0   # días de turno de todo el período (para el proporcional por ingreso o salida)
         suma_montos      = 0.0  # con cambio de labor: el monto de la regla de cada día asignado
         reglas_dias      = set()
@@ -399,8 +406,8 @@ class BonoService:
         if descuenta:
             partes.append(f"{dias_asistidos}/{dias_laborables} días asistidos")
         if factor_ingreso < 1.0:
-            partes.append(f"{dias_asignados}/{dias_periodo} días de turno del período (ingreso "
-                          f"{(empleado.get('fecha_ingreso') or '?')[:10]}{', salida ' + salida[:10] if salida else ''})")
+            partes.append(f"{dias_asignados}/{dias_periodo} días de turno del período (turno desde "
+                          f"{(inicio or '?')[:10]}{', salida ' + salida[:10] if salida else ''})")
         return {
             "aplica": True, "califica": True,
             "monto": monto_final,

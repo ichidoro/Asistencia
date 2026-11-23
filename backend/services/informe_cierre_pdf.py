@@ -79,7 +79,7 @@ def dias_persona(dias_dict: Dict[str, Any], rango_dias: List, es_bolsa: bool, et
         if cod:
             por_clave[_norm(cod)] = cod
             por_clave[_norm(t.get('nombre'))] = cod
-    out = {'trab': 0, 'aus': {}, 'per': 0, 'comp': 0, 'ina': 0, 'ano': 0, 'dias_aus': {}, 'jextra': 0, 'jextra_dias': []}
+    out = {'trab': 0, 'aus': {}, 'per': 0, 'comp': 0, 'ina': 0, 'ano': 0, 'dias_aus': {}, 'jextra': 0, 'jextra_dias': [], 'jextra_fechas': []}
     for d in rango_dias:
         k = f'{d.year}-{d.month:02d}-{d.day:02d}'
         di = dias_dict.get(k)
@@ -92,6 +92,8 @@ def dias_persona(dias_dict: Dict[str, Any], rango_dias: List, es_bolsa: bool, et
         if estado.upper() in ESTADOS_JORNADA_EXTRA:
             out['jextra'] += 1
             out['jextra_dias'].append(f'{d.day:02d}-{d.month:02d}')
+            out['jextra_fechas'].append((f'{d.year}-{d.month:02d}-{d.day:02d}', estado.upper(),
+                                         int(round(float(di.get('horas_trabajadas') or 0) * 3600))))
         clave = None
         if sigla in SIGLAS_TRABAJADAS:
             out['trab'] += 1
@@ -1021,14 +1023,89 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
 
     historia = [enc, Spacer(1, 8), t_chips, Spacer(1, 6), tabla, Spacer(1, 7)]
     historia += [Paragraph(x, st_ley) for x in leyenda(inf, justif, cols)]
-    lineas_jx = [f'<b>{p["nombre"]}</b>: {p["jextra"]} ({_y(p["jextra_dias"])}).' for p in inf['personas'] if p.get('jextra')]
-    if lineas_jx:
-        st_jx_t = ParagraphStyle('jxt', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY))
-        st_jx = ParagraphStyle('jx', fontName=_f('Barlow'), fontSize=8.3, leading=11, textColor=H(C_INK), leftIndent=8,
-                               bulletIndent=0, spaceAfter=2)
-        historia += [Spacer(1, 10), KeepTogether([Paragraph('Jornadas extra (monto fijo)', st_jx_t), Spacer(1, 3),
-                                                  Paragraph(lineas_jx[0], st_jx, bulletText='•')])]
-        historia += [Paragraph(x, st_jx, bulletText='•') for x in lineas_jx[1:]]
+    # Jornadas extra (monto fijo) en una tabla (dueño, 23-11-2026: la lista era poco práctica): una fila por persona y una
+    # columna por cada fecha con jornada extra (fecha completa y día de la semana); en la celda, las horas de esa jornada.
+    # Si las fechas no caben en el ancho de la hoja, la tabla sigue debajo con las fechas que faltan
+    con_jx = [p for p in inf['personas'] if p.get('jextra')]
+    if con_jx:
+        st_jx_t = ParagraphStyle('jxt', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY), keepWithNext=1)
+        st_jx_n = ParagraphStyle('jxn', fontName=_f('Barlow-Medium'), fontSize=7.6, leading=9.5, textColor=H(C_INK))
+        st_jx_c = ParagraphStyle('jxc', fontName=_f('BarlowSC-SemiBold'), fontSize=6.8, leading=8.4, textColor=H(C_NAVY))
+        st_jx_cr = ParagraphStyle('jxcr', parent=st_jx_c, alignment=2)
+        st_jx_cc = ParagraphStyle('jxcc', parent=st_jx_c, alignment=1)
+        dias_sem = ('LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM')
+        # horas y tipo de cada persona en cada fecha
+        celdas_p = {p['emp_id']: {x[0]: (x[2] if len(x) > 2 else 0, x[1]) for x in (p.get('jextra_fechas') or [])} for p in con_jx}
+        fechas_jx = sorted({x[0] for p in con_jx for x in (p.get('jextra_fechas') or [])})
+        # Feriado o día libre va en el encabezado de la fecha, con la palabra completa (dueño, 23-11-2026): «FERIADO» si
+        # la jornada de esa fecha fue en feriado; «DÍA LIBRE» solo si fue día libre para todas las personas de esa fecha
+        def tipo_fecha(iso):
+            tipos = {c[iso][1] for c in celdas_p.values() if iso in c}
+            if 'FERIADO Y JORNADA EXTRA' in tipos:
+                return 'FERIADO'
+            if tipos == {'DÍA LIBRE Y JORNADA EXTRA'}:
+                return 'DÍA LIBRE'
+            return ''
+        w_rut_jx = max(stringWidth(p['rut'], _f('Barlow'), 7.6) for p in con_jx) + 8
+        w_nom_jx = min(max(stringWidth(p['nombre'], _f('Barlow-Medium'), 7.6) for p in con_jx) + 8, 170)
+        w_n_jx, w_h_jx, w_f_jx = 44, 52, 50
+        por_tabla = max(1, int((util - w_rut_jx - w_nom_jx - w_n_jx - w_h_jx) // w_f_jx))
+        bloques_jx = [fechas_jx[i:i + por_tabla] for i in range(0, len(fechas_jx), por_tabla)] or [[]]
+        tablas_jx = []
+        for nb_, fechas_b in enumerate(bloques_jx):
+            ultimo = nb_ == len(bloques_jx) - 1
+            cab = [Paragraph('RUT', st_jx_c), Paragraph('NOMBRE', st_jx_c)]
+            for iso in fechas_b:
+                dt = datetime.strptime(iso, '%Y-%m-%d')
+                t_f = tipo_fecha(iso)
+                cab.append(Paragraph((f'<font color="{C_AMBER}">{t_f}</font><br/>' if t_f else '')
+                                     + f'{dias_sem[dt.weekday()]}<br/>{dt.strftime("%d-%m-%Y")}', st_jx_cc))
+            if ultimo:
+                cab += [Paragraph('JORNADAS', st_jx_cr), Paragraph('HORAS', st_jx_cr)]
+            filas_jx = [cab]
+            for p in con_jx:
+                c = celdas_p[p['emp_id']]
+                fila = [p['rut'], Paragraph(p['nombre'], st_jx_n)]
+                for iso in fechas_b:
+                    if iso in c:
+                        seg, t = c[iso]
+                        fila.append(hms(seg) if seg else 'Sí')
+                    else:
+                        fila.append('')
+                if ultimo:
+                    fila += [str(p['jextra']), hms(sum(v[0] for v in c.values()))]
+                filas_jx.append(fila)
+            tot = [f'Total · {len(con_jx)} {"persona" if len(con_jx) == 1 else "personas"}', '']
+            for iso in fechas_b:
+                n_ = sum(1 for c in celdas_p.values() if iso in c)
+                tot.append(f'{n_} · {hms(sum(c[iso][0] for c in celdas_p.values() if iso in c))}' if n_ else '')
+            if ultimo:
+                tot += [str(sum(p['jextra'] for p in con_jx)), hms(sum(v[0] for c in celdas_p.values() for v in c.values()))]
+            filas_jx.append(tot)
+            anchos_jx = [w_rut_jx, w_nom_jx] + [w_f_jx] * len(fechas_b) + ([w_n_jx, w_h_jx] if ultimo else [])
+            t_jx = Table(filas_jx, colWidths=anchos_jx, repeatRows=1, hAlign='LEFT')
+            est_jx = [('FONT', (0, 1), (-1, -1), _f('Barlow'), 7.6), ('TEXTCOLOR', (0, 1), (-1, -1), H(C_INK)),
+                      ('BACKGROUND', (0, 0), (-1, 0), H(C_NAVY_SOFT)), ('LINEBELOW', (0, 0), (-1, 0), 0.8, H(C_NAVY)),
+                      ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('VALIGN', (0, 0), (-1, 0), 'BOTTOM'),
+                      ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
+                      ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                      ('TOPPADDING', (0, 0), (-1, -1), 2.6), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.6),
+                      ('SPAN', (0, -1), (1, -1)), ('FONT', (0, -1), (-1, -1), _f('Barlow-Bold'), 7.2),
+                      ('LINEABOVE', (0, -1), (-1, -1), 1.1, H(C_INK))]
+            for x in range(2, 2 + len(fechas_b)):
+                est_jx.append(('LINEBEFORE', (x, 0), (x, -1), 0.4, H(C_LINE)))
+            if ultimo:
+                est_jx += [('ALIGN', (-2, 1), (-1, -1), 'RIGHT'), ('LINEBEFORE', (-2, 0), (-2, -1), 0.6, H(C_LINE)),
+                           ('FONT', (-2, 1), (-1, -2), _f('Barlow-Bold'), 7.6)]
+            for k in range(1, len(filas_jx) - 1):
+                est_jx.append(('LINEBELOW', (0, k), (-1, k), 0.4, H(C_LINE_2)))
+                if k % 2 == 0:
+                    est_jx.append(('BACKGROUND', (0, k), (-1, k), H(C_ZEBRA)))
+            t_jx.setStyle(TableStyle(est_jx))
+            tablas_jx += [t_jx, Spacer(1, 6)]
+        st_jx_l = ParagraphStyle('jxl', fontName=_f('Barlow'), fontSize=7.4, leading=9.5, textColor=H(C_INK_2))
+        nota_jx = 'En cada fecha, las horas de esa jornada extra. La fila Total dice cuántas personas y cuántas horas hubo cada día.'
+        historia += [Spacer(1, 10), Paragraph('Jornadas extra (monto fijo)', st_jx_t), Spacer(1, 4)] + tablas_jx + [Paragraph(nota_jx, st_jx_l)]
     det_b = detalle_bonos(inf)
     if det_b['no_pagados'] or det_b['en_parte']:
         st_db_t = ParagraphStyle('dbt', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY))
