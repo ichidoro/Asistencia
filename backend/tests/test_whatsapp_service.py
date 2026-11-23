@@ -89,3 +89,23 @@ def test_destino_valido_acepta_contacto_del_telefono():
     assert wa.destino_valido("14155552671@s.whatsapp.net") == "14155552671@s.whatsapp.net"
     assert wa.destino_valido("56912345678@s.whatsapp.net") == "56912345678@s.whatsapp.net"
     assert wa.destino_valido("abc@s.whatsapp.net") is None
+
+
+def test_buscar_contacto_por_nombre_en_cualquier_orden():
+    from backend.services.whatsapp_resumen import buscar_contacto
+    cs = [{"id": "1@s.whatsapp.net", "nombre": "Hans Valenzuela"}, {"id": "2@s.whatsapp.net", "nombre": "María José Pérez"}, {"id": "3@s.whatsapp.net", "nombre": "Pedro"}]
+    assert buscar_contacto("HANS ELLIOT", "VALENZUELA", "VARGAS", cs)[1]["id"] == "1@s.whatsapp.net"
+    assert buscar_contacto("Maria Jose", "Perez", "", cs)[0] == "ok"          # sin tildes y con segundo nombre
+    assert buscar_contacto("Pedro", "Soto", "", cs) == ("ninguno", None)       # solo el primer nombre no alcanza
+    assert buscar_contacto("Hans", "", "", cs) == ("ninguno", None)            # sin apellido no se arriesga
+    assert buscar_contacto("Hans", "Vargas", "", cs) == ("ninguno", None)      # el apellido debe estar
+
+
+def test_buscar_contacto_desempata_o_marca_ambiguo():
+    from backend.services.whatsapp_resumen import buscar_contacto
+    cs = [{"id": "1@s.whatsapp.net", "nombre": "Juan Soto"}, {"id": "2@s.whatsapp.net", "nombre": "Juan Pablo Soto"}]
+    # el contacto que además trae el segundo nombre gana
+    assert buscar_contacto("JUAN PABLO", "SOTO", "RIOS", cs)[1]["id"] == "2@s.whatsapp.net"
+    # sin nada más para decidir hay dos posibles: no se elige
+    estado, lista = buscar_contacto("JUAN", "SOTO", "", [{"id": "1@s.whatsapp.net", "nombre": "Juan Soto"}, {"id": "9@s.whatsapp.net", "nombre": "Soto Juan"}])
+    assert estado == "ambiguo" and len(lista) == 2

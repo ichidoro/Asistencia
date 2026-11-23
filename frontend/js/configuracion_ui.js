@@ -2863,8 +2863,10 @@ window.cargarMapaCodigo = async function () {
                 if (!r.ok) return msg(esc(r.j.detail || 'Error al calcular el resumen.'));
                 const j = r.j;
                 let t = '<b>' + j.personas + '</b> personas en Bolsa. ';
-                t += j.chats != null ? 'Chats asignados: <b>' + j.chats + '</b>.' : '<b>' + j.con_telefono + '</b> con celular válido.';
-                if ((j.sin_telefono || []).length) t += '<div class="text-muted">Sin celular: ' + esc(j.sin_telefono.join(', ')) + '</div>';
+                t += j.chats != null ? 'Chats asignados: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> encontradas en los contactos del teléfono.';
+                if ((j.sin_contacto || []).length) t += '<div class="text-muted">Sin contacto con su nombre (no se les envía): ' + esc(j.sin_contacto.join(', ')) + '</div>';
+                if ((j.ambiguos || []).length) t += '<div class="text-muted">Con más de un contacto posible (no se les envía): ' + esc(j.ambiguos.join('; ')) + '</div>';
+                if (simular && (j.coincidencias || []).length) t += '<details class="mt-2"><summary>Revisar a quién llegaría (' + j.coincidencias.length + ')</summary><table class="table table-sm mt-1" style="font-size:0.8rem;"><thead><tr><th>Persona</th><th>Contacto</th><th>Número</th></tr></thead><tbody>' + j.coincidencias.map(function (x) { return '<tr><td>' + esc(x.persona) + '</td><td>' + esc(x.contacto) + '</td><td>' + esc(x.numero) + '</td></tr>'; }).join('') + '</tbody></table></details>';
                 if (simular) t += (j.vista_previa || []).slice(0, 2).map(function (v) { return '<pre class="mt-2 p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.nombre) + ' → ' + esc(v.telefono || 'sin celular') + '\n\n' + esc(v.mensaje) + '</pre>'; }).join('');
                 else t += '<div class="mt-1">Enviados: <b>' + j.enviados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
                 msg(t);

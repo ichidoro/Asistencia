@@ -4,6 +4,8 @@ Usa los mismos números que la grilla y el cierre (ReportService.datos_periodo: 
 Hay dos avisos: uno para cada persona (a su propio celular) y uno consolidado para los chats que se asignen (jefatura).
 """
 import asyncio
+import re
+import unicodedata
 from datetime import date
 from typing import Any, Dict, List
 
@@ -18,7 +20,7 @@ MAX_LINEAS_JEFATURA = 40    # el mensaje de WhatsApp se corta en 4000 caracteres
 AVISOS = {
     "resumen_personal": {
         "nombre": "Resumen semanal a cada persona",
-        "descripcion": "A cada persona de Bolsa Flexible, en su propio celular: cuánto lleva de su meta de 180 h y cuánto le falta.",
+        "descripcion": "A cada persona de Bolsa Flexible, en su propio WhatsApp: cuánto lleva de su meta de 180 h y cuánto le falta. Se la busca por nombre entre los contactos del teléfono (los números de la ficha no se usan).",
         "usa_chats": False,
     },
     "resumen_jefatura": {
@@ -27,6 +29,45 @@ AVISOS = {
         "usa_chats": True,
     },
 }
+
+
+_SIN_VALOR = {"de", "del", "la", "las", "los", "y", "e"}
+
+
+def _tokens(texto: object) -> set:
+    """Palabras del nombre en minúsculas y sin tildes, sin conectores («de», «del»…)."""
+    t = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode().lower()
+    return {w for w in re.split(r"[^a-z0-9]+", t) if len(w) > 1 and w not in _SIN_VALOR}
+
+
+def buscar_contacto(nombre: str, paterno: str, materno: str, contactos: List[Dict[str, Any]]) -> tuple:
+    """Encuentra a la persona entre los contactos del teléfono por su nombre.
+
+    Un contacto sirve si trae el primer nombre Y el apellido paterno (en cualquier orden: «Hans Valenzuela», «Valenzuela Hans»).
+    Si varios sirven, gana el que además trae el segundo nombre o el apellido materno; si aun así empatan, es ambiguo y no se envía.
+    Devuelve ("ok", contacto) | ("ambiguo", [contactos]) | ("ninguno", None).
+    """
+    nombres = [w for w in re.split(r"\s+", str(nombre or "").strip()) if w]
+    primero = _tokens(nombres[0]) if nombres else set()
+    resto = _tokens(" ".join(nombres[1:])) | _tokens(materno)
+    pat = _tokens(paterno)
+    if not primero or not pat:
+        return "ninguno", None
+    candidatos = []
+    for c in contactos:
+        ct = _tokens(c.get("nombre"))
+        if primero <= ct and pat <= ct:
+            candidatos.append((len(resto & ct), c))
+    if not candidatos:
+        return "ninguno", None
+    mejor = max(p for p, _ in candidatos)
+    ganadores = [c for p, c in candidatos if p == mejor]
+    return ("ok", ganadores[0]) if len(ganadores) == 1 else ("ambiguo", ganadores)
+
+
+def _numero_de(jid: str) -> str:
+    n = str(jid).split("@")[0]
+    return ("+" + n) if jid.endswith("@s.whatsapp.net") else n
 
 
 def _hhmm(minutos: float) -> str:
@@ -72,22 +113,25 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
     return "\n".join(lineas)
 
 
-async def construir(asistencia_service, hoy: str) -> Dict[str, Any]:
-    """Una fila por persona activa en Bolsa Flexible (teléfono None si no tiene uno válido) y el tramo vigente."""
+async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]] | None = None) -> Dict[str, Any]:
+    """Una fila por persona activa en Bolsa Flexible y el tramo vigente. El destino sale de los contactos del teléfono (por nombre):
+    los números de la ficha no se usan porque pueden estar mal. `estado`: ok | ambiguo | ninguno."""
     from backend.services.cuadre_service import CuadreService
     from backend.services.report_service import ReportService
     db = asistencia_service.repository.db
     inicio, fin = await CuadreService(asistencia_service).tramo_de(hoy)
     datos = await ReportService(asistencia_service).datos_periodo(inicio, fin, None)
-    contactos = {int(r["id"]): r for r in await db.fetch_all("SELECT id, nombre, telefono FROM empleados")}
+    fichas = {int(r["id"]): r for r in await db.fetch_all("SELECT id, nombre, apellido_paterno, apellido_materno FROM empleados")}
     personas = []
     for f in datos["filas"]:
         if not f.get("esBolsa") or f.get("activo") != "SÍ":
             continue
-        c = contactos.get(int(f["emp_id"])) or {}
+        c = fichas.get(int(f["emp_id"])) or {}
+        estado, hallado = buscar_contacto(c.get("nombre") or "", c.get("apellido_paterno") or "", c.get("apellido_materno") or "", contactos or [])
         personas.append({
-            "emp_id": f["emp_id"], "nombre": f["nombre"], "acum": f["acumBolsa"], "meta": f["metaMin"],
-            "telefono": whatsapp_service.normalizar_telefono(c.get("telefono")),
+            "emp_id": f["emp_id"], "nombre": f["nombre"], "acum": f["acumBolsa"], "meta": f["metaMin"], "estado": estado,
+            "telefono": hallado["id"] if estado == "ok" else None, "contacto": hallado["nombre"] if estado == "ok" else None,
+            "candidatos": [x["nombre"] for x in hallado] if estado == "ambiguo" else [],
             "mensaje": armar_mensaje(c.get("nombre") or "", f["acumBolsa"], f["metaMin"], inicio, fin, hoy),
         })
     return {"inicio": inicio, "fin": fin, "personas": personas}
@@ -96,7 +140,7 @@ async def construir(asistencia_service, hoy: str) -> Dict[str, Any]:
 async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, aviso: str = "resumen_personal",
                          destinos: List[str] | None = None) -> Dict[str, Any]:
     """simular=True no envía nada: devuelve a quién y qué se enviaría. `destinos` solo para el aviso a chats."""
-    base = await construir(asistencia_service, hoy)
+    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos())
     personas = base["personas"]
     if aviso == "resumen_jefatura":
         texto = armar_mensaje_jefatura(personas, base["inicio"], base["fin"], hoy)
@@ -116,10 +160,12 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
         return res
 
     con_tel = [i for i in personas if i["telefono"]]
-    res = {"simulado": simular, "aviso": aviso, "personas": len(personas), "con_telefono": len(con_tel),
-           "sin_telefono": [i["nombre"] for i in personas if not i["telefono"]]}
+    res = {"simulado": simular, "aviso": aviso, "personas": len(personas), "con_contacto": len(con_tel),
+           "sin_contacto": [i["nombre"] for i in personas if i["estado"] == "ninguno"],
+           "ambiguos": [f"{i['nombre']} (¿{' o '.join(i['candidatos'])}?)" for i in personas if i["estado"] == "ambiguo"]}
     if simular:
-        res["vista_previa"] = [{"nombre": i["nombre"], "telefono": i["telefono"], "mensaje": i["mensaje"]} for i in personas[:5]]
+        res["coincidencias"] = [{"persona": i["nombre"], "contacto": i["contacto"], "numero": _numero_de(i["telefono"])} for i in con_tel]
+        res["vista_previa"] = [{"nombre": i["nombre"], "telefono": _numero_de(i["telefono"]), "mensaje": i["mensaje"]} for i in con_tel[:2]]
         return res
     enviados = fallidos = 0
     for i in con_tel:
@@ -128,7 +174,7 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
         else:
             fallidos += 1
         await asyncio.sleep(PAUSA_ENTRE_ENVIOS_SEG)
-    logger.info(f"WhatsApp resumen semanal: {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin teléfono")
+    logger.info(f"WhatsApp resumen semanal: {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin contacto")
     res.update(enviados=enviados, fallidos=fallidos)
     return res
 
