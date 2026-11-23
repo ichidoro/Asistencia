@@ -1,7 +1,7 @@
 {
- "archivos_revisados": 181,
+ "archivos_revisados": 185,
  "repetidas": {
-  "total": 142,
+  "total": 146,
   "top": [
    {
     "nombre": "esc",
@@ -122,19 +122,19 @@
     ]
    },
    {
-    "nombre": "fmt",
+    "nombre": "_repo",
     "archivos": [
-     "dashboard_build/src/ui.jsx",
-     "frontend/js/configuracion_ui.js",
-     "frontend/js/cuadre_ui.js",
-     "frontend/js/horarios.js",
-     "frontend/js/marcaciones_ui.js"
+     "backend/routers/articulo22.py",
+     "backend/routers/llaves.py",
+     "backend/routers/reglas_marcas.py",
+     "backend/routers/visitas.py",
+     "backend/routers/whatsapp.py"
     ]
    }
   ]
  },
  "funciones_largas": {
-  "total": 1547,
+  "total": 1583,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -215,7 +215,7 @@
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",
-   "lineas": 2762
+   "lineas": 2906
   },
   {
    "archivo": "frontend/js/productos_4.js",

@@ -31,6 +31,8 @@ class MarcaNoCumple(BaseModel):
     razon_nc_id: Optional[int] = None
     # Los peonetas que iban con el chofer ese día (1 o 2, cambian de chofer): reciben la misma marca (23-11-2026)
     peonetas_ids: List[int] = Field(default_factory=list, max_length=2)
+    # Eliminar la marca del día (por si hubo un error): el día vuelve a «sin marcar», que cuenta como cumplido
+    eliminar: bool = False
 
 
 @router.get("/bono-semanal/acompanantes/")
@@ -72,6 +74,17 @@ async def marcar_no_cumple(
         if not asignaciones or (turnos and not any(a["turno_id"] in turnos for a in asignaciones)):
             raise HTTPException(status_code=400, detail="Ese día " + ("la persona" if pid == req.empleado_id else "un peoneta elegido")
                                 + " no tiene un horario con este bono.")
+    if req.eliminar:
+        borradas = await repo.quitar_marca_dia(req.bono_id, req.empleado_id, fecha)
+        try:
+            from backend.repositories.seguridad import SeguridadRepository
+            await SeguridadRepository(db).log_auditoria(
+                current_user.user_id, current_user.username, "BONO_SEMANAL_ELIMINAR_MARCA", "MARCACIONES",
+                json.dumps({"bono_id": req.bono_id, "bono": bono["nombre"], "empleado_id": req.empleado_id, "fecha": fecha,
+                            "borradas": borradas}, ensure_ascii=False))
+        except Exception as e:
+            logger.warning(f"[BonoSemanal] Auditoría no registrada: {e}")
+        return {"ok": True, "fecha": fecha, "eliminada": bool(borradas), "personas": [req.empleado_id]}
     comentario = (req.comentario or "").strip() or None
     razon = None
     no_cumple = req.no_cumple

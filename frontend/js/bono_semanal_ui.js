@@ -175,8 +175,12 @@
             + (Number(sel) === Number(p.id) ? ' selected' : '') + '>' + esc(nombreDe(p)) + '</option>').join('');
         const opsRazon = '<option value="">Elija la razón…</option>' + lista.map(x => '<option value="' + x.id + '" data-culpa="' + (x.culpa_chofer ? 1 : 0) + '"'
             + (previa.razon_nc_id === x.id ? ' selected' : '') + '>' + esc(x.nombre) + (x.culpa_chofer ? ' · culpa del chofer' : ' · no es culpa del chofer') + '</option>').join('');
-        const html = '<div class="av-quien">' + esc(quien) + '</div><div class="av-tx">Si un día no cumple, la semana no se paga.'
-            + (previa.marca ? ' Hoy está marcado «' + (previa.marca === 'cumple' ? 'Cumple' : 'No cumple') + '»' + (previa.usuario ? ' por ' + esc(previa.usuario) : '') + '.' : '') + '</div>'
+        // Encabezado: el nombre de la persona; debajo, el bono y el día (dueño, 23-11-2026)
+        const yaMarcado = !!previa.marca;
+        const html = '<div class="av-quien">' + esc(b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha) + (yaMarcado ? ' · editar evaluación' : '')) + '</div>'
+            + '<div class="av-tx">' + (yaMarcado ? 'Hoy está marcado <b>«' + (previa.marca === 'cumple' ? 'Cumple' : 'No cumple') + '»</b>' + (previa.usuario ? ' por ' + esc(previa.usuario) : '')
+                + (previa.tiene_nc && previa.razon_nc ? ', con nota de crédito por ' + esc(previa.razon_nc) : '') + '. Cambie lo que necesite y guarde, o elimine la marca.'
+                : 'Si un día no cumple, la semana no se paga.') + '</div>'
             + '<div class="av-campos">'
             + '<label for="bs-nc">¿Tiene nota de crédito?<select id="bs-nc"><option value="0">No</option><option value="1"' + (previa.tiene_nc ? ' selected' : '') + '>Sí</option></select></label>'
             + '<label for="bs-razon" id="bs-razon-wrap" style="' + (previa.tiene_nc ? '' : 'display:none') + '">Razón de la nota de crédito<select id="bs-razon">' + opsRazon + '</select>'
@@ -186,14 +190,17 @@
             + (esChofer ? '<label for="bs-p1">Peonetas que iban con el chofer (reciben la misma marca)<select id="bs-p1">' + opsPeon(propuestos[0]) + '</select>'
                 + '<select id="bs-p2" style="margin-top:6px">' + opsPeon(propuestos[1]) + '</select>'
                 + (propuestos.length ? '<small>Propuestos desde la libreta de ese día; se pueden cambiar.</small>' : '') + '</label>' : '')
-            + '</div>';
+            + '</div>'
+            + (yaMarcado ? '<div style="margin-top:12px;text-align:left"><button type="button" id="bs-eliminar" class="bs-eliminar">'
+                + '<i class="bi bi-trash3" aria-hidden="true"></i> Eliminar marca (el día queda sin marcar)</button></div>' : '');
         if (!window.Swal) { if (window.Avisos) window.Avisos.error('No se pudo abrir la ventana.'); return; }
+        let eliminar = false;
         const res = await window.Swal.fire({
-            title: b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha),
+            title: (window.nombreTitulo ? window.nombreTitulo(quien) : quien),
             html: html,
             showDenyButton: true, showCancelButton: true, reverseButtons: true, focusConfirm: false,
             confirmButtonText: 'No cumple', denyButtonText: 'Cumple', cancelButtonText: 'Cancelar',
-            customClass: { confirmButton: 'av-btn av-btn-borra', denyButton: 'av-btn av-btn-pri' },
+            customClass: { confirmButton: 'av-btn av-btn-borra', denyButton: 'av-btn av-btn-pri', title: 'bs-titulo' },
             didOpen: () => {
                 // Con nota de crédito, la razón decide: se oculta «Cumple» / «No cumple» y queda un solo «Guardar»
                 const nc = document.getElementById('bs-nc'), razon = document.getElementById('bs-razon');
@@ -217,6 +224,8 @@
                 nc.addEventListener('change', pintar);
                 razon.addEventListener('change', pintar);
                 pintar();
+                const del = document.getElementById('bs-eliminar');
+                if (del) del.addEventListener('click', () => { eliminar = true; window.Swal.close(); });
             },
             preConfirm: () => {
                 const con = document.getElementById('bs-nc').value === '1';
@@ -236,6 +245,22 @@
                 };
             }
         });
+        if (eliminar) {
+            const ok = await window.uiConfirm('¿Eliminar la marca del ' + window.formatFechaDDMMYYYY(fecha) + '?',
+                { quien, items: ['El día queda sin marcar: cuenta como cumplido.', 'Las marcas de sus peonetas se corrigen en la fila de cada uno.'], confirmText: 'Eliminar marca', danger: true });
+            if (!ok) return;
+            try {
+                const resp = await fetch('/api/asistencia/bono-semanal/no-cumple/', { method: 'POST', headers: authHead(),
+                    body: JSON.stringify({ bono_id: r.bono_id, empleado_id: Number(empId), fecha, eliminar: true }) });
+                const out = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(out.detail || 'No se pudo eliminar.');
+                if (window.Avisos) window.Avisos.listo('Marca eliminada');
+                if (typeof window.reloadSingleEmployeeRow === 'function') await window.reloadSingleEmployeeRow(empId);
+            } catch (e) {
+                if (window.Avisos) window.Avisos.error(e.message || 'No se pudo eliminar.'); else alert(e.message);
+            }
+            return;
+        }
         if (res.isDismissed) return;
         const v = res.value || {};
         const cuerpo = { bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: !!res.isConfirmed && !v.tiene_nc,

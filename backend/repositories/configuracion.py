@@ -582,6 +582,12 @@ class ConfiguracionRepository:
              razon_nc["id"] if razon_nc else None, razon_nc["nombre"] if razon_nc else None,
              (1 if razon_nc["culpa_chofer"] else 0) if razon_nc else None))
 
+    async def quitar_marca_dia(self, bono_id: int, empleado_id: int, fecha: str) -> int:
+        """Borra la marca del día (vuelve a «sin marcar», que cuenta como cumplido). Devuelve cuántas se borraron."""
+        res = await self.db.execute("DELETE FROM bono_dias_no_cumple WHERE bono_id = ? AND empleado_id = ? AND fecha = ?",
+                                    (bono_id, empleado_id, fecha))
+        return res.rowcount or 0
+
     async def get_razones_nota_credito(self) -> List[Dict]:
         """Las razones de nota de crédito, activas primero y por nombre."""
         if not await self.db.table_exists("razones_nota_credito"):
