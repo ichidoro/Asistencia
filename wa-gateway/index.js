@@ -43,7 +43,8 @@ async function conectar() {
       estado = 'conectado'; qr = null; console.log('[wa] conectado');
       // La libreta de contactos solo llega al vincular; si falta (sesión anterior a esta función) se vuelve a pedir su estado de sincronización.
       if (contactos.size === 0) setTimeout(async () => {
-        try { await sock?.resyncAppState(['critical_unblock_low'], true); } catch (e) { console.log('[wa] no se pudo pedir la libreta:', e.message || e); }
+        // La versión ya guardada de esa colección hace que solo lleguen novedades: se borra para que WhatsApp mande la libreta completa.
+        try { await sock?.authState.keys.set({ 'app-state-sync-version': { critical_unblock_low: null } }); await sock?.resyncAppState(['critical_unblock_low'], true); } catch (e) { console.log('[wa] no se pudo pedir la libreta:', e.message || e); }
         console.log('[wa] contactos recibidos:', contactos.size);
       }, 8000);
     }
