@@ -127,6 +127,10 @@ class Settings(BaseSettings):
     # NOTIFICACIONES EMAIL
     # ============================================
     FEATURE_NOTIFICACIONES_EMAIL: bool = True
+    # WhatsApp por la puerta wa-gateway (número propio). Apagado por defecto: sin interruptor ni token no se envía nada.
+    WHATSAPP_ENABLED: bool = False
+    WHATSAPP_GATEWAY_URL: str = "http://wa:3000"
+    WHATSAPP_GATEWAY_TOKEN: str = ""
     SMTP_SERVER: Optional[str] = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = "operaciones.aguacol.spa@gmail.com"

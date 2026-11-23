@@ -30,6 +30,7 @@ PUBLICAS = {
     "GET /api/sync/health/": "estado de la base y de las marcaciones (sin datos de personas)",
     # Con su propia protección
     "POST /api/sync/cron/": "lo llama el cron del servidor con una clave secreta",
+    "POST /api/whatsapp/resumen-semanal/cron": "lo llama el cron del servidor con una clave secreta",
     "GET /api/porteria/fotos/{nombre}": "nombre aleatorio no adivinable, como un enlace de Drive",
 }
 DEPENDENCIAS_DE_SESION = {"get_current_user", "RequirePermission", "RequireAnyPermission"}

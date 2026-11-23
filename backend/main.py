@@ -249,6 +249,8 @@ app.include_router(reglas_marcas.router, prefix="/api", tags=["Reglas de marcaci
 app.include_router(cuadre.router, prefix="/api", tags=["Cuadre"])
 from backend.routers import mapa_codigo  # noqa: E402  (Configuración → Mapa del código, solo súper administrador)
 app.include_router(mapa_codigo.router, prefix="/api", tags=["Mapa del código"])
+from backend.routers import whatsapp  # noqa: E402  (vinculación y prueba del número de avisos)
+app.include_router(whatsapp.router, prefix="/api", tags=["WhatsApp"])
 
 
 # ============================================

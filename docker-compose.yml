@@ -75,6 +75,24 @@ services:
     cap_drop:
       - ALL
 
+  # Puerta de WhatsApp (número propio, se vincula con QR desde /static/whatsapp.html). Sin puerto publicado: solo la app la usa.
+  wa:
+    build: ./wa-gateway
+    container_name: asistencia_wa
+    restart: unless-stopped
+    environment:
+      WA_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN:-}
+      TZ: America/Santiago
+    volumes:
+      - wa_auth:/data/auth
+    logging: *logs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   pgdata:
     name: asistencia_pgdata
+  wa_auth:
+    name: asistencia_wa_auth

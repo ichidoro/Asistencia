@@ -188,3 +188,9 @@ Etapa 5 (16-11-2026): plan en 16 piezas en docs/AUDITORIA_CODIGO_2026-11-15.md; 
 ### 2.8 Mapa del código (graphify)
 
 Se ve en Configuración → Mapa del código (solo el súper administrador) y se vuelve a publicar con cada cambio de código (`scripts/publicar_mapa.py`).
+
+### 2.9 Avisos por WhatsApp (23-11-2026)
+
+- Número propio vinculado con QR (contenedor `wa`, página `/static/whatsapp.html`). Apagado por defecto: falta vincular el chip y activar `WHATSAPP_ENABLED` con su token en el `.env`.
+- Resumen semanal (lunes 08:00, `cron-resumen-whatsapp.sh`): horas de Bolsa vs meta por persona. Antes de activar el cron: simular (`POST /api/whatsapp/resumen-semanal`), probar con un número propio y revisar cuántas personas no tienen celular cargado.
+- Pendiente: definir las demás notificaciones y un registro de envíos para no duplicar si el cron corre dos veces.
