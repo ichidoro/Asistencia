@@ -558,6 +558,7 @@ async function openModalBono(bono = null) {
 
     form.reset();
     container.innerHTML = '';
+    document.getElementById('bono-vista-previa').innerHTML = '';
 
     if (bono) {
         title.innerText = 'Editar Bono';
@@ -693,16 +694,15 @@ function addBonoReglaRow(regla = null) {
 
 }
 
-async function saveBono() {
-    const id = document.getElementById('bono-id').value;
+// Lo que dice la ventana del bono, listo para enviar. Devuelve null (y avisa) si falta elegir algo.
+function _leerFormularioBono() {
     const nombre = document.getElementById('bono-nombre').value;
     const descripcion = document.getElementById('bono-descripcion').value;
     const activo = document.getElementById('bono-activo').value === 'true';
 
     // Recolectar reglas
     const reglas = [];
-    const ruleRows = document.querySelectorAll('.regla-row');
-    ruleRows.forEach(row => {
+    document.querySelectorAll('#modal-bono .regla-row').forEach(row => {
         reglas.push({
             monto: parseFloat(row.querySelector('.rule-monto').value) || 0,
             tipo_contrato: row.querySelector('.rule-contrato').value || null,
@@ -714,24 +714,73 @@ async function saveBono() {
     });
     // Efectos (etapa B3a): no se guarda sin elegirlos todos
     const efectoInas = document.getElementById('bono-efecto-inas').value;
-    if (!efectoInas) { showToast('Falta elegir qué hace una inasistencia sin justificar con el bono.', 'warning'); return; }
+    if (!efectoInas) { showToast('Falta elegir qué hace una inasistencia sin justificar con el bono.', 'warning'); return null; }
     const efJ = _leerEfectos(document.getElementById('bono-efectos-container'));
-    if (efJ.falta) { showToast('Falta elegir el efecto de «' + efJ.falta + '» en el bono.', 'warning'); return; }
-    // Recolectar áreas asignadas — buscar dentro del modal (no en todo el doc)
+    if (efJ.falta) { showToast('Falta elegir el efecto de «' + efJ.falta + '» en el bono.', 'warning'); return null; }
+    // Áreas asignadas: dentro de la ventana. null solo si no se dibujaron (no tocar las guardadas)
     const modalBonoEl = document.getElementById('modal-bono');
-    const areaChecks = modalBonoEl
-        ? modalBonoEl.querySelectorAll('.bono-area-chk:checked')
-        : document.querySelectorAll('.bono-area-chk:checked');
-    const area_ids = Array.from(areaChecks).map(chk => parseInt(chk.value));
-    
-    // Diagnóstico: solo visible en consola del dev, no en producción
-    const totalAreas = modalBonoEl ? modalBonoEl.querySelectorAll('.bono-area-chk').length : 0;
-    console.log(`[saveBono] id=${id || 'nuevo'} | checks marcados=${areaChecks.length}/${totalAreas} | area_ids=${JSON.stringify(area_ids)}`);
-    // Enviar null solo si NO hay checkboxes renderizados (modal no cargó áreas)
-    // Si hay checkboxes pero ninguno marcado, area_ids=[] es válido (desmarcar todo)
-    const area_ids_payload = totalAreas === 0 ? null : area_ids;
+    const area_ids = Array.from(modalBonoEl.querySelectorAll('.bono-area-chk:checked')).map(chk => parseInt(chk.value));
+    const totalAreas = modalBonoEl.querySelectorAll('.bono-area-chk').length;
+    return { nombre, descripcion, activo, reglas, area_ids: totalAreas === 0 ? null : area_ids, efecto_inasistencia: efectoInas, efectos: efJ.valores };
+}
 
-    const body = { nombre, descripcion, activo, reglas, area_ids: area_ids_payload, efecto_inasistencia: efectoInas, efectos: efJ.valores };
+// ── Vista previa del bono (etapa B3c del plan de bonos) ──
+// Quién lo recibe y cuánto en el período vigente con lo que se está editando, sin guardarlo; y quién calza con dos reglas.
+async function _pedirVistaPreviaBono(body) {
+    const r = await fetch(`${API_CONFIG}bonos/vista-previa/`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify(body) });
+    const d = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(d.detail || 'No se pudo calcular la vista previa.');
+    return d;
+}
+
+function _pintarVistaPreviaBono(d) {
+    const esc = window.FichaCfg ? window.FichaCfg.esc : function (x) { return String(x == null ? '' : x); };
+    const pesos = function (n) { return '$' + Number(n || 0).toLocaleString('es-CL'); };
+    const fecha = function (f) { return String(f).slice(8, 10) + '-' + String(f).slice(5, 7) + '-' + String(f).slice(0, 4); };
+    const cont = document.getElementById('bono-vista-previa');
+    const pisan = d.pisan.length ? '<div class="alert alert-warning small py-2 mb-2"><b>' + (d.pisan.length === 1 ? '1 persona calza' : d.pisan.length + ' personas calzan')
+        + ' con más de una regla.</b> Se usa la primera que calza: ' + d.pisan.map(function (p) { return esc(p.nombre) + ' (reglas ' + p.reglas.join(' y ') + ')'; }).join(', ') + '.</div>' : '';
+    const filas = d.personas.map(function (p) {
+        return '<tr><td>' + esc(p.nombre) + '</td><td>' + esc(p.area) + '</td><td class="text-center">' + (p.regla || '—') + '</td>'
+            + '<td class="text-end ' + (p.califica ? '' : 'text-danger fw-bold') + '">' + (p.califica ? pesos(p.monto) : '—') + '</td>'
+            + '<td class="small text-muted">' + esc(p.califica && p.motivo.indexOf('Proporcional') !== 0 ? '' : p.motivo) + '</td></tr>';
+    }).join('');
+    cont.innerHTML = '<div class="border rounded p-2 bg-white">'
+        + '<div class="fw-bold small mb-1">Vista previa · período ' + fecha(d.fecha_inicio) + ' al ' + fecha(d.fecha_fin) + ' (días revisados hasta hoy) · no se ha guardado</div>'
+        + '<div class="small mb-2">' + d.reciben + (d.reciben === 1 ? ' persona lo recibe' : ' personas lo reciben') + ' · total <b>' + pesos(d.total) + '</b>'
+        + (d.no_cobran ? ' · <span class="text-danger">' + d.no_cobran + ' no lo ' + (d.no_cobran === 1 ? 'cobra' : 'cobran') + '</span>' : '') + '</div>'
+        + pisan
+        + (filas ? '<div style="max-height: 240px; overflow-y: auto;"><table class="table table-sm small mb-0"><thead><tr><th>Persona</th><th>Área</th><th class="text-center">Regla</th><th class="text-end">Monto</th><th>Motivo</th></tr></thead><tbody>'
+            + filas + '</tbody></table></div>' : '<div class="small text-muted">Con estas reglas no le corresponde a nadie.</div>')
+        + '</div>';
+}
+
+window.vistaPreviaBono = async function () {
+    const body = _leerFormularioBono();
+    if (!body) return;
+    const cont = document.getElementById('bono-vista-previa');
+    cont.innerHTML = '<span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Calculando…</span>';
+    try { _pintarVistaPreviaBono(await _pedirVistaPreviaBono(body)); }
+    catch (e) { cont.innerHTML = '<span class="text-danger small">' + e.message + '</span>'; }
+};
+
+async function saveBono() {
+    const id = document.getElementById('bono-id').value;
+    const body = _leerFormularioBono();
+    if (!body) return;
+    // Aviso de reglas que se pisan (etapa B3c): si alguien calza con más de una regla, se pregunta antes de guardar
+    try {
+        const vp = await _pedirVistaPreviaBono(body);
+        if (vp.pisan.length) {
+            _pintarVistaPreviaBono(vp);
+            const ok = await uiConfirm('¿Guardar con reglas que se pisan?', { items: [
+                (vp.pisan.length === 1 ? '1 persona calza' : vp.pisan.length + ' personas calzan') + ' con más de una regla de este bono.',
+                'Se le aplica la primera que calza. El detalle quedó en la vista previa.'], confirmText: 'Guardar igual' });
+            if (!ok) return;
+        }
+    } catch (e) { console.warn('[saveBono] vista previa:', e.message); }
+
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_CONFIG}bonos/${id}/` : `${API_CONFIG}bonos/`;
 

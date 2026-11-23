@@ -40,6 +40,24 @@ async def create_bono(
     new_id = await service.create_bono(bono)
     return {"id": new_id, "message": "Bono creado exitosamente"}
 
+@router.post("/bonos/vista-previa/", response_model=Dict[str, Any])
+async def vista_previa_bono(
+    bono: BonoCreate,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "configuracion.wizard"]))
+):
+    """Quién recibe el bono y cuánto en el período vigente con lo que se está editando, sin guardarlo; y las personas
+    con las que calza más de una regla (etapa B3c del plan de bonos)."""
+    from backend.services.bono_service import BonoService
+    periodo = await ConfiguracionRepository(db).get_fechas_periodo_vigente()
+    if not periodo:
+        raise HTTPException(status_code=400, detail="No hay un período vigente para la vista previa.")
+    datos = {"nombre": bono.nombre, "activo": True, "reglas": [r.model_dump() for r in bono.reglas],
+             "efecto_inasistencia": bono.efecto_inasistencia, "efectos": dict(bono.efectos or {})}
+    return await BonoService(db).vista_previa(datos, str(periodo["fecha_inicio"])[:10], str(periodo["fecha_fin"])[:10],
+                                              areas_permitidas=current_user.get_areas_filter())
+
+
 @router.get("/bonos/", response_model=List[BonoResponse])
 async def get_bonos(
     service: ConfiguracionService = Depends(get_config_service),

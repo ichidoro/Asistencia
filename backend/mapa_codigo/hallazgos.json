@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1487,
+  "total": 1491,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -212,7 +212,7 @@
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",
-   "lineas": 2575
+   "lineas": 2624
   },
   {
    "archivo": "frontend/js/productos_4.js",

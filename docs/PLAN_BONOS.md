@@ -263,7 +263,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - **Sigue abierto M (Bolsa):** en Bolsa Flexible los días justificados no se cuentan, así que el efecto configurado
   solo alcanza a Ciclo Inteligente. Corregirlo cambia lo que cobran personas de Bolsa: va aparte, con su ensayo.
 
-**B3b hecho (22-11-2026, falta subir):**
+**B3b hecho (22-11-2026, commit be56814):**
 - Los cargos de cada regla se eligen con casillas de la lista de cargos («Cargos que lo reciben», vacío = todos;
   «Cargos que no lo reciben») y la regla guarda su identificador. El cálculo compara el cargo de la persona, no su
   nombre escrito. Al crearse, las reglas de hoy se pasaron a la lista buscando sus nombres en la lista y en los alias
@@ -276,6 +276,16 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
   los cargos de las 7 reglas de hoy se encontraron todos en la lista.
 - Prueba nueva `test_cargos_de_la_lista_en_bonos.py` (5 casos); 643 pruebas en verde. Renombrar y unir probados contra
   la copia de práctica (PostgreSQL), también con una persona.
+
+**B3c hecho (22-11-2026, falta subir):**
+- Botón «Vista previa» en la ventana del bono: con lo que se está editando y sin guardarlo, muestra para el período
+  vigente quién lo recibe, cuánto, con qué regla y por qué no lo cobra quien no lo cobra (días que no cuentan,
+  resumidos por causa), y el total.
+- Aviso de reglas que se pisan (L): la vista previa dice quién calza con más de una regla del mismo bono; al guardar
+  así, la pantalla pregunta antes («¿Guardar con reglas que se pisan?»). Se sigue usando la primera que calza.
+- El cálculo y la vista previa eligen la regla con la misma función.
+- Prueba nueva `test_vista_previa_bono.py` (3 casos); 646 pruebas en verde. Probado en el navegador con la copia de
+  práctica (vista previa, aviso y cancelar sin guardar). No cambia ningún cálculo.
 
 2. **Se quita la «Asistencia mínima» (E).** No existe en las reglas de Aguacol (decisión de la persona dueña,
    22-11-2026): lo que decide el bono es la relación entre la asistencia del día y las justificaciones (punto 1). Se

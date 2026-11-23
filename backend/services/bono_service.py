@@ -83,6 +83,71 @@ class BonoService:
 
         return resultados
 
+    async def vista_previa(self, bono: Dict[str, Any], fecha_inicio: str, fecha_fin: str,
+                           areas_permitidas: Optional[List] = None) -> Dict[str, Any]:
+        """Quién recibe el bono y cuánto en el período [fecha_inicio, fecha_fin] con la configuración que se está editando,
+        sin guardarla (etapa B3c del plan de bonos). También las personas con las que calza más de una regla."""
+        srv = AsistenciaService(AsistenciaRepository(self.db))
+        data = await srv.get_matriz_periodo(fecha_inicio, fecha_fin, None, None, None, areas_permitidas=areas_permitidas)
+        feriados = {r['fecha'] for r in await self.db.fetch_all(
+            "SELECT fecha FROM feriados WHERE fecha BETWEEN ? AND ?", (fecha_inicio, fecha_fin))}
+        just: Dict[int, list] = {}
+        for j in data.get("justificaciones", []):
+            just.setdefault(j["empleado_id"], []).append(j)
+        asist: Dict[int, list] = {}
+        for a in data.get("data", []):
+            asist.setdefault(a["empleado_id"], []).append(a)
+        matrix = data.get("matrix", {})
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        personas, pisan = [], []
+        for emp in data.get("empleados", []):
+            nombre = " ".join(x for x in (emp.get("apellido_paterno"), emp.get("apellido_materno"), emp.get("nombre")) if x)
+            calzan = self.reglas_que_calzan(emp, bono)
+            if len(calzan) > 1 and not emp.get("excluido_asistencia"):
+                pisan.append({"nombre": nombre, "reglas": [i + 1 for i in calzan]})
+            r = self._calificar_bono(emp, bono, asist.get(emp["id"], []), just.get(emp["id"], []),
+                                     matrix.get(emp["id"]) or matrix.get(str(emp["id"])), hoy, fecha_inicio, fecha_fin, feriados)
+            if not r.get("aplica"):
+                continue
+            personas.append({"nombre": nombre, "area": emp.get("area") or "", "regla": calzan[0] + 1 if calzan else None,
+                             "califica": bool(r.get("califica")), "monto": int(round(r.get("monto") or 0)),
+                             "motivo": self._motivo_corto(r)})
+        personas.sort(key=lambda p: p["nombre"])
+        return {"fecha_inicio": fecha_inicio, "fecha_fin": fecha_fin, "hoy": hoy, "personas": personas, "pisan": pisan,
+                "total": sum(p["monto"] for p in personas),
+                "reciben": sum(1 for p in personas if p["califica"] and p["monto"] > 0),
+                "no_cobran": sum(1 for p in personas if not p["califica"])}
+
+    @staticmethod
+    def _motivo_corto(r: Dict[str, Any]) -> str:
+        """Los días que no cuentan, agrupados por causa («Inasistencia sin justificar: 3 días»), para la vista previa."""
+        cuenta: Dict[str, int] = {}
+        for d in r.get("perdidos") or []:
+            cuenta[d["causa"]] = cuenta.get(d["causa"], 0) + 1
+        if not cuenta:
+            return r.get("motivo") or ""
+        partes = "; ".join(f"{c}: {n} {'día' if n == 1 else 'días'}" for c, n in cuenta.items())
+        return partes if not r.get("califica") else f"{r.get('motivo')} ({partes})"
+
+    @staticmethod
+    def reglas_que_calzan(empleado: Dict[str, Any], bono: Dict[str, Any]) -> List[int]:
+        """Posiciones de las reglas del bono que calzan con la persona por contrato y cargo. Se usa la primera; si hay
+        más de una, las reglas se pisan (la vista previa lo avisa, etapa B3c del plan de bonos). Los cargos de la regla
+        son los elegidos de la lista (etapa B3b): se compara el cargo de la persona, no su nombre escrito."""
+        cargo_id = empleado.get("cargo_id")
+        contrato = (empleado.get("tipo_contrato") or "").strip().upper()
+        out = []
+        for i, regla in enumerate(bono.get("reglas") or []):
+            requeridos = regla.get("cargos_req_ids")
+            if requeridos and cargo_id not in requeridos:
+                continue
+            if cargo_id in (regla.get("cargos_excl_ids") or []):
+                continue
+            if regla.get("tipo_contrato") and contrato != regla["tipo_contrato"].strip().upper():
+                continue
+            out.append(i)
+        return out
+
     # ──────────────────────────────────────────────────────────────────────
     # MOTOR CENTRAL DE CALIFICACIÓN
     # ──────────────────────────────────────────────────────────────────────
@@ -115,23 +180,9 @@ class BonoService:
             return {"aplica": False, "califica": False, "monto": 0,
                     "motivo": "Excluido de asistencia (Art 22)"}
 
-        # ── 1. Filtro estructural: cargo / contrato ────────────────────────
-        # Los cargos de la regla son los elegidos de la lista (etapa B3b): se compara el cargo de la persona, no su nombre
-        regla_activa = None
-        cargo_id = empleado.get("cargo_id")
-        for regla in bono.get("reglas", []):
-            requeridos = regla.get("cargos_req_ids")
-            if requeridos and cargo_id not in requeridos:
-                continue
-            if cargo_id in (regla.get("cargos_excl_ids") or []):
-                continue
-            if regla.get("tipo_contrato") and (
-                (empleado.get("tipo_contrato") or "").strip().upper()
-                != regla["tipo_contrato"].strip().upper()
-            ):
-                continue
-            regla_activa = regla
-            break  # primera regla que coincide
+        # ── 1. Filtro estructural: cargo / contrato (la primera regla que calza) ──
+        calzan = self.reglas_que_calzan(empleado, bono)
+        regla_activa = bono["reglas"][calzan[0]] if calzan else None
 
         if regla_activa is None:
             return {"aplica": False, "califica": False, "monto": 0,
