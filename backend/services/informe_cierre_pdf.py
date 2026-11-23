@@ -745,7 +745,9 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
     ps = inf['personas']
     cols = columnas(inf, justif, bonos)
 
-    # ── texto de cada celda
+    # ── texto de cada celda (con la tabla muy ancha, los montos van sin «$» y el grupo dice «Bonos ($)»)
+    sin_signo = {'si': False}
+    monto_txt = lambda v: pesos(v)[1:] if sin_signo['si'] else pesos(v)
     def txt(c, p):
         v = c['valor'](p)
         if c['fmt'] == 'b':
@@ -753,7 +755,7 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
         if c['fmt'] == 'h':
             return hms(v)
         if c['fmt'] == 'm':
-            return '' if v is None else ('—' if not v else pesos(v))
+            return '' if v is None else ('—' if not v else monto_txt(v))
         return '—' if not v else str(v)
 
     def txt_total(c):
@@ -761,7 +763,7 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
             return str(sum(1 for p in ps if c['valor'](p)))
         if c['fmt'] == 'm':
             s = sum(c['valor'](p) or 0 for p in ps)
-            return pesos(s) if s else '—'
+            return monto_txt(s) if s else '—'
         s = sum(c['valor'](p) for p in ps)
         return hms(s) if c['fmt'] == 'h' else ('—' if not s else str(s))
 
@@ -769,28 +771,45 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
     for p in ps:
         grupos_hor.setdefault(p['horario'], []).append(p)
 
-    # ── anchos: el mayor texto de cada columna en una sola línea; si no cabe, baja la letra
-    pad = 2.6
-    def medir(cuerpo):
+    # ── anchos: el mayor texto de cada columna. Si la tabla no cabe en la hoja se va ajustando, de menos a más
+    # (23-11-2026: con los montos de bonos y las jornadas extra, Producción se salía de la hoja): primero los títulos
+    # pasan a dos líneas, después baja la letra, después los nombres largos se parten en dos líneas y al final se
+    # achica el relleno de las celdas
+    def medir(cuerpo, pad, titulos_partidos, tope_nombre):
         cab = cuerpo - 1.3
-        w_rut = max([stringWidth('RUT', _f('BarlowSC-SemiBold'), cab)] + [stringWidth(p['rut'], _f('Barlow'), cuerpo) for p in ps])
+        # (+1 punto: sin ese margen el párrafo del título corta la palabra que mide justo el ancho de la columna)
+        ancho_t = lambda t: 1 + (max(stringWidth(w, _f('BarlowSC-SemiBold'), cab) for w in t.upper().split())
+                                 if titulos_partidos else stringWidth(t.upper(), _f('BarlowSC-SemiBold'), cab))
+        w_rut = max([ancho_t('RUT')] + [stringWidth(p['rut'], _f('Barlow'), cuerpo) for p in ps])
         badge = stringWidth('Inactivo', _f('Barlow-SemiBold'), cuerpo - 1.4) + 8
-        w_nom = max([stringWidth('NOMBRE', _f('BarlowSC-SemiBold'), cab), stringWidth(f'Total · {len(ps)} personas', _f('Barlow-Bold'), cuerpo)]
+        w_total = stringWidth(f'Total · {len(ps)} personas', _f('Barlow-Bold'), cuerpo)
+        w_nom = max([ancho_t('NOMBRE'), w_total]
                     + [stringWidth(p['nombre'], _f('Barlow-Medium'), cuerpo) + (0 if p['activo'] else badge) for p in ps])
+        if tope_nombre:
+            largo_palabra = max([w_total] + [stringWidth(w, _f('Barlow-Medium'), cuerpo) for p in ps for w in p['nombre'].split()])
+            w_nom = max(largo_palabra, w_nom * tope_nombre)
         ws = [w_rut + 2 * pad, w_nom + 2 * pad]
         for c in cols:
-            w = stringWidth(c['titulo'].upper(), _f('BarlowSC-SemiBold'), cab)
+            w = ancho_t(c['titulo'])
             if c['fmt'] == 'b':
                 w = max(w, 9)
             else:
                 w = max([w, stringWidth(txt_total(c), _f('Barlow-Bold'), cuerpo)] + [stringWidth(txt(c, p), _f('Barlow-Bold'), cuerpo) for p in ps])
             ws.append(w + 2 * pad)
         return ws
-    cuerpo = 7.8
-    anchos = medir(cuerpo)
-    while sum(anchos) > util and cuerpo > 5.6:
-        cuerpo -= 0.2
-        anchos = medir(cuerpo)
+    pasos = [(7.8, 2.6, False, None), (7.8, 2.6, True, None)]
+    pasos += [(round(7.6 - 0.2 * i, 1), 2.6, True, None) for i in range(12)]            # letra de 7,6 a 5,4
+    pasos += [(5.4, 2.6, True, t) for t in (0.8, 0.65, 0.55)]                          # nombres en dos líneas
+    pasos += [(5.4, p, True, 0.55) for p in (2.0, 1.5, 1.2)]                           # menos relleno
+    pasos += [(c, 1.2, True, 0.55, True) for c in (5.4, 5.2, 5.0)]                    # montos sin «$» y letra hasta 5
+    for paso in pasos:
+        cuerpo, pad, titulos_partidos, tope_nombre = paso[:4]
+        sin_signo['si'] = len(paso) > 4
+        anchos = medir(cuerpo, pad, titulos_partidos, tope_nombre)
+        if sum(anchos) <= util:
+            break
+    if sum(anchos) > util:
+        logger.warning(f'[InformeCierre] la tabla no cabe en la hoja ({sum(anchos):.0f} de {util:.0f} puntos)')
     if sum(anchos) < util:                      # el espacio que sobra va al nombre
         anchos[1] += util - sum(anchos)
     cab = cuerpo - 1.3
@@ -806,8 +825,16 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
         spans[-1][2] = i
     fila_g = ['', ''] + [''] * len(cols)
     for g, a, b in spans:
-        fila_g[a + 2] = g.upper()
-    fila_h = ['RUT', 'NOMBRE'] + [c['titulo'].upper() for c in cols]
+        fila_g[a + 2] = (g + ' ($)' if g == 'Bonos' and sin_signo['si'] else g).upper()
+    # Títulos como párrafos: si hace falta, pasan a dos líneas dentro del ancho de su columna
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    st_tit = lambda al: ParagraphStyle('tit' + str(al), fontName=_f('BarlowSC-SemiBold'), fontSize=cab, leading=cab + 1.2,
+                                       textColor=H(C_NAVY), alignment=al)
+    st_grupo = ParagraphStyle('grp', fontName=_f('BarlowSC-SemiBold'), fontSize=cab - 0.3, leading=cab + 0.9,
+                              textColor=H(C_INK_2), alignment=TA_CENTER)
+    fila_g = [Paragraph(x, st_grupo) if x else '' for x in fila_g]
+    fila_h = [Paragraph('RUT', st_tit(TA_LEFT)), Paragraph('NOMBRE', st_tit(TA_LEFT))] + [
+        Paragraph(c['titulo'].upper(), st_tit(TA_CENTER if c['fmt'] == 'b' else TA_RIGHT)) for c in cols]
     data = [fila_g, fila_h]
     estilo = [
         ('FONT', (0, 0), (-1, 0), _f('BarlowSC-SemiBold'), cab - 0.3), ('TEXTCOLOR', (0, 0), (-1, 0), H(C_INK_2)),
@@ -816,7 +843,7 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
         ('BACKGROUND', (0, 1), (-1, 1), H(C_NAVY_SOFT)), ('LINEBELOW', (0, 1), (-1, 1), 0.8, H(C_NAVY)),
         ('ALIGN', (2, 1), (-1, -1), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('LEFTPADDING', (0, 0), (-1, -1), pad), ('RIGHTPADDING', (0, 0), (-1, -1), pad),
-        ('TOPPADDING', (0, 0), (-1, -1), 2.6), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.6),
+        ('TOPPADDING', (0, 0), (-1, -1), 2.6), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.6), ('VALIGN', (0, 1), (-1, 1), 'BOTTOM'),
         ('FONT', (0, 2), (-1, -1), _f('Barlow'), cuerpo), ('TEXTCOLOR', (0, 2), (-1, -1), H(C_INK)),
     ]
     for g, a, b in spans:
@@ -912,9 +939,34 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
         if alerta:
             est_chips.append(('BACKGROUND', (2 * i, 0), (2 * i, 0), H(C_PINK_SOFT)))
         chips.append(''); anchos_chip.append(5)
-    t_chips = Table([chips], colWidths=anchos_chip, hAlign='LEFT')
-    t_chips.setStyle(TableStyle(est_chips + [('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                                             ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+    # Los recuadros pasan a otra fila cuando no caben en el ancho de la hoja (23-11-2026)
+    filas_chips, fila_act, ancho_act = [], [], 0.0
+    for i in range(0, len(chips), 2):
+        if fila_act and ancho_act + anchos_chip[i] + 5 > util:
+            filas_chips.append(fila_act); fila_act, ancho_act = [], 0.0
+        fila_act.append(i // 2)
+        ancho_act += anchos_chip[i] + 5
+    if fila_act:
+        filas_chips.append(fila_act)
+    bloques_chips = []
+    for fila_i in filas_chips:
+        celdas, anchos_f, est_f = [], [], []
+        for j, k in enumerate(fila_i):
+            a, num, b, alerta = lista_resumen[k]
+            celdas += [chips[2 * k], '']
+            anchos_f += [anchos_chip[2 * k], 5]
+            est_f.append(('BOX', (2 * j, 0), (2 * j, 0), 0.6, H(C_PINK if alerta else C_LINE)))
+            if alerta:
+                est_f.append(('BACKGROUND', (2 * j, 0), (2 * j, 0), H(C_PINK_SOFT)))
+        tc = Table([celdas], colWidths=anchos_f, hAlign='LEFT')
+        tc.setStyle(TableStyle(est_f + [('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                                        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+        bloques_chips.append(tc)
+    t_chips = bloques_chips[0] if len(bloques_chips) == 1 else Table([[b] for b in bloques_chips], hAlign='LEFT',
+                                                                      style=[('LEFTPADDING', (0, 0), (-1, -1), 0),
+                                                                             ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                                                                             ('TOPPADDING', (0, 0), (-1, -1), 0),
+                                                                             ('BOTTOMPADDING', (0, 0), (-1, -1), 4)])
 
     st_ley = ParagraphStyle('l', fontName=_f('Barlow'), fontSize=7.2, leading=10, textColor=H(C_INK_2))
     firmas = Table([['Jefatura del área', '', 'Recursos Humanos · recibido', '', 'Cargado en remuneraciones · fecha']],

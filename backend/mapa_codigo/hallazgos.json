@@ -169,6 +169,11 @@
     "lineas": 312
    },
    {
+    "funcion": "render_pdf",
+    "archivo": "backend/services/informe_cierre_pdf.py",
+    "lineas": 297
+   },
+   {
     "funcion": "lifespan",
     "archivo": "backend/core/events.py",
     "lineas": 286
@@ -177,11 +182,6 @@
     "funcion": "_sync_empleado",
     "archivo": "backend/services/sync_service.py",
     "lineas": 275
-   },
-   {
-    "funcion": "calcular_haberes_debitos",
-    "archivo": "backend/services/cierre_service.py",
-    "lineas": 274
    }
   ]
  },
