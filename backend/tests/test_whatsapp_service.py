@@ -83,3 +83,9 @@ def test_mensaje_jefatura_ordena_de_menor_a_mayor_avance():
     assert "1 de 3 ya cumplieron la meta; 2 aún no." in m
     assert m.index("Cami") < m.index("Ana") and "Beto" not in m
     assert "Cami: 50:00 de 180:00 h (28 %), faltan 130:00 h" in m
+
+
+def test_destino_valido_acepta_contacto_del_telefono():
+    assert wa.destino_valido("14155552671@s.whatsapp.net") == "14155552671@s.whatsapp.net"
+    assert wa.destino_valido("56912345678@s.whatsapp.net") == "56912345678@s.whatsapp.net"
+    assert wa.destino_valido("abc@s.whatsapp.net") is None

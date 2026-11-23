@@ -73,6 +73,12 @@ async def grupos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
     return {"grupos": await whatsapp_service.grupos()}
 
 
+@router.get("/contactos")
+async def contactos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
+    """Contactos agregados en el teléfono vinculado, para asignarles avisos."""
+    return {"contactos": await whatsapp_service.contactos()}
+
+
 @router.get("/config")
 async def config(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
     """Cada aviso automático: si está encendido y a qué chats va."""
@@ -101,7 +107,7 @@ async def agregar_destino(aviso: str, datos: DestinoIn, db: Database = Depends(g
         raise HTTPException(400, "Ese aviso va a cada persona, no a chats asignados.")
     destino = whatsapp_service.destino_valido(datos.destino)
     if not destino:
-        raise HTTPException(400, "Destino inválido: elija un grupo o escriba un celular chileno (9 1234 5678).")
+        raise HTTPException(400, "Destino inválido: elija un contacto o grupo, o escriba un celular chileno (9 1234 5678).")
     await (await _repo(db)).agregar_destino(aviso, destino, datos.etiqueta.strip()[:80])
     return {"ok": True}
 

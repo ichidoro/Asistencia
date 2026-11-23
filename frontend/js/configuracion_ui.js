@@ -2767,7 +2767,8 @@ window.cargarMapaCodigo = async function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
     const esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
-    let timer = null, grupos = null;
+    let timer = null, grupos = null, contactos = null;
+    const elegibles = new Map(); // texto de la lista -> {id, nombre}
 
     async function api(metodo, ruta, cuerpo) {
         const r = await fetch('/api/whatsapp' + ruta, { method: metodo, headers: H(), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
@@ -2800,7 +2801,7 @@ window.cargarMapaCodigo = async function () {
             if (!window.confirm('Se cerrará la sesión de WhatsApp de este número y dejarán de enviarse los avisos hasta vincularlo de nuevo con un QR. ¿Cortar la conexión?')) return;
             msg('Cortando…');
             const r = await api('POST', '/desconectar');
-            grupos = null;
+            grupos = null; contactos = null;
             msg(r.ok ? 'Conexión cortada. En unos segundos aparece un QR nuevo.' : esc(r.j.detail || 'No se pudo cortar.'));
         });
     }
@@ -2809,7 +2810,12 @@ window.cargarMapaCodigo = async function () {
     function pintarAvisos(cfg, conectado) {
         const c = document.getElementById('wa-avisos');
         if (!c) return;
-        c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(lunes 08:00, si el cron está instalado en el servidor)</span></h6>'
+        elegibles.clear();
+        const opciones = [];
+        (contactos || []).forEach(function (x) { const t = x.nombre + ' · contacto'; elegibles.set(t, x); opciones.push(t); });
+        (grupos || []).forEach(function (x) { const t = x.nombre + ' · grupo'; elegibles.set(t, x); opciones.push(t); });
+        c.innerHTML = '<datalist id="wa-lista">' + opciones.map(function (t) { return '<option value="' + esc(t) + '"></option>'; }).join('') + '</datalist>'
+            + '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(lunes 08:00, si el cron está instalado en el servidor)</span></h6>'
             + cfg.avisos.map(function (a) {
                 const usaChats = !!a.usa_chats;
                 let h = '<div class="border rounded p-3 mb-3" data-aviso="' + esc(a.aviso) + '">'
@@ -2823,12 +2829,10 @@ window.cargarMapaCodigo = async function () {
                         return '<span class="badge bg-light text-dark border me-1">' + esc(nom) + (d.destino.indexOf('@g.us') > 0 ? ' (grupo)' : '') + ' <a href="#" class="wa-quitar text-danger text-decoration-none" data-id="' + d.id + '" title="Quitar">✕</a></span>';
                     }).join('') : '<span class="text-muted">ningún chat asignado</span>';
                     h += '</div><div class="d-flex flex-wrap gap-2 mt-2">'
-                        + '<select class="form-select wa-grupo" style="max-width:260px;"><option value="">Agregar un grupo…</option>'
-                        + (grupos || []).map(function (g) { return '<option value="' + esc(g.id) + '">' + esc(g.nombre) + '</option>'; }).join('') + '</select>'
-                        + '<input class="form-control wa-num" placeholder="o un celular: 9 1234 5678" inputmode="tel" style="max-width:200px;">'
+                        + '<input class="form-control wa-buscar" list="wa-lista" placeholder="Buscar un contacto o grupo, o escribir un celular" style="max-width:340px;">'
                         + '<input class="form-control wa-eti" placeholder="Nombre (opcional)" style="max-width:170px;">'
                         + '<button class="btn btn-outline-primary wa-add">Asignar</button></div>';
-                    if (conectado && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">El número no está en ningún grupo: agréguelo a uno en WhatsApp o asigne un celular.</div>';
+                    if (conectado && contactos && !contactos.length && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">WhatsApp entrega los contactos al vincular y aún no llegó ninguno: puede escribir un celular, o cortar la conexión y vincular de nuevo.</div>';
                 }
                 h += '<div class="mt-3"><button class="btn btn-sm btn-outline-secondary me-2 wa-sim">Simular (no envía)</button>'
                     + '<button class="btn btn-sm btn-primary wa-env">Enviar ahora</button></div></div>';
@@ -2846,11 +2850,10 @@ window.cargarMapaCodigo = async function () {
             });
             const add = box.querySelector('.wa-add');
             if (add) add.onclick = async function () {
-                const sel = box.querySelector('.wa-grupo'), num = box.querySelector('.wa-num').value.trim(), eti = box.querySelector('.wa-eti').value.trim();
-                const destino = sel.value || num;
-                if (!destino) { msg('Elija un grupo o escriba un celular.'); return; }
-                const nombreGrupo = sel.value ? sel.options[sel.selectedIndex].text : '';
-                const r = await api('POST', '/avisos/' + aviso + '/destinos', { destino: destino, etiqueta: eti || nombreGrupo });
+                const texto = box.querySelector('.wa-buscar').value.trim(), eti = box.querySelector('.wa-eti').value.trim();
+                if (!texto) { msg('Elija un contacto o grupo, o escriba un celular.'); return; }
+                const hit = elegibles.get(texto);
+                const r = await api('POST', '/avisos/' + aviso + '/destinos', { destino: hit ? hit.id : texto, etiqueta: eti || (hit ? hit.nombre : '') });
                 if (!r.ok) { msg(esc(r.j.detail || 'No se pudo asignar.')); return; }
                 msg('Chat asignado.'); cargarAvisos();
             };
@@ -2872,8 +2875,9 @@ window.cargarMapaCodigo = async function () {
     }
 
     async function cargarAvisos() {
-        const [cfg, gr] = await Promise.all([api('GET', '/config'), grupos ? Promise.resolve(null) : api('GET', '/grupos')]);
+        const [cfg, gr, co] = await Promise.all([api('GET', '/config'), grupos ? Promise.resolve(null) : api('GET', '/grupos'), contactos ? Promise.resolve(null) : api('GET', '/contactos')]);
         if (gr && gr.ok) grupos = gr.j.grupos || [];
+        if (co && co.ok) contactos = co.j.contactos || [];
         if (cfg.ok) pintarAvisos(cfg.j, true);
     }
 
@@ -2883,7 +2887,7 @@ window.cargarMapaCodigo = async function () {
         c.innerHTML = '<div class="p-3" style="max-width:700px;"><h5 class="mb-1">WhatsApp de avisos</h5>'
             + '<p class="text-muted" style="font-size:0.9rem;">Número propio que envía los avisos. Se vincula una vez escaneando un código QR; luego se asigna qué aviso va a qué chat.</p>'
             + '<div id="wa-estado">Consultando…</div><div id="wa-avisos"></div><div id="wa-msg" class="mt-3" style="font-size:0.9rem;"></div></div>';
-        grupos = null;
+        grupos = null; contactos = null;
         let ultimo = null;
         const consultar = async function () {
             const tab = document.getElementById('tab-whatsapp');
@@ -2895,7 +2899,7 @@ window.cargarMapaCodigo = async function () {
                 // Se repinta el estado solo si cambió o hay QR (se renueva); así no se pisa lo que la persona esté escribiendo.
                 if (ultimo !== d.estado || d.qr) {
                     const cambio = ultimo !== d.estado; ultimo = d.estado; pintarEstado(d);
-                    if (cambio) { grupos = null; if (d.estado === 'conectado') cargarAvisos(); else document.getElementById('wa-avisos').innerHTML = ''; }
+                    if (cambio) { grupos = null; contactos = null; if (d.estado === 'conectado') cargarAvisos(); else document.getElementById('wa-avisos').innerHTML = ''; }
                 }
             } catch (e) { document.getElementById('wa-estado').innerHTML = '<span class="text-muted">No se pudo consultar el estado de WhatsApp.</span>'; }
         };
