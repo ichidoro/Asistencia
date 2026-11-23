@@ -25,12 +25,16 @@ class ConfiguracionService:
         if faltan:
             raise HTTPException(status_code=400, detail=f"Falta elegir el efecto en {len(faltan)} {que}.")
 
-    async def _validar_efectos_bono(self, bono: BonoCreate, creando: bool):
+    async def _validar_efectos_bono(self, bono: BonoCreate, creando: bool, bono_id: Optional[int] = None):
         from fastapi import HTTPException
         if creando and not bono.efecto_inasistencia:
             raise HTTPException(status_code=400, detail="Falta elegir qué hace una inasistencia sin justificar con el bono.")
         if creando or bono.efectos is not None:
             self._faltan(await self.repository.get_ids_tipos_justificacion(), bono.efectos, "justificaciones")
+        # Un beneficio en especie (4 Productos) se recibe o no: no se puede «descontar en proporción» (etapa B3d)
+        tipo = bono.tipo or ((await self.repository.get_tipos_de_bonos()).get(bono_id) if bono_id else None) or 'pesos'
+        if tipo == 'beneficio' and (bono.efecto_inasistencia == 'proporcion' or 'proporcion' in (bono.efectos or {}).values()):
+            raise HTTPException(status_code=400, detail="Un beneficio en especie no se descuenta en proporción: se recibe o no.")
 
     async def _guardar_efectos_bono(self, bono_id: int, bono: BonoCreate):
         if bono.efecto_inasistencia:
@@ -69,7 +73,7 @@ class ConfiguracionService:
         return bono_id
 
     async def update_bono(self, bono_id: int, bono: BonoCreate) -> bool:
-        await self._validar_efectos_bono(bono, creando=False)
+        await self._validar_efectos_bono(bono, creando=False, bono_id=bono_id)
         updated = await self.repository.update_bono(bono_id, bono)
         if updated:
             await self._guardar_efectos_bono(bono_id, bono)
@@ -99,6 +103,9 @@ class ConfiguracionService:
         return updated
 
     async def delete_bono(self, bono_id: int) -> bool:
+        from fastapi import HTTPException
+        if bono_id == await self.repository.get_id_bono_productos_4():
+            raise HTTPException(status_code=400, detail="Este bono lo usa 4 Productos para decidir quién recibe los productos: no se puede eliminar. Se puede dejar sin uso.")
         return await self.repository.delete_bono(bono_id)
 
     async def get_all_bonos(self) -> List[Dict]:
@@ -128,7 +135,7 @@ class ConfiguracionService:
             bonos_a_asignar: List[Dict] = []
 
             for bono in bonos:
-                if not bono['activo']:
+                if not bono['activo'] or bono.get('tipo') == 'beneficio':
                     continue
 
                 match = False
@@ -198,16 +205,23 @@ class ConfiguracionService:
     async def get_all_tipos_justificacion(self) -> List[Dict]:
         return await self.repository.get_all_tipos_justificacion()
 
+    async def _validar_efectos_tipo(self, efectos):
+        from fastapi import HTTPException
+        self._faltan(await self.repository.get_ids_bonos(), efectos, "bonos")
+        tipos = await self.repository.get_tipos_de_bonos()
+        if any(tipos.get(int(b)) == 'beneficio' and e == 'proporcion' for b, e in (efectos or {}).items()):
+            raise HTTPException(status_code=400, detail="Un beneficio en especie no se descuenta en proporción: se recibe o no.")
+
     async def create_tipo_justificacion(self, tipo: JustificacionTipoCreate) -> int:
         # Una justificación nueva no se guarda sin elegir su efecto en cada bono (sin valor por defecto escondido)
-        self._faltan(await self.repository.get_ids_bonos(), tipo.efectos_bonos, "bonos")
+        await self._validar_efectos_tipo(tipo.efectos_bonos)
         tipo_id = await self.repository.create_tipo_justificacion(tipo)
         await self.repository.set_efectos_de_tipo(tipo_id, tipo.efectos_bonos)
         return tipo_id
 
     async def update_tipo_justificacion(self, tipo_id: int, tipo: JustificacionTipoCreate) -> bool:
         if tipo.efectos_bonos is not None:
-            self._faltan(await self.repository.get_ids_bonos(), tipo.efectos_bonos, "bonos")
+            await self._validar_efectos_tipo(tipo.efectos_bonos)
         ok = await self.repository.update_tipo_justificacion(tipo_id, tipo)
         if ok and tipo.efectos_bonos is not None:
             await self.repository.set_efectos_de_tipo(tipo_id, tipo.efectos_bonos)

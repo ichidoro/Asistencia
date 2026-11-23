@@ -44,7 +44,8 @@ class BonoService:
         las fechas de la tabla de períodos, sean las que sean (etapa B1 del plan de bonos, 22-11-2026: antes usaba el
         mes calendario)."""
         bonos = await self.config_repo.get_all_bonos()
-        bonos_activos = [b for b in bonos if b.get("activo")]
+        # Solo los bonos en pesos: el beneficio en especie (4 Productos) lo evalúa su propia pantalla (etapa B3d)
+        bonos_activos = [b for b in bonos if b.get("activo") and b.get("tipo") != "beneficio"]
 
         # Feriados del período (puede cruzar el año), para no contar como de turno un feriado dentro de una justificación
         feriados_rows = await self.db.fetch_all(
@@ -109,13 +110,16 @@ class BonoService:
                                      matrix.get(emp["id"]) or matrix.get(str(emp["id"])), hoy, fecha_inicio, fecha_fin, feriados)
             if not r.get("aplica"):
                 continue
+            if bono.get("tipo") == "beneficio":
+                r = dict(r, monto=0)
             personas.append({"nombre": nombre, "area": emp.get("area") or "", "regla": calzan[0] + 1 if calzan else None,
                              "califica": bool(r.get("califica")), "monto": int(round(r.get("monto") or 0)),
                              "motivo": self._motivo_corto(r)})
         personas.sort(key=lambda p: p["nombre"])
         return {"fecha_inicio": fecha_inicio, "fecha_fin": fecha_fin, "hoy": hoy, "personas": personas, "pisan": pisan,
                 "total": sum(p["monto"] for p in personas),
-                "reciben": sum(1 for p in personas if p["califica"] and p["monto"] > 0),
+                "beneficio": bono.get("tipo") == "beneficio",
+                "reciben": sum(1 for p in personas if p["califica"] and (p["monto"] > 0 or bono.get("tipo") == "beneficio")),
                 "no_cobran": sum(1 for p in personas if not p["califica"])}
 
     @staticmethod

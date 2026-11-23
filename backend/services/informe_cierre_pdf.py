@@ -956,7 +956,8 @@ async def _personas_del_area(db, asistencia_service, fecha_inicio: str, fecha_fi
     datos = await rs.datos_periodo(fecha_inicio, fecha_fin, area)
     justif = [dict(r) for r in await db.fetch_all('SELECT nombre, nomenclatura FROM justificacion_tipos ORDER BY id')]
     # Todos los bonos activos, en su orden; el informe muestra los que les corresponden a sus personas (etapa B2)
-    bonos = [r['nombre'] for r in await db.fetch_all('SELECT nombre FROM bonos WHERE activo = 1 ORDER BY id')]
+    bonos = [r['nombre'] for r in await db.fetch_all(
+        "SELECT nombre FROM bonos WHERE activo = 1 AND COALESCE(tipo, 'pesos') <> 'beneficio' ORDER BY id")]
     if not bonos:
         bonos = list(datos.get('lista_bonos') or [])
     return armar_personas(datos, rs._format_concepto_cell, justif), justif, bonos

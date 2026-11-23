@@ -276,7 +276,7 @@ async def get_asistencia_matrix(
 
     # Siempre incluir la lista maestra de todos los bonos activos (columnas estáticas)
     todos_bonos = await bono_service.config_repo.get_all_bonos()
-    data["bonos_nombres"] = sorted([b["nombre"] for b in todos_bonos if b.get("activo")])
+    data["bonos_nombres"] = sorted([b["nombre"] for b in todos_bonos if b.get("activo") and b.get("tipo") != "beneficio"])
 
     # Evaluar cumplimiento de bonos para los empleados del período
     empleados = data.get("empleados", [])
@@ -331,7 +331,7 @@ async def get_matriz_asistencia(
     
     # Siempre incluir la lista maestra de todos los bonos activos (columnas estáticas)
     todos_bonos = await bono_service.config_repo.get_all_bonos()
-    data["bonos_nombres"] = sorted([b["nombre"] for b in todos_bonos if b.get("activo")])
+    data["bonos_nombres"] = sorted([b["nombre"] for b in todos_bonos if b.get("activo") and b.get("tipo") != "beneficio"])
 
     # Evaluar cumplimiento de bonos para los empleados del período
     if "empleados" in data and data["empleados"]:

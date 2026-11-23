@@ -2076,6 +2076,10 @@
                     <div class="modal-body">
                         <form id="form-bono" onsubmit="event.preventDefault(); saveBono()">
                             <input type="hidden" id="bono-id">
+                            <input type="hidden" id="bono-tipo" value="pesos">
+                            <div id="bono-nota-beneficio" class="alert alert-info small py-2" style="display:none">
+                                Beneficio en especie de 4 Productos: no tiene monto en pesos. Decide quién recibe los productos según estas reglas y el efecto de las faltas.
+                            </div>
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="bono-nombre">Nombre del Bono *</label>

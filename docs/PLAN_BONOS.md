@@ -277,7 +277,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - Prueba nueva `test_cargos_de_la_lista_en_bonos.py` (5 casos); 643 pruebas en verde. Renombrar y unir probados contra
   la copia de práctica (PostgreSQL), también con una persona.
 
-**B3c hecho (22-11-2026, falta subir):**
+**B3c hecho (22-11-2026, commit dea3dc8):**
 - Botón «Vista previa» en la ventana del bono: con lo que se está editando y sin guardarlo, muestra para el período
   vigente quién lo recibe, cuánto, con qué regla y por qué no lo cobra quien no lo cobra (días que no cuentan,
   resumidos por causa), y el total.
@@ -286,6 +286,21 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - El cálculo y la vista previa eligen la regla con la misma función.
 - Prueba nueva `test_vista_previa_bono.py` (3 casos); 646 pruebas en verde. Probado en el navegador con la copia de
   práctica (vista previa, aviso y cancelar sin guardar). No cambia ningún cálculo.
+
+**B3d hecho (22-11-2026, falta subir):**
+- Bono nuevo «4 Productos» de tipo **beneficio** (en especie, sin monto en pesos), en Configuración → Bonos como
+  cualquier otro: sus reglas (contrato, cargos) y el efecto de las faltas se configuran ahí. 4 Productos lo lee por su
+  identificador (ajuste «bono_productos_4»); ya no busca el bono llamado «compromiso» ni le cambia las reglas en el
+  código. Al crearse se llenó con lo de hoy: una regla para todos y los efectos de Compromiso; activo solo si
+  Compromiso lo estaba.
+- Un beneficio no sale en el informe de cierre, el Excel, la grilla ni la lista de bonos de la persona; no ofrece
+  «Descuenta en proporción» (se recibe o no) y no se puede eliminar (se puede dejar sin uso). Su vista previa dice
+  quién lo recibe.
+- **Ensayo en el servidor** con el respaldo del 22-11-2026 (base temporal borrada): 0 cambios en quién califica para
+  4 Productos en los 7 períodos (entre 70 y 79 personas por período) y 0 cambios en los bonos en pesos.
+- Prueba nueva `test_bono_productos_4.py` (7 casos); 653 pruebas en verde.
+- **Visto de paso, sin tocar:** 4 Productos tiene escrita en el código la regla «califica a partir del segundo mes de
+  antigüedad». Para la persona dueña: ¿se pasa también a la configuración?
 
 2. **Se quita la «Asistencia mínima» (E).** No existe en las reglas de Aguacol (decisión de la persona dueña,
    22-11-2026): lo que decide el bono es la relación entre la asistencia del día y las justificaciones (punto 1). Se

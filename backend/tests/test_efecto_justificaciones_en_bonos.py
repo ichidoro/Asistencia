@@ -172,6 +172,9 @@ class _Repo:
     async def get_ids_tipos_justificacion(self):
         return [10, 11]
 
+    async def get_tipos_de_bonos(self):
+        return {1: "pesos", 2: "pesos"}
+
     async def create_tipo_justificacion(self, tipo):
         return 99
 

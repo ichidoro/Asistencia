@@ -4,6 +4,7 @@ from backend.core.database import Database
 from backend.schemas.bono import BonoCreate, BonoReglaCreate, BonoAsignacionCreate
 from backend.schemas.justificacion import JustificacionTipoCreate, JustificacionCreate
 import json
+from datetime import date
 
 
 class ConfiguracionRepository:
@@ -470,6 +471,9 @@ class ConfiguracionRepository:
             except Exception as e_seed:
                 logger.warning(f"\u26a0\ufe0f Error sembrando periodo inicial: {e_seed}")
 
+        # 7. El bono de 4 Productos (etapa B3d del plan de bonos): necesita la tabla de ajustes, creada más arriba
+        await self._init_bono_productos_4()
+
         logger.info("✅ Tablas de configuración, ajustes y periodos inicializadas")
 
     EFECTOS = ("asistido", "proporcion", "pierde")
@@ -562,6 +566,57 @@ class ConfiguracionRepository:
                                   (a_ids(r['cargo_requerido'], r['id'], "requerido"), a_ids(r['cargos_excluidos'], r['id'], "excluido"), r['id']))
         logger.info("✨ Migración: cargos de las reglas de bono guardados por su identificador")
 
+    CLAVE_BONO_PRODUCTOS_4 = "bono_productos_4"
+
+    async def _init_bono_productos_4(self):
+        """Columna bonos.tipo (pesos / beneficio) y el bono «4 Productos» (beneficio en especie). Hasta hoy, 4 Productos
+        tomaba el bono que se llamara «compromiso» y le cambiaba las reglas en el código (cualquier cargo y contrato). La
+        primera vez se crea un bono propio con eso mismo: una regla para todos, y los efectos de las faltas copiados de
+        Compromiso; queda activo solo si Compromiso lo estaba (sin Compromiso activo, 4 Productos no miraba la asistencia).
+        4 Productos lo lee por su identificador (ajuste «bono_productos_4»), no por su nombre."""
+        get_cols = getattr(self.db, 'get_column_names', None)
+        if get_cols and "tipo" not in await get_cols("bonos"):
+            await self.db.execute("ALTER TABLE bonos ADD COLUMN tipo TEXT DEFAULT 'pesos'")
+            await self.db.execute("UPDATE bonos SET tipo = 'pesos' WHERE tipo IS NULL")
+            logger.info("✨ Migración: columna 'tipo' agregada a bonos")
+        if not await self.db.table_exists("ajustes"):
+            return
+        if await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = ?", (self.CLAVE_BONO_PRODUCTOS_4,)):
+            return
+        # Solo para llenar la primera vez con lo de hoy: el código de antes buscaba este nombre
+        comp = await self.db.fetch_one("SELECT id, activo, efecto_inasistencia FROM bonos WHERE LOWER(TRIM(nombre)) = 'compromiso'")
+        res = await self.db.execute(
+            "INSERT INTO bonos (nombre, descripcion, activo, efecto_inasistencia, tipo) VALUES (?, ?, ?, ?, 'beneficio')",
+            ("4 Productos", "Beneficio en especie: decide por asistencia quién recibe los 4 productos. No tiene monto en pesos.",
+             1 if comp and comp['activo'] else 0, "pierde"))
+        bono_id = res.lastrowid
+        await self.db.execute(
+            "INSERT INTO bono_reglas (bono_id, monto, asistencia_minima, es_proporcional, version, fecha_inicio) VALUES (?, 0, 0, 0, 1, ?)",
+            (bono_id, date.today().isoformat()))
+        if comp:
+            filas = await self.db.fetch_all("SELECT tipo_id, efecto FROM bono_efectos WHERE bono_id = ?", (comp['id'],))
+            efectos = {r['tipo_id']: ("pierde" if r['efecto'] == "proporcion" else r['efecto']) for r in filas}
+        else:
+            efectos = {t['id']: ("asistido" if t['con_goce_sueldo'] else "pierde")
+                       for t in await self.db.fetch_all("SELECT id, con_goce_sueldo FROM justificacion_tipos")}
+        if efectos:
+            await self.db.execute_batch([("INSERT INTO bono_efectos (bono_id, tipo_id, efecto) VALUES (?, ?, ?)", (bono_id, t, e))
+                                         for t, e in efectos.items()])
+        await self.db.execute("INSERT INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
+                              (self.CLAVE_BONO_PRODUCTOS_4, str(bono_id), "Bono (beneficio) que decide quién recibe 4 Productos"))
+        ConfiguracionRepository._bonos_cache = None
+        logger.info(f"✨ Bono «4 Productos» creado (id {bono_id}) con lo que hacía hoy 4 Productos")
+
+    async def get_id_bono_productos_4(self) -> Optional[int]:
+        r = await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = ?", (self.CLAVE_BONO_PRODUCTOS_4,))
+        try:
+            return int(r['valor']) if r else None
+        except (TypeError, ValueError):
+            return None
+
+    async def get_tipos_de_bonos(self) -> Dict[int, str]:
+        return {r['id']: (r.get('tipo') or 'pesos') for r in await self.db.fetch_all("SELECT id, tipo FROM bonos")}
+
     async def set_efectos_de_bono(self, bono_id: int, efectos: Dict[int, str]) -> None:
         """Reemplaza el efecto de cada justificación en un bono."""
         ConfiguracionRepository._bonos_cache = None
@@ -592,8 +647,8 @@ class ConfiguracionRepository:
         try:
             logger.info("Iniciando creación de bono...")
             res = await self.db.execute(
-                "INSERT INTO bonos (nombre, descripcion, activo) VALUES (?, ?, ?)",
-                (bono.nombre, bono.descripcion, 1 if bono.activo else 0)
+                "INSERT INTO bonos (nombre, descripcion, activo, tipo) VALUES (?, ?, ?, ?)",
+                (bono.nombre, bono.descripcion, 1 if bono.activo else 0, bono.tipo or 'pesos')
             )
             bono_id = res.lastrowid
             logger.info(f"Bono Header creado con ID: {bono_id}")
@@ -678,6 +733,8 @@ class ConfiguracionRepository:
                 "UPDATE bonos SET nombre = ?, descripcion = ?, activo = ? WHERE id = ?",
                 (bono.nombre, bono.descripcion, 1 if bono.activo else 0, bono_id)
             )
+            if bono.tipo:
+                await self.db.execute("UPDATE bonos SET tipo = ? WHERE id = ?", (bono.tipo, bono_id))
             
             # 2. Reemplazar reglas (borrar anteriores e insertar nuevas)
             await self.db.execute("DELETE FROM bono_reglas WHERE bono_id = ?", (bono_id,))
@@ -720,11 +777,14 @@ class ConfiguracionRepository:
             bonos = await self.db.fetch_all(query)
             
             # 2. Obtener Reglas para cada bono
+            id_p4 = await self.get_id_bono_productos_4() if await self.db.table_exists("ajustes") else None
             result = []
             for b in bonos:
                 bono_dict = dict(b)
                 # Convertir activo a bool si es necesario, aunque SQLite devuelve 0/1
                 bono_dict['activo'] = bool(b['activo'])
+                bono_dict['tipo'] = b.get('tipo') or 'pesos'
+                bono_dict['usa_productos_4'] = (b['id'] == id_p4)
                 
                 query_reglas = "SELECT * FROM bono_reglas WHERE bono_id = ?"
                 reglas = await self.db.fetch_all(query_reglas, (b['id'],))

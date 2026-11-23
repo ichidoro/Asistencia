@@ -438,6 +438,9 @@ async function _doLoadMetadata() {
 // ==========================================
 const EFECTOS_BONO = [['asistido', 'Cuenta como asistido'], ['proporcion', 'Descuenta en proporción'], ['pierde', 'Hace perder el bono']];
 const EFECTOS_INASISTENCIA = [['pierde', 'Hace perder el bono'], ['proporcion', 'Descuenta en proporción']];
+// Un beneficio en especie (4 Productos, etapa B3d) se recibe o no: sin «Descuenta en proporción»
+const sinProporcion = function (ops) { return ops.filter(function (o) { return o[0] !== 'proporcion'; }); };
+const opsEfecto = function (b) { return b && b.tipo === 'beneficio' ? sinProporcion(EFECTOS_BONO) : EFECTOS_BONO; };
 const nombreEfecto = function (v) { const o = EFECTOS_BONO.find(function (x) { return x[0] === v; }); return o ? o[1] : 'Sin configurar'; };
 
 async function _asegurarBonos() {
@@ -462,14 +465,14 @@ function _htmlSelectEfecto(id, ops, valor, attrs) {
 }
 
 // Filas «nombre · efecto» con un <select> por cada elemento (bonos en la justificación, justificaciones en el bono)
-function _htmlFilasEfecto(prefijo, items, valorDe) {
+function _htmlFilasEfecto(prefijo, items, valorDe, ops) {
     const esc = window.FichaCfg ? window.FichaCfg.esc : function (x) { return String(x == null ? '' : x); };
     if (!items.length) return '<span class="text-muted small">No hay nada que configurar todavía.</span>';
     return items.map(function (it) {
         const id = prefijo + it.id;
         return '<div class="d-flex align-items-center gap-2 mb-1"><label class="small flex-grow-1 mb-0" for="' + esc(id) + '">' + esc(it.nombre)
             + (it.activo === false ? ' <span class="text-muted">(no se calcula)</span>' : '') + '</label>'
-            + '<div style="min-width: 210px">' + _htmlSelectEfecto(id, EFECTOS_BONO, valorDe(it) || '', 'data-ef-id="' + it.id + '" data-ef-nombre="' + esc(it.nombre) + '"') + '</div></div>';
+            + '<div style="min-width: 210px">' + _htmlSelectEfecto(id, ops ? ops(it) : EFECTOS_BONO, valorDe(it) || '', 'data-ef-id="' + it.id + '" data-ef-nombre="' + esc(it.nombre) + '"') + '</div></div>';
     }).join('');
 }
 
@@ -515,14 +518,14 @@ function renderBonos() {
         items: bonosList.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
         id: function (b) { return b.id; },
         etiqueta: function (b) { return b.nombre; },
-        sub: function (b) { const n = (b.reglas || []).length; return n ? n + (n === 1 ? ' regla' : ' reglas') : 'Sin reglas'; },
+        sub: function (b) { if (b.tipo === 'beneficio') return 'Beneficio · 4 Productos'; const n = (b.reglas || []).length; return n ? n + (n === 1 ? ' regla' : ' reglas') : 'Sin reglas'; },
         apagado: function (b) { return !b.activo; },
         vacio: 'No hay bonos. Cree el primero con «Nuevo bono».',
         ficha: function (b, panel) {
             const reglas = (b.reglas || []).map(function (r) {
                 const cond = [r.tipo_contrato || 'Todo contrato', r.cargo_requerido ? 'lo reciben: ' + r.cargo_requerido : 'todos los cargos',
                               r.cargos_excluidos ? 'no lo reciben: ' + r.cargos_excluidos : ''].filter(Boolean).join(' · ');
-                return '<div class="fcB-campo"><div class="fcB-et"><span class="num">' + F.esc(pesos(r.monto)) + '</span></div><div class="fcB-ctl"><span>' + F.esc(cond) + '</span></div></div>';
+                return '<div class="fcB-campo"><div class="fcB-et"><span class="num">' + F.esc(b.tipo === 'beneficio' ? 'En especie' : pesos(r.monto)) + '</span></div><div class="fcB-ctl"><span>' + F.esc(cond) + '</span></div></div>';
             }).join('');
             // Efecto de las justificaciones y de la inasistencia sin justificar (etapa B3a)
             const tipos = (tiposJustificacionList || []).slice().sort(function (x, y) { return String(x.nombre).localeCompare(String(y.nombre), 'es'); });
@@ -532,13 +535,14 @@ function renderBonos() {
                 return F.campo(o[1], '<span>' + F.esc(porEfecto[o[0]].join(', ')) + '</span>');
             }).join('');
             panel.innerHTML = F.cabeza(b.nombre, b.descripcion || '')
+                + (b.usa_productos_4 ? '<p class="fcB-nota">Lo usa 4 Productos para decidir quién recibe los productos. No sale en el informe de cierre ni en la grilla, y no se puede eliminar.</p>' : '')
                 + F.campo('En uso', '<span class="fcB-sw" aria-disabled="true"><input type="checkbox" disabled' + (b.activo ? ' checked' : '') + '><span aria-hidden="true"></span>' + (b.activo ? 'Se calcula' : 'No se calcula') + '</span>')
                 + F.campo('Inasistencia sin justificar', '<span>' + F.esc(b.efecto_inasistencia ? nombreEfecto(b.efecto_inasistencia) : 'Sin configurar') + '</span>')
                 + F.seccion('Reglas de aplicación')
                 + (reglas || '<p class="fcB-nota">Este bono no tiene reglas: no se paga a nadie.</p>')
                 + F.seccion('Efecto de las justificaciones')
                 + (efectosHtml || '<p class="fcB-nota">No hay justificaciones.</p>')
-                + (canEdit ? F.pie('<button type="button" class="fcB-btn borra" onclick="confirmDeleteBono(' + b.id + ')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar bono</button>',
+                + (canEdit ? F.pie(b.usa_productos_4 ? '' : '<button type="button" class="fcB-btn borra" onclick="confirmDeleteBono(' + b.id + ')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar bono</button>',
                     '<button type="button" class="fcB-btn pri" onclick="editBono(' + b.id + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Editar bono</button>') : '');
         }
     });
@@ -567,7 +571,7 @@ async function openModalBono(bono = null) {
         document.getElementById('bono-descripcion').value = bono.descripcion || '';
         document.getElementById('bono-activo').value = bono.activo ? 'true' : 'false';
         if (bono.reglas) {
-            bono.reglas.forEach(r => addBonoReglaRow(r));
+            bono.reglas.forEach(r => addBonoReglaRow(r, bono.tipo === 'beneficio'));
         }
     } else {
         title.innerText = 'Crear Nuevo Bono';
@@ -576,11 +580,15 @@ async function openModalBono(bono = null) {
     }
 
     // Efecto de la inasistencia sin justificar y de cada justificación en este bono (etapa B3a)
+    // Beneficio en especie (4 Productos, etapa B3d): sin monto en pesos ni «Descuenta en proporción»
+    const esBeneficio = !!(bono && bono.tipo === 'beneficio');
+    document.getElementById('bono-tipo').value = bono ? (bono.tipo || 'pesos') : 'pesos';
+    document.getElementById('bono-nota-beneficio').style.display = esBeneficio ? '' : 'none';
     document.getElementById('bono-efecto-inas-wrap').innerHTML =
-        _htmlSelectEfecto('bono-efecto-inas', EFECTOS_INASISTENCIA, bono ? (bono.efecto_inasistencia || '') : '');
+        _htmlSelectEfecto('bono-efecto-inas', esBeneficio ? sinProporcion(EFECTOS_INASISTENCIA) : EFECTOS_INASISTENCIA, bono ? (bono.efecto_inasistencia || '') : '');
     const tiposJ = await _asegurarTiposJ();
     document.getElementById('bono-efectos-container').innerHTML =
-        _htmlFilasEfecto('bono-ef-', tiposJ, function (t) { return bono ? (bono.efectos || {})[t.id] : ''; });
+        _htmlFilasEfecto('bono-ef-', tiposJ, function (t) { return bono ? (bono.efectos || {})[t.id] : ''; }, function () { return opsEfecto(bono); });
 
     // FIX RACE CONDITION: cargar areas ANTES de mostrar el modal.
     // Si mostramos el modal primero y el fetch es async, el usuario puede
@@ -648,7 +656,7 @@ function closeModalBono(fromSave = false) {
     }
 }
 
-function addBonoReglaRow(regla = null) {
+function addBonoReglaRow(regla = null, beneficio = document.getElementById('bono-tipo') && document.getElementById('bono-tipo').value === 'beneficio') {
     const container = document.getElementById('reglas-container');
     const rowIdx = container.querySelectorAll('.regla-row').length; // ID único basado en el conteo actual
     const div = document.createElement('div');
@@ -666,7 +674,7 @@ function addBonoReglaRow(regla = null) {
                     <option value="Temporal" ${regla && regla.tipo_contrato === 'Temporal' ? 'selected' : ''}>Temporal</option>
                 </select>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6" ${beneficio ? 'style="display:none"' : ''}>
                 <label for="rule-monto-${rowIdx}" class="small text-muted fw-bold">2. Monto Base ($)</label>
                 <div class="input-group input-group-sm">
                     <span class="input-group-text">$</span>
@@ -721,7 +729,9 @@ function _leerFormularioBono() {
     const modalBonoEl = document.getElementById('modal-bono');
     const area_ids = Array.from(modalBonoEl.querySelectorAll('.bono-area-chk:checked')).map(chk => parseInt(chk.value));
     const totalAreas = modalBonoEl.querySelectorAll('.bono-area-chk').length;
-    return { nombre, descripcion, activo, reglas, area_ids: totalAreas === 0 ? null : area_ids, efecto_inasistencia: efectoInas, efectos: efJ.valores };
+    const tipo = document.getElementById('bono-tipo').value || 'pesos';
+    if (tipo === 'beneficio') reglas.forEach(function (r) { r.monto = 0; });
+    return { nombre, descripcion, activo, tipo, reglas, area_ids: totalAreas === 0 ? null : area_ids, efecto_inasistencia: efectoInas, efectos: efJ.valores };
 }
 
 // ── Vista previa del bono (etapa B3c del plan de bonos) ──
@@ -743,12 +753,12 @@ function _pintarVistaPreviaBono(d) {
         + ' con más de una regla.</b> Se usa la primera que calza: ' + d.pisan.map(function (p) { return esc(p.nombre) + ' (reglas ' + p.reglas.join(' y ') + ')'; }).join(', ') + '.</div>' : '';
     const filas = d.personas.map(function (p) {
         return '<tr><td>' + esc(p.nombre) + '</td><td>' + esc(p.area) + '</td><td class="text-center">' + (p.regla || '—') + '</td>'
-            + '<td class="text-end ' + (p.califica ? '' : 'text-danger fw-bold') + '">' + (p.califica ? pesos(p.monto) : '—') + '</td>'
+            + '<td class="text-end ' + (p.califica ? '' : 'text-danger fw-bold') + '">' + (p.califica ? (d.beneficio ? 'Recibe' : pesos(p.monto)) : '—') + '</td>'
             + '<td class="small text-muted">' + esc(p.califica && p.motivo.indexOf('Proporcional') !== 0 ? '' : p.motivo) + '</td></tr>';
     }).join('');
     cont.innerHTML = '<div class="border rounded p-2 bg-white">'
         + '<div class="fw-bold small mb-1">Vista previa · período ' + fecha(d.fecha_inicio) + ' al ' + fecha(d.fecha_fin) + ' (días revisados hasta hoy) · no se ha guardado</div>'
-        + '<div class="small mb-2">' + d.reciben + (d.reciben === 1 ? ' persona lo recibe' : ' personas lo reciben') + ' · total <b>' + pesos(d.total) + '</b>'
+        + '<div class="small mb-2">' + d.reciben + (d.reciben === 1 ? ' persona lo recibe' : ' personas lo reciben') + (d.beneficio ? '' : ' · total <b>' + pesos(d.total) + '</b>')
         + (d.no_cobran ? ' · <span class="text-danger">' + d.no_cobran + ' no lo ' + (d.no_cobran === 1 ? 'cobra' : 'cobran') + '</span>' : '') + '</div>'
         + pisan
         + (filas ? '<div style="max-height: 240px; overflow-y: auto;"><table class="table table-sm small mb-0"><thead><tr><th>Persona</th><th>Área</th><th class="text-center">Regla</th><th class="text-end">Monto</th><th>Motivo</th></tr></thead><tbody>'
@@ -934,7 +944,7 @@ async function fichaTipoJ(t, panel, canEdit) {
         + '<p class="fcB-nota">Qué pasa con cada bono en un día con esta justificación.</p>'
         + (bonosEf.length ? bonosEf.map(function (b) {
             return F.campo(b.nombre + (b.activo ? '' : ' (no se calcula)'),
-                F.lista('fj-ef-' + b.id, [['', 'Elegir…']].concat(EFECTOS_BONO), esNuevo ? '' : ((b.efectos || {})[t.id] || '')), '', 'fj-ef-' + b.id);
+                F.lista('fj-ef-' + b.id, [['', 'Elegir…']].concat(opsEfecto(b)), esNuevo ? '' : ((b.efectos || {})[t.id] || '')), '', 'fj-ef-' + b.id);
         }).join('') : '<p class="fcB-nota">No hay bonos.</p>')
         + F.mas('Más opciones',
             F.campo('Mínimo de días', F.numero('fj-min', t.min_dias || 1, ' min="1"'), '', 'fj-min')
@@ -1047,7 +1057,7 @@ window.openModalTipoJ = function(tipo = null) {
     const cont = document.getElementById('tipo-j-efectos');
     cont.innerHTML = '<span class="text-muted small">Cargando bonos…</span>';
     _asegurarBonos().then(function (bonos) {
-        cont.innerHTML = _htmlFilasEfecto('tipo-j-ef-', bonos, function (b) { return tipo ? (b.efectos || {})[tipo.id] : ''; });
+        cont.innerHTML = _htmlFilasEfecto('tipo-j-ef-', bonos, function (b) { return tipo ? (b.efectos || {})[tipo.id] : ''; }, opsEfecto);
     });
 
     modal.style.display = 'flex';

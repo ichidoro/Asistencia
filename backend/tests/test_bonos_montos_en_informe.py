@@ -73,7 +73,8 @@ def test_pdf_con_bonos_se_dibuja():
 def test_el_informe_toma_todos_los_bonos_activos_no_las_areas_marcadas():
     from pathlib import Path
     fuente = (Path(__file__).resolve().parents[1] / 'services' / 'informe_cierre_pdf.py').read_text(encoding='utf-8')
-    assert 'FROM bonos WHERE activo = 1 ORDER BY id' in fuente and 'FROM area_bonos' not in fuente
+    # todos los bonos en pesos activos (el beneficio de 4 Productos no sale en el informe, etapa B3d)
+    assert "FROM bonos WHERE activo = 1 AND COALESCE(tipo, 'pesos') <> 'beneficio' ORDER BY id" in fuente and 'FROM area_bonos' not in fuente
 
 
 def test_excel_muestra_el_monto_y_el_total_de_bonos():

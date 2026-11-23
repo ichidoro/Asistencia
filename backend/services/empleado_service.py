@@ -536,7 +536,7 @@ class EmpleadoService:
 
         all_bonos = await self.config_service.repository.get_all_bonos()
         # Filtrar solo activos y ordenar
-        active_bonos = [b for b in all_bonos if b['activo']]
+        active_bonos = [b for b in all_bonos if b['activo'] and b.get('tipo') != 'beneficio']
         active_bonos.sort(key=lambda x: x['id'])
         
         columns = [{"id": b['id'], "nombre": b['nombre']} for b in active_bonos]

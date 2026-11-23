@@ -83,11 +83,14 @@ class Productos4Service:
         )
         matrix_data = matrix_res.get("matrix", {})
         
-        # 3. Cargar el Bono de Compromiso y evaluar asistencia
+        # 3. El bono (beneficio) de 4 Productos, por su identificador (etapa B3d del plan de bonos; antes se buscaba el
+        # bono llamado «compromiso» y se le cambiaban las reglas en el código). Sus reglas y efectos se configuran en
+        # Configuración → Bonos.
         bonos = await self.config_repo.get_all_bonos()
-        compromiso_bono = next((b for b in bonos if str(b.get("nombre")).strip().lower() == "compromiso"), None)
+        id_p4 = await self.config_repo.get_id_bono_productos_4()
+        bono_p4 = next((b for b in bonos if b.get("id") == id_p4), None)
         
-        # Cargar feriados para el motor
+        # Feriados del período
         feriados_rows = await self.db.fetch_all(
             # Por las fechas del período, que puede cruzar el año (etapa B1 del plan de bonos)
             "SELECT fecha FROM feriados WHERE fecha BETWEEN ? AND ?", (fecha_inicio, fecha_fin)
@@ -168,22 +171,10 @@ class Productos4Service:
                 # Empleados excluidos de asistencia (Art 22) califican por default en 4 productos
                 califica_asistencia = True
                 motivo_asistencia = "OK (Excluido de asistencia / Art 22)."
-            elif compromiso_bono and compromiso_bono.get("activo"):
-                import copy
-                # Modificar las reglas del bono en memoria para que aplique universalmente a cualquier cargo y contrato
-                compromiso_beneficio = copy.deepcopy(compromiso_bono)
-                compromiso_beneficio["reglas"] = [{
-                    "cargo_requerido": None,
-                    "cargos_excluidos": None,
-                    "tipo_contrato": None,
-                    "es_proporcional": 0,
-                    "monto": 1000
-                }]
-                
-                # Ejecutar calificacion de bono Compromiso
+            elif bono_p4 and bono_p4.get("activo"):
                 res_calif = bono_service._calificar_bono(
                     emp_dict,
-                    compromiso_beneficio,
+                    bono_p4,
                     asist_map.get(emp_id, []),
                     just_map.get(emp_id, []),
                     matrix_data.get(emp_id),
@@ -192,17 +183,16 @@ class Productos4Service:
                     fecha_fin,
                     feriados_set
                 )
-                
-                # Para el beneficio de 4 Productos, no se excluye a nadie (aplica es siempre True)
-                # Solo se evalua si califica por su asistencia
-                if not res_calif.get("califica"):
+                if not res_calif.get("aplica"):
+                    califica_asistencia = False
+                    motivo_asistencia = "No le corresponde por cargo o contrato (reglas del bono «" + bono_p4["nombre"] + "»)."
+                elif not res_calif.get("califica"):
                     califica_asistencia = False
                     motivo_asistencia = f"No califica por asistencia. Detalle: {res_calif.get('motivo')}"
             else:
-                # Si el Bono de Compromiso no esta configurado o esta inactivo,
-                # se asume que no hay restriccion de asistencia activa.
-                logger.warning("[Productos4Service] Bono de Compromiso inactivo o no configurado. Omite asistencia.")
-            
+                # Sin el bono de 4 Productos en uso no hay restricción de asistencia (igual que antes sin Compromiso activo)
+                logger.warning("[Productos4Service] El bono de 4 Productos no existe o no está en uso: no se revisa la asistencia.")
+
             # Obtener seleccion previa si existe
             prev_asig = asignaciones_map.get(emp_id)
             seleccion = None

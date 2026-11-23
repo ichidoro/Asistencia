@@ -52,7 +52,7 @@ async def vista_previa_bono(
     periodo = await ConfiguracionRepository(db).get_fechas_periodo_vigente()
     if not periodo:
         raise HTTPException(status_code=400, detail="No hay un período vigente para la vista previa.")
-    datos = {"nombre": bono.nombre, "activo": True, "reglas": [r.model_dump() for r in bono.reglas],
+    datos = {"nombre": bono.nombre, "activo": True, "tipo": bono.tipo or "pesos", "reglas": [r.model_dump() for r in bono.reglas],
              "efecto_inasistencia": bono.efecto_inasistencia, "efectos": dict(bono.efectos or {})}
     return await BonoService(db).vista_previa(datos, str(periodo["fecha_inicio"])[:10], str(periodo["fecha_fin"])[:10],
                                               areas_permitidas=current_user.get_areas_filter())

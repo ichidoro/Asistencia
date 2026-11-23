@@ -44,6 +44,9 @@ Efecto = Literal["asistido", "proporcion", "pierde"]
 
 
 class BonoCreate(BonoBase):
+    # «pesos» = se paga en dinero; «beneficio» = en especie, sin monto (el de 4 Productos, etapa B3d). None al editar:
+    # se mantiene el que tenía.
+    tipo: Optional[Literal["pesos", "beneficio"]] = None
     reglas: List[BonoReglaBase] = []
     area_ids: Optional[List[int]] = Field(None, description="IDs de áreas a las que asignar el bono")
     efecto_inasistencia: Optional[Literal["proporcion", "pierde"]] = Field(
@@ -56,6 +59,8 @@ class BonoResponse(BonoBase):
     area_ids: List[int] = []   # IDs de áreas asignadas — necesario para el frontend
     efecto_inasistencia: Optional[str] = None
     efectos: Dict[int, str] = {}
+    tipo: str = "pesos"
+    usa_productos_4: bool = False
     created_at: datetime
 
     class Config:
