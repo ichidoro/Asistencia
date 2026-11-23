@@ -2355,6 +2355,23 @@ class QuantumMatrixEngine:
 
 
     @staticmethod
+    def _sigue_en_curso_con_varias_marcas(dt_list: List[datetime], fecha: str, es_nocturno: bool, dt_sal_teo,
+                                          today_str: str, now_local: datetime, ventana_en_curso_min: int,
+                                          tolerancia_salida: int) -> bool:
+        """Día de hoy con 2 o más marcas (entrada, salida e ingreso de colación, etc.): sigue «en curso» mientras no pase
+        la hora de salida del horario más «Esperar la salida hasta ___ min después», y la última marca llegó antes de la
+        salida menos la tolerancia de salida adelantada (entonces todavía no es la salida del turno). Ambos valores
+        vienen de la pantalla del horario (dueño, 23-11-2026)."""
+        if not dt_sal_teo or not dt_list:
+            return False
+        f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
+        if not (fecha == today_str or (es_nocturno and today_str == f_sal_eval)):
+            return False
+        if now_local >= dt_sal_teo + timedelta(minutes=ventana_en_curso_min):
+            return False
+        return dt_list[-1] < dt_sal_teo - timedelta(minutes=tolerancia_salida)
+
+    @staticmethod
     def _atrasos_y_salidas(res: Dict[str, Any], r_ent_dt: datetime, r_sal_dt: datetime, hora_ent_teo, hora_sal_teo,
                            dt_ent_teo, dt_sal_teo, anclaje_entrada: int, anclaje_salida: int, is_bolsa: bool,
                            todos_ciclos_dia, tolerancia_alerta: int, tolerancia_descuento: int,
@@ -2876,6 +2893,16 @@ class QuantumMatrixEngine:
         if n_marks == 1:
             return cls._una_sola_marca(res, bloque_p, dt_list, fecha, es_nocturno, hora_ent_teo, hora_sal_teo, today_str,
                                        now_local, ventana_en_curso_min)
+
+        # 6b. Hoy, con varias marcas (entrada y colación) y antes de la hora de salida: la jornada sigue en curso
+        if (not is_bolsa and not is_holiday and not es_libre_dia
+                and cls._sigue_en_curso_con_varias_marcas(dt_list, fecha, es_nocturno, dt_sal_teo, today_str, now_local,
+                                                          ventana_en_curso_min, tolerancia_salida)):
+            res['hora_entrada_real'] = dt_list[0].strftime("%H:%M:%S")
+            res['estado'] = 'EN_CURSO'
+            res['observaciones'] += ('Jornada en curso (falta salida): marcas de las '
+                                     + ", ".join(d.strftime("%H:%M:%S") for d in dt_list) + '. ')
+            return res
 
         r_ent_dt, r_sal_dt, pausas_intermedias, horas_brutas = cls._varias_marcas(
             bloque_p, dt_list, res, is_bolsa, repetidas_seg, dt_ent_teo, dt_sal_teo, horas_teoricas, is_holiday, es_libre_dia,

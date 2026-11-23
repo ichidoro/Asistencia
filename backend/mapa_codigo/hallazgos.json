@@ -1,5 +1,5 @@
 {
- "archivos_revisados": 185,
+ "archivos_revisados": 186,
  "repetidas": {
   "total": 148,
   "top": [
@@ -136,7 +136,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1602,
+  "total": 1606,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -184,9 +184,9 @@
     "lineas": 286
    },
    {
-    "funcion": "_sync_empleado",
-    "archivo": "backend/services/sync_service.py",
-    "lineas": 275
+    "funcion": "save_libreta_180h",
+    "archivo": "backend/routers/asistencia_libreta.py",
+    "lineas": 279
    }
   ]
  },
@@ -217,7 +217,7 @@
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
-   "lineas": 2920
+   "lineas": 2947
   },
   {
    "archivo": "frontend/js/productos_4.js",

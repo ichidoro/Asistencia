@@ -1296,7 +1296,7 @@ function renderModalHtml() {
                                 <div>
                                     <label for="input-ventana-en-curso" class="form-label">Esperar la salida hasta</label>
                                     <div class="input-group"><input type="number" id="input-ventana-en-curso" class="form-control" name="ventana_en_curso_minutos" min="0" step="1" value="0"><span class="input-group-text">min después</span></div>
-                                    <div class="form-text">Con entrada y sin salida, el día sigue «en curso» hasta entonces; después queda «falta salida».</div>
+                                    <div class="form-text">Hoy, con entrada y sin salida, el día sigue «en curso» hasta entonces; después queda «falta salida». Con más marcas (por ejemplo la colación), también sigue «en curso» si la última llegó antes de la salida menos la tolerancia de salida adelantada: no cuenta deuda ni horas extra hasta que termine.</div>
                                 </div>
                                 <div class="gobernanza-col">
                                     <label for="input-espera-inasistencia" class="form-label">Marcar inasistencia a los</label>

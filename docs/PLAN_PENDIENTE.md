@@ -113,6 +113,10 @@ Corrección en la base (23-11-2026, autorizada por la persona dueña, con respal
 
 **Hecho (23-11-2026, commit 9b319b2):** en la ventana del día, el nombre de la persona va como encabezado grande; si el día ya tiene marca, la ventana dice «Editar evaluación», muestra lo guardado (marca, quién la hizo y la razón) y trae el botón «Eliminar marca» (con confirmación y registro en la auditoría), que deja el día sin marcar. Probado en la copia de práctica.
 
+### 2.5 undecies El día de hoy con varias marcas sigue «en curso»
+
+**Hecho (23-11-2026, falta subir):** la persona dueña avisó que el día de hoy, con entrada y colación marcadas, ya generaba deuda, salida adelantada y estados erróneos mientras la persona seguía trabajando. En Ciclo Inteligente, el día de hoy con 2 o más marcas ahora queda «en curso» mientras no pasa la salida del horario más «Esperar la salida hasta ___ min después», y la última marca llegó antes de la salida menos la tolerancia de salida adelantada. Los dos valores se configuran en la pantalla de cada horario; no hay cifras en el código. En curso no cuenta deuda, atraso, salida adelantada ni horas extra. Medición a las 17:57: 21 días mal en 7 horarios (unas 58,5 h de deuda falsa). Ensayo a las 18:02 con el respaldo: 20 días pasan a «en curso» (12 desde salida adelantada, 7 desde atraso, 1 desde OK) y la deuda de hoy baja de 57,3 h a 1,9 h; Bolsa sin cambios. Regla en REGLAS_ASISTENCIA.md §3; 9 pruebas nuevas.
+
 ### 2.6 Deudas técnicas
 
 - **Hecho (22-11-2026):** `backend/tests/test_libreta_en_orden.py` tenía nombres reales de cuatro personas; se cambiaron por nombres inventados (la prueba no cambia). Siguen en el historial de git anterior: borrarlos de ahí exigiría reescribir el historial, que no se hace sin decisión de la persona dueña.
