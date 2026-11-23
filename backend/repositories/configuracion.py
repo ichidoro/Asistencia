@@ -258,6 +258,25 @@ class ConfiguracionRepository:
             """)
             logger.info("✨ Tabla 'cierres_periodos' creada exitosamente")
 
+        # 7b. Bonos guardados al cerrar (etapa B5 del plan de bonos, 22-11-2026): el resultado completo de cada bono por
+        # persona, para que volver a sacar el informe de un período cerrado dé siempre lo que se cerró
+        if not await self.db.table_exists("bonos_cierre"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS bonos_cierre (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cierre_id INTEGER NOT NULL,
+                    empleado_id INTEGER NOT NULL,
+                    bono TEXT NOT NULL,
+                    aplica INTEGER,
+                    califica INTEGER,
+                    monto REAL,
+                    resultado TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_bonos_cierre ON bonos_cierre(cierre_id)")
+            logger.info("✨ Tabla 'bonos_cierre' creada")
+
         # ⚡ Índice para cierres_periodos (query de rango en cada reproceso de asistencia)
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_cierres_rango ON cierres_periodos(fecha_inicio, fecha_fin)")
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_cierres_area ON cierres_periodos(area)")

@@ -851,8 +851,41 @@ class AsistenciaRepository:
         return await self.db.fetch_one("SELECT * FROM cierres_periodos WHERE id = ?", (cierre_id,))
 
     async def eliminar_cierre(self, cierre_id: int) -> None:
-        """Borra un registro de cierre: así se reabre el período de esa área."""
+        """Borra un registro de cierre: así se reabre el período de esa área. Los bonos guardados al cerrar también se
+        borran (al cerrar de nuevo se guardan otra vez)."""
+        if await self.db.table_exists("bonos_cierre"):
+            await self.db.execute("DELETE FROM bonos_cierre WHERE cierre_id = ?", (cierre_id,))
         await self.db.execute("DELETE FROM cierres_periodos WHERE id = ?", (cierre_id,))
+
+    # ── Bonos guardados al cerrar (etapa B5 del plan de bonos) ──
+    async def guardar_bonos_cierre(self, cierre_id: int, bonos_por_persona: Dict[Any, Dict[str, Any]]) -> int:
+        import json
+        ops = [("DELETE FROM bonos_cierre WHERE cierre_id = ?", (cierre_id,))]
+        for emp_id, bonos in bonos_por_persona.items():
+            for bono, r in (bonos or {}).items():
+                ops.append(("INSERT INTO bonos_cierre (cierre_id, empleado_id, bono, aplica, califica, monto, resultado) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (cierre_id, int(emp_id), bono, 1 if r.get("aplica") else 0, 1 if r.get("califica") else 0,
+                             float(r.get("monto") or 0), json.dumps(r, ensure_ascii=False, default=str))))
+        await self.db.execute_batch(ops)
+        return len(ops) - 1
+
+    async def get_bonos_cierre(self, fecha_inicio: str, fecha_fin: str, area: str) -> Optional[Dict[int, Dict[str, Any]]]:
+        """Los bonos guardados al cerrar ese tramo del área, por persona; None si el área no está cerrada en ese tramo o
+        se cerró antes de guardar los bonos (Mayo a Octubre 2026)."""
+        import json
+        if not area or not await self.db.table_exists("bonos_cierre"):
+            return None
+        c = await self.db.fetch_one("SELECT id FROM cierres_periodos WHERE area = ? AND fecha_inicio = ? AND fecha_fin = ? ORDER BY id DESC LIMIT 1",
+                                    (area, fecha_inicio, fecha_fin))
+        if not c:
+            return None
+        filas = await self.db.fetch_all("SELECT empleado_id, bono, resultado FROM bonos_cierre WHERE cierre_id = ?", (c["id"],))
+        if not filas:
+            return None
+        out: Dict[int, Dict[str, Any]] = {}
+        for f in filas:
+            out.setdefault(int(f["empleado_id"]), {})[f["bono"]] = json.loads(f["resultado"] or "{}")
+        return out
 
     async def get_cierres_historial(self, limit: int = 12) -> List[Dict[str, Any]]:
         """El historial de cierres, del más nuevo al más antiguo, con el nombre de su período (mes_cierre, «Julio 2026»).

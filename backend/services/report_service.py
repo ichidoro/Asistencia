@@ -192,7 +192,7 @@ class ReportService:
                 total += int(round(v.get("monto") or 0))
         return total
 
-    async def _calcular_filas(self, matrix_data: dict, rango_dias: List[date]) -> Dict[str, Any]:
+    async def _calcular_filas(self, matrix_data: dict, rango_dias: List[date], area: Optional[str] = None) -> Dict[str, Any]:
         """Resumen por persona del período (réplica de la grilla analítica): lo usan el Excel y el informe PDF de
         cierre, para que los dos documentos escriban las mismas cifras."""
         empleados = matrix_data.get("empleados", [])
@@ -201,15 +201,22 @@ class ReportService:
         # Evaluar bonos desde el backend
         from backend.services.bono_service import BonoService
         bono_srv = BonoService(self.asistencia_service.repository.db)
-        # Con las fechas del período (etapa B1 del plan de bonos): antes, sin fechas, usaba el mes de hoy
-        bonos_eval = await bono_srv.evaluar_bonos_directo(
-            empleados,
-            matrix_data.get("data", []),
-            matrix_data.get("justificaciones", []),
-            matrix_data.get("matrix", {}),
-            fecha_inicio=rango_dias[0].isoformat(),
-            fecha_fin=rango_dias[-1].isoformat(),
-        )
+        # Un período ya cerrado lee los bonos guardados al cerrar (etapa B5 del plan de bonos): volver a sacar el informe
+        # da siempre lo que se cerró, aunque después cambien los cargos o las reglas
+        guardados = await self.asistencia_service.repository.get_bonos_cierre(
+            rango_dias[0].isoformat(), rango_dias[-1].isoformat(), area) if area else None
+        if guardados is not None:
+            bonos_eval = {e["id"]: guardados.get(e["id"], {}) for e in empleados}
+        else:
+            # Con las fechas del período (etapa B1 del plan de bonos): antes, sin fechas, usaba el mes de hoy
+            bonos_eval = await bono_srv.evaluar_bonos_directo(
+                empleados,
+                matrix_data.get("data", []),
+                matrix_data.get("justificaciones", []),
+                matrix_data.get("matrix", {}),
+                fecha_inicio=rango_dias[0].isoformat(),
+                fecha_fin=rango_dias[-1].isoformat(),
+            )
         
         # Los bonos que le corresponden a alguien del área según sus reglas (etapa B2 del plan de bonos)
         todos_bonos = set()
@@ -525,7 +532,7 @@ class ReportService:
         rango_dias = [(f_ini + timedelta(days=i)) for i in range((f_fin - f_ini).days + 1)]
         matrix_data = await self.asistencia_service.get_matrix_data_with_projections(
             f_ini.month, f_ini.year, area=area, turno_id=None, fecha_inicio_override=fecha_inicio, fecha_fin_override=fecha_fin)
-        calc = await self._calcular_filas(matrix_data, rango_dias)
+        calc = await self._calcular_filas(matrix_data, rango_dias, area)
         return {"matrix_data": matrix_data, "rango_dias": rango_dias, **calc}
 
     async def _generate_excel_workbook(self, matrix_data: dict, rango_dias: List[date], area: Optional[str]) -> BytesIO:
@@ -542,7 +549,7 @@ class ReportService:
             feriados = matrix_data.get("feriados", [])
             feriados_set = {f['fecha'] for f in feriados}
             
-            calc = await self._calcular_filas(matrix_data, rango_dias)
+            calc = await self._calcular_filas(matrix_data, rango_dias, area)
             rows_calc, hay_bolsa, lista_bonos = calc["filas"], calc["hay_bolsa"], calc["lista_bonos"]
             # Igual que antes de separar el cálculo: más abajo, en los días sin registro, `emp` es la última persona
             # del ciclo de cálculo (comportamiento heredado, se mantiene para que el Excel no cambie).

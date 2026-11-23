@@ -369,7 +369,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - **Ensayo en el servidor** con el respaldo del 22-11-2026 (base temporal borrada): 113 personas con su tramo; 0 cambios
   en los bonos en pesos y en 4 Productos.
 - Prueba nueva `test_bono_por_cargo_de_cada_dia.py` (6 casos); 660 pruebas en verde.
-**B4b hecho (22-11-2026, falta subir):**
+**B4b hecho (22-11-2026, commit 2373d04):**
 - Ficha de la persona → pestaña «Historial de cargos»: los cargos con desde, hasta, motivo y quién; y el botón
   «Cambiar labor desde una fecha» (cargo de la lista, fecha y motivo). Antes de guardar muestra qué bonos gana o pierde
   en el período de esa fecha. No deja una fecha dentro de un período cerrado para el área, anterior al ingreso, sin
@@ -388,6 +388,12 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - Al cerrar un período se guarda el resultado de los bonos de cada persona (bono, monto, motivo).
 - El informe y el Excel de un período cerrado leen lo guardado: volver a sacarlos da siempre lo mismo.
 - Mayo a Octubre se dejan como están: lo que ya se pagó no se toca (decisión de la persona dueña, 22-11-2026).
+- **Hecho (22-11-2026, falta subir):** al cerrar un área se guarda en la tabla nueva `bonos_cierre` el resultado completo
+  de cada bono por persona (el mismo cálculo del informe: monto, motivo, días). El informe PDF y el Excel de un período
+  cerrado leen lo guardado; al reabrir se borra y al cerrar de nuevo se guarda otra vez. Mayo a Octubre no tienen nada
+  guardado y se calculan como antes. Probado contra la copia de práctica: con el período cerrado, cambiar la regla del
+  bono no cambia el informe; al reabrir vuelve a calcular. Prueba nueva `test_bonos_guardados_al_cerrar.py` (5 casos).
+  La grilla sigue calculando en vivo.
 
 ### Etapa B6 · Orden (J, K)
 

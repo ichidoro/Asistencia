@@ -630,7 +630,7 @@ class CierreService:
             INSERT INTO cierres_periodos (fecha_inicio, fecha_fin, usuario_id, username, tipo_cierre, area, comentarios)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """
-        await self.db.execute(insert_query, (
+        res_cierre = await self.db.execute(insert_query, (
             fecha_inicio,
             fecha_fin,
             user.get("id"),
@@ -639,6 +639,17 @@ class CierreService:
             area,
             comentarios
         ))
+
+        # Bonos guardados al cerrar (etapa B5 del plan de bonos): el mismo cálculo del informe, por persona y bono
+        try:
+            from backend.repositories.asistencia import AsistenciaRepository as _AR
+            from backend.services.asistencia_service import AsistenciaService as _AS
+            from backend.services.report_service import ReportService as _RS
+            datos_b = await _RS(_AS(_AR(self.db))).datos_periodo(fecha_inicio, fecha_fin, area)
+            n_b = await _AR(self.db).guardar_bonos_cierre(res_cierre.lastrowid, {f["emp_id"]: f.get("bonos") or {} for f in datos_b["filas"]})
+            logger.info(f"💾 Bonos del cierre guardados: {n_b} (cierre {res_cierre.lastrowid}, {area})")
+        except Exception as e_bonos:
+            logger.error(f"❌ No se pudieron guardar los bonos del cierre (el informe los calculará de nuevo): {e_bonos}")
 
         # Si hay un periodo en periodos_rrhh que coincide con el rango cerrado, marcarlo como 'cerrado'
         # Pero solo si todas las áreas activas están cerradas

@@ -96,7 +96,7 @@ def test_excel_muestra_el_monto_y_el_total_de_bonos():
 
     rs = ReportService(_Svc())
 
-    async def _calc(md, rd):
+    async def _calc(md, rd, area=None):
         return {'filas': [fila], 'hay_bolsa': False, 'lista_bonos': ['Cloro', 'Compromiso', 'Transporte']}
     rs._calcular_filas = _calc
     md = {'empleados': [{'id': 1, 'nombre': 'UNO', 'apellido_paterno': 'PERSONA', 'tipo_programacion': 'CICLO'}],
