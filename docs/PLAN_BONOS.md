@@ -300,7 +300,8 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
   4 Productos en los 7 períodos (entre 70 y 79 personas por período) y 0 cambios en los bonos en pesos.
 - Prueba nueva `test_bono_productos_4.py` (7 casos); 653 pruebas en verde.
 - **Visto de paso, sin tocar:** 4 Productos tiene escrita en el código la regla «califica a partir del segundo mes de
-  antigüedad». Para la persona dueña: ¿se pasa también a la configuración?
+  antigüedad». **Hecho (22-11-2026, falta subir):** a pedido de la persona dueña pasó a la pantalla: el bono «4
+  Productos» tiene «Antigüedad mínima (meses)», llenada con 1 (lo de antes). Ensayo: 0 cambios en 4 Productos.
 
 **M (Bolsa) hecho (22-11-2026, commit b6ff0f7):**
 - En Bolsa Flexible un día justificado cuenta como día de turno igual que en Ciclo: si en su horario no es libre ni
@@ -398,7 +399,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 ### Etapa B6 · Orden (J, K)
 
 - La Bolsa por sus dos nombres de tipo; quitar el campo «labor requerida» que no existe.
-- **Hecho (22-11-2026, falta subir):** el cálculo de bonos reconoce la Bolsa por sus dos nombres de tipo (hoy ningún
+- **Hecho (22-11-2026, commit 3ad6205):** el cálculo de bonos reconoce la Bolsa por sus dos nombres de tipo (hoy ningún
   horario usa el segundo); se quitó «labor requerida» del esquema; la lista de bonos por persona (Empleados →
   Asignación masiva) se arma con las mismas reglas que el cálculo (antes comparaba nombres escritos y nunca calzaba una
   regla con varios cargos) y se rehízo una vez al arrancar. Ensayo con el respaldo: 0 cambios en bonos y 4 Productos;

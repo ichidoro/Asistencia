@@ -598,14 +598,25 @@ class ConfiguracionRepository:
             await self.db.execute("ALTER TABLE bonos ADD COLUMN tipo TEXT DEFAULT 'pesos'")
             await self.db.execute("UPDATE bonos SET tipo = 'pesos' WHERE tipo IS NULL")
             logger.info("✨ Migración: columna 'tipo' agregada a bonos")
+        # Antigüedad mínima para recibir el beneficio (meses desde el mes de ingreso), configurable en el bono «4 Productos»
+        # (decisión de la persona dueña, 22-11-2026). Antes estaba escrita en el código: «a partir del segundo mes» = 1.
+        nueva_antig = bool(get_cols and "antiguedad_meses" not in await get_cols("bonos"))
+        if nueva_antig:
+            await self.db.execute("ALTER TABLE bonos ADD COLUMN antiguedad_meses INTEGER")
+            logger.info("✨ Migración: columna 'antiguedad_meses' agregada a bonos")
         if not await self.db.table_exists("ajustes"):
             return
-        if await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = ?", (self.CLAVE_BONO_PRODUCTOS_4,)):
+        ya = await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = ?", (self.CLAVE_BONO_PRODUCTOS_4,))
+        if ya:
+            if nueva_antig:
+                await self.db.execute("UPDATE bonos SET antiguedad_meses = 1 WHERE id = ?", (int(ya['valor']),))
+                ConfiguracionRepository._bonos_cache = None
+                logger.info("✨ 4 Productos: antigüedad mínima de 1 mes (lo que estaba escrito en el código)")
             return
         # Solo para llenar la primera vez con lo de hoy: el código de antes buscaba este nombre
         comp = await self.db.fetch_one("SELECT id, activo, efecto_inasistencia FROM bonos WHERE LOWER(TRIM(nombre)) = 'compromiso'")
         res = await self.db.execute(
-            "INSERT INTO bonos (nombre, descripcion, activo, efecto_inasistencia, tipo) VALUES (?, ?, ?, ?, 'beneficio')",
+            "INSERT INTO bonos (nombre, descripcion, activo, efecto_inasistencia, tipo, antiguedad_meses) VALUES (?, ?, ?, ?, 'beneficio', 1)",
             ("4 Productos", "Beneficio en especie: decide por asistencia quién recibe los 4 productos. No tiene monto en pesos.",
              1 if comp and comp['activo'] else 0, "pierde"))
         bono_id = res.lastrowid
@@ -754,6 +765,8 @@ class ConfiguracionRepository:
             )
             if bono.tipo:
                 await self.db.execute("UPDATE bonos SET tipo = ? WHERE id = ?", (bono.tipo, bono_id))
+            if bono.antiguedad_meses is not None:
+                await self.db.execute("UPDATE bonos SET antiguedad_meses = ? WHERE id = ?", (bono.antiguedad_meses, bono_id))
             
             # 2. Reemplazar reglas (borrar anteriores e insertar nuevas)
             await self.db.execute("DELETE FROM bono_reglas WHERE bono_id = ?", (bono_id,))

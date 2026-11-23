@@ -120,7 +120,9 @@ class Productos4Service:
             emp_id = emp.id
             nombre = emp.nombre_completo
             
-            # --- Regla 1: Antiguedad (a partir del segundo mes) ---
+            # --- Regla 1: Antigüedad mínima, la configurada en el bono «4 Productos» (antes escrita en el código: el
+            # segundo mes). Meses desde el mes de ingreso hasta el mes del período. ---
+            antig_min = int((bono_p4 or {}).get("antiguedad_meses") or 0)
             fecha_ingreso_str = emp.fecha_ingreso
             if not fecha_ingreso_str:
                 resultado_evaluacion.append({
@@ -138,7 +140,7 @@ class Productos4Service:
             try:
                 hire_date = datetime.strptime(fecha_ingreso_str[:10], "%Y-%m-%d")
                 diff_months = (anio - hire_date.year) * 12 + (mes - hire_date.month)
-                if diff_months < 1:
+                if diff_months < antig_min:
                     resultado_evaluacion.append({
                         "empleado_id": emp_id,
                         "nombre": nombre,
@@ -146,7 +148,8 @@ class Productos4Service:
                         "cargo": emp.cargo or "Sin Cargo",
                         "area": emp.area or "Sin Area",
                         "califica": False,
-                        "motivo": f"Antiguedad insuficiente. Ingreso el {fecha_ingreso_str[:10]}. Califica a partir del segundo mes.",
+                        "motivo": f"Antigüedad insuficiente. Ingresó el {fecha_ingreso_str[:10]}. Recibe desde {antig_min} "
+                                  f"{'mes' if antig_min == 1 else 'meses'} después del mes de ingreso.",
                         "seleccion": None
                     })
                     continue

@@ -538,6 +538,8 @@ function renderBonos() {
                 + (b.usa_productos_4 ? '<p class="fcB-nota">Lo usa 4 Productos para decidir quién recibe los productos. No sale en el informe de cierre ni en la grilla, y no se puede eliminar.</p>' : '')
                 + F.campo('En uso', '<span class="fcB-sw" aria-disabled="true"><input type="checkbox" disabled' + (b.activo ? ' checked' : '') + '><span aria-hidden="true"></span>' + (b.activo ? 'Se calcula' : 'No se calcula') + '</span>')
                 + F.campo('Inasistencia sin justificar', '<span>' + F.esc(b.efecto_inasistencia ? nombreEfecto(b.efecto_inasistencia) : 'Sin configurar') + '</span>')
+                + (b.tipo === 'beneficio' ? F.campo('Antigüedad mínima', '<span>' + F.esc(b.antiguedad_meses == null ? 'Sin configurar'
+                    : (b.antiguedad_meses === 0 ? 'Desde el mes de ingreso' : b.antiguedad_meses + (b.antiguedad_meses === 1 ? ' mes' : ' meses') + ' después del mes de ingreso')) + '</span>') : '')
                 + F.seccion('Reglas de aplicación')
                 + (reglas || '<p class="fcB-nota">Este bono no tiene reglas: no se paga a nadie.</p>')
                 + F.seccion('Efecto de las justificaciones')
@@ -584,6 +586,8 @@ async function openModalBono(bono = null) {
     const esBeneficio = !!(bono && bono.tipo === 'beneficio');
     document.getElementById('bono-tipo').value = bono ? (bono.tipo || 'pesos') : 'pesos';
     document.getElementById('bono-nota-beneficio').style.display = esBeneficio ? '' : 'none';
+    document.getElementById('bono-antiguedad-wrap').style.display = esBeneficio ? '' : 'none';
+    document.getElementById('bono-antiguedad').value = esBeneficio && bono.antiguedad_meses != null ? bono.antiguedad_meses : '';
     document.getElementById('bono-efecto-inas-wrap').innerHTML =
         _htmlSelectEfecto('bono-efecto-inas', esBeneficio ? sinProporcion(EFECTOS_INASISTENCIA) : EFECTOS_INASISTENCIA, bono ? (bono.efecto_inasistencia || '') : '');
     const tiposJ = await _asegurarTiposJ();
@@ -731,7 +735,13 @@ function _leerFormularioBono() {
     const totalAreas = modalBonoEl.querySelectorAll('.bono-area-chk').length;
     const tipo = document.getElementById('bono-tipo').value || 'pesos';
     if (tipo === 'beneficio') reglas.forEach(function (r) { r.monto = 0; });
-    return { nombre, descripcion, activo, tipo, reglas, area_ids: totalAreas === 0 ? null : area_ids, efecto_inasistencia: efectoInas, efectos: efJ.valores };
+    let antiguedad_meses = null;
+    if (tipo === 'beneficio') {
+        const v = document.getElementById('bono-antiguedad').value;
+        if (v === '' || isNaN(parseInt(v, 10)) || parseInt(v, 10) < 0) { showToast('Falta la antigüedad mínima en meses (0 o más).', 'warning'); return null; }
+        antiguedad_meses = parseInt(v, 10);
+    }
+    return { nombre, descripcion, activo, tipo, antiguedad_meses, reglas, area_ids: totalAreas === 0 ? null : area_ids, efecto_inasistencia: efectoInas, efectos: efJ.valores };
 }
 
 // ── Vista previa del bono (etapa B3c del plan de bonos) ──

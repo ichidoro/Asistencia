@@ -138,3 +138,20 @@ def test_pantalla():
     html = (RAIZ / "frontend" / "index.html").read_text(encoding="utf-8")
     assert 'id="bono-tipo"' in html and 'id="bono-nota-beneficio"' in html
     assert "opsEfecto(b)" in js and "b.usa_productos_4 ? ''" in js
+
+
+def test_antiguedad_de_4_productos_se_configura_en_el_bono():
+    # Antes «a partir del segundo mes» estaba escrito en el código; ahora sale del bono (decisión del 22-11-2026)
+    fuente = (RAIZ / "backend" / "services" / "productos_4_service.py").read_text(encoding="utf-8")
+    assert 'antig_min = int((bono_p4 or {}).get("antiguedad_meses") or 0)' in fuente and "diff_months < antig_min" in fuente
+    assert "diff_months < 1" not in fuente
+    # al agregar la columna, el bono que ya existía queda con 1 mes (lo de antes)
+    db = _DB(ajuste="50", cols=("id", "nombre", "tipo"))
+    asyncio.run(ConfiguracionRepository(db)._init_bono_productos_4())
+    assert ("UPDATE bonos SET antiguedad_meses = 1 WHERE id = ?", (50,)) in db.inserts
+    # y uno nuevo se crea con 1 mes
+    db2 = _DB(compromiso={"id": 1, "activo": 1, "efecto_inasistencia": "pierde"})
+    asyncio.run(ConfiguracionRepository(db2)._init_bono_productos_4())
+    assert any(q == "INSERT INTO bonos" for q, _ in db2.inserts)
+    js = (RAIZ / "frontend" / "js" / "configuracion_ui.js").read_text(encoding="utf-8")
+    assert "bono-antiguedad" in js and "antiguedad_meses, reglas" in js
