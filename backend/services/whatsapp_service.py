@@ -24,7 +24,7 @@ def normalizar_telefono(tel: object) -> Optional[str]:
 def destino_valido(destino: object) -> Optional[str]:
     """Un grupo («123-456@g.us», tal como lo entrega la puerta) o un celular chileno. None si no sirve."""
     s = str(destino or "").strip()
-    if re.fullmatch(r"[0-9-]+@g\.us", s) or re.fullmatch(r"[0-9]{8,15}@s\.whatsapp\.net", s):
+    if re.fullmatch(r"[0-9-]+@g\.us", s) or re.fullmatch(r"[0-9]{8,20}@(s\.whatsapp\.net|lid)", s):
         return s  # grupo, o contacto del teléfono (puede ser de cualquier país)
     return normalizar_telefono(s)
 

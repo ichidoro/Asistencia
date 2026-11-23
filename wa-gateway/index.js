@@ -17,7 +17,8 @@ function cargarContactos() { try { for (const [j, n] of JSON.parse(require('fs')
 function anotarContactos(lista) {
   let cambio = false;
   for (const c of lista || []) {
-    const jid = [c.phoneNumber, c.id].find(x => typeof x === 'string' && x.endsWith('@s.whatsapp.net'));
+    // Preferimos el número; si WhatsApp solo entrega el identificador interno (@lid) también sirve para enviar.
+    const jid = [c.phoneNumber, c.id].find(x => typeof x === 'string' && x.endsWith('@s.whatsapp.net')) || [c.id, c.lid].find(x => typeof x === 'string' && x.endsWith('@lid'));
     const nombre = c.name || c.notify || c.verifiedName;
     if (jid && nombre && contactos.get(jid) !== nombre) { contactos.set(jid, nombre); cambio = true; }
   }
@@ -38,7 +39,14 @@ async function conectar() {
   sock.ev.on('messaging-history.set', (h) => anotarContactos(h.contacts));
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr: nuevo }) => {
     if (nuevo) qr = nuevo;
-    if (connection === 'open') { estado = 'conectado'; qr = null; console.log('[wa] conectado'); }
+    if (connection === 'open') {
+      estado = 'conectado'; qr = null; console.log('[wa] conectado');
+      // La libreta de contactos solo llega al vincular; si falta (sesión anterior a esta función) se vuelve a pedir su estado de sincronización.
+      if (contactos.size === 0) setTimeout(async () => {
+        try { await sock?.resyncAppState(['critical_unblock_low'], true); } catch (e) { console.log('[wa] no se pudo pedir la libreta:', e.message || e); }
+        console.log('[wa] contactos recibidos:', contactos.size);
+      }, 8000);
+    }
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       sock = null; qr = null; estado = 'desconectado';
@@ -51,7 +59,7 @@ async function conectar() {
 }
 
 // Un número (solo dígitos) va a su chat; un grupo llega ya como «…@g.us».
-const jidDe = (t) => { const s = String(t || '').trim(); if (/^[0-9-]+@g\.us$/.test(s) || /^[0-9]{8,15}@s\.whatsapp\.net$/.test(s)) return s; const d = s.replace(/\D/g, ''); return d.length >= 8 ? `${d}@s.whatsapp.net` : ''; };
+const jidDe = (t) => { const s = String(t || '').trim(); if (/^[0-9-]+@g\.us$/.test(s) || /^[0-9]{8,20}@(s\.whatsapp\.net|lid)$/.test(s)) return s; const d = s.replace(/\D/g, ''); return d.length >= 8 ? `${d}@s.whatsapp.net` : ''; };
 const leer = (req) => new Promise((ok, no) => { let b = ''; req.on('data', c => { b += c; if (b.length > 20000) { no(new Error('grande')); req.destroy(); } }); req.on('end', () => ok(b)); });
 const responder = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
