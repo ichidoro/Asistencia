@@ -34,7 +34,7 @@ async def marcar_no_cumple(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
-    """Marca (no_cumple = true) o quita (false) el «no cumple» de un día. Un día marcado hace perder la semana del bono."""
+    """Marca un día «no cumple» (no_cumple = true: pierde la semana del bono) o «cumple» (false)."""
     try:
         fecha = date.fromisoformat(req.fecha[:10]).isoformat()
     except ValueError:
@@ -50,10 +50,9 @@ async def marcar_no_cumple(
     if not asignaciones or (turnos and not any(a["turno_id"] in turnos for a in asignaciones)):
         raise HTTPException(status_code=400, detail="Ese día la persona no tiene un horario con este bono.")
     comentario = (req.comentario or "").strip() or None
-    if req.no_cumple:
-        await repo.marcar_dia_no_cumple(req.bono_id, req.empleado_id, fecha, comentario, current_user.username)
-    else:
-        await repo.quitar_dia_no_cumple(req.bono_id, req.empleado_id, fecha)
+    # «Cumple» también queda marcado, para que la celda lo diga (23-11-2026); un día sin marca cuenta como cumplido
+    await repo.marcar_dia_no_cumple(req.bono_id, req.empleado_id, fecha, comentario if req.no_cumple else None,
+                                    current_user.username, "no_cumple" if req.no_cumple else "cumple")
     try:
         from backend.repositories.seguridad import SeguridadRepository
         await SeguridadRepository(db).log_auditoria(

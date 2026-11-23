@@ -531,27 +531,30 @@ class ConfiguracionRepository:
             """)
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_bono_no_cumple_fecha ON bono_dias_no_cumple(fecha)")
             logger.info("✨ Tabla bono_dias_no_cumple creada (bonos semanales)")
+        # La marca del día: «no_cumple» o «cumple» (dueño, 23-11-2026: al elegir «Cumple» la celda debe decirlo; un día sin
+        # marca cuenta como cumplido)
+        if get_cols and "marca" not in await get_cols("bono_dias_no_cumple"):
+            await self.db.execute("ALTER TABLE bono_dias_no_cumple ADD COLUMN marca TEXT DEFAULT 'no_cumple'")
+            await self.db.execute("UPDATE bono_dias_no_cumple SET marca = 'no_cumple' WHERE marca IS NULL")
+            logger.info("✨ Migración: columna 'marca' agregada a bono_dias_no_cumple")
 
     async def get_dias_no_cumple(self, bono_ids: List[int], desde: str, hasta: str) -> List[Dict]:
-        """Los días marcados «no cumple» de esos bonos semanales entre dos fechas."""
+        """Los días marcados («no_cumple» o «cumple») de esos bonos semanales entre dos fechas."""
         if not bono_ids or not await self.db.table_exists("bono_dias_no_cumple"):
             return []
         ph = ",".join("?" * len(bono_ids))
         return [dict(r) for r in await self.db.fetch_all(
-            f"SELECT bono_id, empleado_id, fecha, comentario, usuario FROM bono_dias_no_cumple "
+            f"SELECT bono_id, empleado_id, fecha, comentario, usuario, COALESCE(marca, 'no_cumple') AS marca FROM bono_dias_no_cumple "
             f"WHERE bono_id IN ({ph}) AND fecha BETWEEN ? AND ?", (*bono_ids, desde, hasta))]
 
     async def marcar_dia_no_cumple(self, bono_id: int, empleado_id: int, fecha: str, comentario: Optional[str],
-                                   usuario: Optional[str]) -> None:
+                                   usuario: Optional[str], marca: str = "no_cumple") -> None:
+        """Guarda la marca del día: «no_cumple» (pierde la semana) o «cumple»."""
         await self.db.execute("DELETE FROM bono_dias_no_cumple WHERE bono_id = ? AND empleado_id = ? AND fecha = ?",
                               (bono_id, empleado_id, fecha))
         await self.db.execute(
-            "INSERT INTO bono_dias_no_cumple (bono_id, empleado_id, fecha, comentario, usuario) VALUES (?, ?, ?, ?, ?)",
-            (bono_id, empleado_id, fecha, comentario, usuario))
-
-    async def quitar_dia_no_cumple(self, bono_id: int, empleado_id: int, fecha: str) -> None:
-        await self.db.execute("DELETE FROM bono_dias_no_cumple WHERE bono_id = ? AND empleado_id = ? AND fecha = ?",
-                              (bono_id, empleado_id, fecha))
+            "INSERT INTO bono_dias_no_cumple (bono_id, empleado_id, fecha, comentario, usuario, marca) VALUES (?, ?, ?, ?, ?, ?)",
+            (bono_id, empleado_id, fecha, comentario, usuario, marca))
 
     EFECTOS = ("asistido", "proporcion", "pierde")
 

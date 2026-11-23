@@ -6988,7 +6988,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         const totalSemana = (vistaFr && dt.getDay() === 0 && window.mxBsSemanaCelda) ? window.mxBsSemanaCelda(emp, d) : '';
         return `<td class="col-day text-center p-0 align-middle cell-clickable${claseRev}${clasePostBaja}" tabindex="0" role="button" aria-label="${ariaCelda}" data-fecha="${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     ${accionCelda}
-                    data-grid-tooltip data-tip="${tipKey}">
+                    ${vistaFr ? '' : 'data-grid-tooltip data-tip="' + tipKey + '"'}>
                     ${cellContent}
                 </td>${totalSemana}`;
     }).join('');

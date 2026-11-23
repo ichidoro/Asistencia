@@ -88,9 +88,14 @@ def test_turno_que_empieza_a_mitad_de_semana_paga_en_proporcion():
     assert r["dias"]["2026-11-02"] == "fuera"
 
 
-def test_semana_en_curso_no_se_pierde_por_dias_que_no_llegan():
+def test_semana_en_curso_parte_en_cero_hasta_su_domingo():
+    # 23-11-2026: una semana que no ha terminado no está ganada; recién al cerrar su domingo se sabe
     r = _evaluar(dias=_dias("2026-10-26", "2026-11-18"), hoy="2026-11-18")
-    assert r["semanas"][3]["estado"] == "en_curso" and r["semanas"][3]["monto"] == 40000
+    s = r["semanas"][3]
+    assert s["estado"] == "en_curso" and s["monto"] == 0 and s["monto_posible"] == 40000
+    assert r["monto"] == 120000 and "en curso" in r["motivo"]
+    # al terminar la semana, se paga
+    assert _evaluar(hoy="2026-11-23")["semanas"][3]["monto"] == 40000
 
 
 def test_a_quien_se_le_paga_areas_y_horarios():

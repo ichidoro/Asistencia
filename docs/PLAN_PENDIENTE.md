@@ -103,7 +103,9 @@ Corrección en la base (23-11-2026, autorizada por la persona dueña, con respal
 
 ### 2.5 nonies Ajustes de la vista Fill Rate
 
-**Hecho (23-11-2026, falta subir):** a pedido de la persona dueña, en el switch «Fill Rate» los días que cumplen van en blanco (el bono se gana) y solo se ve lo que cambia la semana (N/C, justificaciones, inasistencias); al final de cada semana hay una columna «Total semana» con su resultado; el clic en un día ya no abre las acciones de asistencia, sino una ventana con «Cumple» y «No cumple» (con comentario). En el bono de producción, Descanso Operativo pasó de proporcional a «cuenta como cumplido» (no es causal de descuento), con respaldo antes. Probado en la copia de práctica. Prueba en `test_bono_semanal_fill_rate.py`.
+**Hecho (23-11-2026, commit 5b7ac7a):** a pedido de la persona dueña, en el switch «Fill Rate» los días que cumplen van en blanco (el bono se gana) y solo se ve lo que cambia la semana (N/C, justificaciones, inasistencias); al final de cada semana hay una columna «Total semana» con su resultado; el clic en un día ya no abre las acciones de asistencia, sino una ventana con «Cumple» y «No cumple» (con comentario). En el bono de producción, Descanso Operativo pasó de proporcional a «cuenta como cumplido» (no es causal de descuento), con respaldo antes. Probado en la copia de práctica. Prueba en `test_bono_semanal_fill_rate.py`.
+
+**Hecho (23-11-2026, falta subir):** segunda ronda de ajustes pedidos por la persona dueña: en el switch Fill Rate no aparece la ficha grande del día al pasar el mouse (en los demás switch sigue igual); al elegir «Cumple» la celda lo muestra (✓), igual que «No cumple» (N/C), y un día sin marcar sigue en blanco y cuenta como cumplido; una semana que no ha terminado parte en $0 («$0 · en curso») y recién al cerrar su domingo se sabe si se ganó. Probado en la copia de práctica.
 
 ### 2.6 Deudas técnicas
 

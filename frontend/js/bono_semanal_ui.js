@@ -60,7 +60,7 @@
     };
 
     const SEM = {
-        obtiene: ['bs-ok', ''], proporcional: ['bs-pr', ''], pierde: ['bs-x', ''], en_curso: ['bs-curso', 'en curso'],
+        obtiene: ['bs-ok', ''], proporcional: ['bs-pr', ''], pierde: ['bs-x', ''], en_curso: ['bs-curso', '$0 · en curso'],
         sin_turno: ['bs-nada', 'sin turno']
     };
 
@@ -71,7 +71,7 @@
         const tit = 'Semana ' + ddmm(s.desde) + ' al ' + ddmm(s.hasta) + ': '
             + (s.estado === 'pierde' ? 'no se paga (' + (s.perdidos || []).map(p => ddmm(p.fecha) + ' ' + p.causa).join('; ') + ')'
                 : s.estado === 'proporcional' ? pesos(s.monto) + ' de ' + pesos(s.monto_completo) + ' (' + s.dias_proporcion + ' de ' + s.dias_turno + ' días en proporción)'
-                    : s.estado === 'en_curso' ? 'en curso: ' + pesos(s.monto) + ' si cumple los días que faltan'
+                    : s.estado === 'en_curso' ? 'en curso: parte en $0; si cumple hasta el domingo, ' + pesos(s.monto_posible != null ? s.monto_posible : s.monto_completo)
                         : s.estado === 'sin_turno' ? 'sin días de turno' : pesos(s.monto));
         return '<span class="bs-sem ' + c[0] + '" title="' + esc(tit) + '">' + esc(c[1] || pesos(s.monto)) + '</span>';
     }
@@ -85,7 +85,8 @@
         const boton = (clase, texto, tit) => '<span class="bs-dia ' + clase + (editable ? ' bs-click' : '') + '" title="' + esc(tit) + '">' + texto + '</span>';
         let html;
         // En blanco: el Fill Rate se gana; solo se ve lo que cambia la semana (dueño, 23-11-2026)
-        if (cod === 'ok') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Cumple' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
+        if (cod === 'cumple') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para cambiar' : ''));
+        else if (cod === 'ok') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Cumple' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
         else if (cod === 'nc') {
             const p = (r.perdidos || []).find(x => x.fecha === fecha);
             html = boton('bs-x', 'N/C', (p ? p.causa : 'No cumple') + (editable ? ' · clic para cambiar' : ''));
@@ -111,7 +112,8 @@
     window.mxBsLeyenda = function () {
         const b = bonoSemanal();
         return '<span class="bs-ley"><b>' + esc(b ? b.nombre : 'Fill Rate') + '</b> · semana de lunes a domingo:</span>'
-            + '<span>En blanco: cumple</span>'
+            + '<span>En blanco: cumple (sin marcar)</span>'
+            + '<span><span class="bs-dia bs-ok">✓</span> marcado «Cumple»</span>'
             + '<span><span class="bs-dia bs-x">N/C</span> no cumple: pierde la semana</span>'
             + '<span><span class="bs-just bs-okj">DEOP</span> justificado que cuenta como cumplido</span>'
             + '<span><span class="bs-just bs-pr">DEOP</span> justificado en proporción</span>'
@@ -128,7 +130,7 @@
         const r = evalDe(emp);
         if (!r) return;
         const cod = (r.dias || {})[fecha];
-        if (!['ok', 'nc', 'pendiente'].includes(cod)) {
+        if (!['ok', 'nc', 'pendiente', 'cumple'].includes(cod)) {
             if (window.Avisos) window.Avisos.info(cod === 'libre' ? 'Día libre o feriado: no se evalúa.'
                 : cod === 'justificado' || cod === 'proporcion' || cod === 'pierde' ? 'Día justificado o con inasistencia: lo decide la configuración del bono.'
                     : 'Este día no se evalúa en este período.');
@@ -155,7 +157,7 @@
             res = { isConfirmed: window.confirm('¿No cumple? (Cancelar = Cumple)'), value: '' };
         }
         const noCumple = !!res.isConfirmed;
-        if (noCumple === marcado && !noCumple) return;   // ya cumplía
+        if (!noCumple && cod === 'cumple') return;   // ya estaba marcado «Cumple»
         const comentario = noCumple ? (res.value || null) : null;
         try {
             const resp = await fetch('/api/asistencia/bono-semanal/no-cumple/', { method: 'POST', headers: authHead(),
