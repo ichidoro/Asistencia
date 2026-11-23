@@ -1,7 +1,7 @@
 {
- "archivos_revisados": 176,
+ "archivos_revisados": 177,
  "repetidas": {
-  "total": 138,
+  "total": 139,
   "top": [
    {
     "nombre": "esc",
@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1500,
+  "total": 1518,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -204,7 +204,7 @@
   },
   {
    "archivo": "frontend/js/main.js",
-   "lineas": 2953
+   "lineas": 3031
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",

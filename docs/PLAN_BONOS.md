@@ -357,7 +357,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
   con el mismo sistema de correos del cierre. Se envía solo con los correos encendidos en el servidor.
 - La tabla de «bonos asignados con fecha» se reemplaza por el historial de cargos (o se elimina si no hace falta).
 
-**B4 en dos partes.** **B4a hecho (22-11-2026, falta subir):**
+**B4 en dos partes.** **B4a hecho (22-11-2026, commit 8f1cba9):**
 - Tabla nueva `historial_cargos` (persona, cargo, desde, hasta, motivo, quién). La primera vez, cada persona queda con
   su cargo de la ficha desde su ingreso.
 - El bono usa el cargo de cada día del período: un bono ligado a un cargo se paga por los días en ese cargo; un día
@@ -369,7 +369,19 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - **Ensayo en el servidor** con el respaldo del 22-11-2026 (base temporal borrada): 113 personas con su tramo; 0 cambios
   en los bonos en pesos y en 4 Productos.
 - Prueba nueva `test_bono_por_cargo_de_cada_dia.py` (6 casos); 660 pruebas en verde.
-- **B4b (sigue):** botón «Cambiar labor desde una fecha», ficha con los cargos anteriores y correo a «Avisos generales».
+**B4b hecho (22-11-2026, falta subir):**
+- Ficha de la persona → pestaña «Historial de cargos»: los cargos con desde, hasta, motivo y quién; y el botón
+  «Cambiar labor desde una fecha» (cargo de la lista, fecha y motivo). Antes de guardar muestra qué bonos gana o pierde
+  en el período de esa fecha. No deja una fecha dentro de un período cerrado para el área, anterior al ingreso, sin
+  motivo ni con el mismo cargo. Corta el tramo vigente el día antes y abre el nuevo.
+- Si la fecha ya pasó, la ficha toma el cargo nuevo al guardar; si es futura, lo toma ese día (la sincronización
+  automática lo pone al día). Aviso: si la persona tiene cargo en BioAlba hay que cambiarlo también allá, porque la
+  sincronización de empleados deja el de BioAlba.
+- Correo «Cambio de labor» a los destinatarios de los avisos (Avisos generales y los del área), con los bonos que
+  cambian; queda en la auditoría (CAMBIO_LABOR).
+- Probado contra la copia de práctica (guardar, mismo cargo, sin motivo, período cerrado, fecha futura, cancelar) y en
+  el navegador. En producción, la puesta al día de la ficha no cambia a nadie hoy (0 diferencias).
+- Prueba nueva `test_cambio_de_labor.py` (4 casos); 664 pruebas en verde.
 
 ### Etapa B5 · Bonos guardados al cerrar (corrige I, B)
 

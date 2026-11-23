@@ -1369,6 +1369,7 @@ async function openModal(empleadoId = null) {
   currentEmpleadoId = empleadoId;
   const dangerZone = document.getElementById('danger-zone-container');
   const tabHistorial = document.getElementById('tab-li-historial');
+  const tabCargos = document.getElementById('tab-li-cargos');
 
   // Reset tabs to first one
   const firstTabEl = document.querySelector('#emp-datos-tab');
@@ -1400,11 +1401,13 @@ async function openModal(empleadoId = null) {
     document.getElementById('modal-title').textContent = 'Editar Empleado';
     if (dangerZone) dangerZone.classList.remove('d-none');
     if (tabHistorial) tabHistorial.style.display = 'block'; // Mostrar si es edición
+    if (tabCargos) tabCargos.style.display = 'block';
     await loadEmpleadoData(empleadoId);
   } else {
     document.getElementById('modal-title').textContent = 'Nuevo Empleado';
     if (dangerZone) dangerZone.classList.add('d-none');
     if (tabHistorial) tabHistorial.style.display = 'none'; // Ocultar si es nuevo
+    if (tabCargos) tabCargos.style.display = 'none';
     formEmpleado.reset();
 
     // Estado inicial por defecto (Nuevo)
@@ -2776,6 +2779,81 @@ window.loadHistorialAreas = async function (empleadoId) {
     tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-danger">Error al cargar historial</td></tr>';
   }
 }
+
+// ==========================================
+// HISTORIAL DE CARGOS Y CAMBIO DE LABOR (etapa B4b del plan de bonos, 22-11-2026)
+// ==========================================
+const _escCargo = function (x) { return window.Ayuda.esc(x == null ? '' : x); };
+const _fechaCargo = function (f) { return f ? String(f).slice(8, 10) + '-' + String(f).slice(5, 7) + '-' + String(f).slice(0, 4) : ''; };
+
+window.loadHistorialCargos = async function (empleadoId) {
+  const tbody = document.getElementById('historial-cargos-tbody');
+  if (!empleadoId || !tbody) return;
+  const btn = document.getElementById('btn-cambiar-labor');
+  if (btn) btn.style.display = (typeof AuthService === 'undefined' || AuthService.hasPermission('empleados.editar')) ? '' : 'none';
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> Cargando...</td></tr>';
+  try {
+    const r = await fetch(`${API_BASE_URL}/empleados/${empleadoId}/historial-cargos/`);
+    if (!r.ok) throw new Error('No se pudo cargar el historial de cargos.');
+    const h = await r.json();
+    tbody.innerHTML = h.length ? h.map(function (x) {
+      return '<tr><td class="fw-bold">' + _escCargo(x.cargo) + '</td><td>' + _fechaCargo(x.fecha_desde) + '</td><td>'
+        + (x.fecha_hasta ? _fechaCargo(x.fecha_hasta) : '<span class="text-muted">vigente</span>') + '</td><td class="small text-muted">'
+        + _escCargo(x.motivo || '') + (x.usuario ? ' · ' + _escCargo(x.usuario) : '') + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="text-center py-3 text-muted">Sin cargos registrados</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-danger">' + _escCargo(e.message) + '</td></tr>';
+  }
+};
+
+window.abrirCambiarLabor = async function (empleadoId) {
+  if (!empleadoId) return;
+  const cargos = await (await fetch('/api/configuracion/cargos/')).json();
+  cargos.sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+  const hoy = new Date(); const hoyIso = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+  const html = '<div class="text-start small">'
+    + '<label class="form-label fw-bold mb-1" for="cl-cargo">Cargo nuevo</label><select id="cl-cargo" class="form-select form-select-sm mb-2"><option value="">Elegir…</option>'
+    + cargos.map(function (c) { return '<option value="' + c.id + '">' + _escCargo(c.nombre) + '</option>'; }).join('') + '</select>'
+    + '<label class="form-label fw-bold mb-1" for="cl-fecha">Desde</label><input id="cl-fecha" type="date" class="form-control form-control-sm mb-2" value="' + hoyIso + '">'
+    + '<label class="form-label fw-bold mb-1" for="cl-motivo">Motivo</label><textarea id="cl-motivo" class="form-control form-control-sm" rows="2" placeholder="Por ejemplo: pasa a la línea de envasado"></textarea>'
+    + '<p class="text-muted mt-2 mb-0">Si la persona tiene cargo en BioAlba, cámbielo también allá: la sincronización de empleados deja el cargo de BioAlba.</p></div>';
+  const paso1 = await Swal.fire({ title: 'Cambiar labor desde una fecha', html: html, showCancelButton: true, confirmButtonText: 'Ver qué cambia',
+    cancelButtonText: 'Cancelar', reverseButtons: true, focusConfirm: false,
+    preConfirm: function () {
+      const v = { cargo_id: parseInt(document.getElementById('cl-cargo').value, 10), fecha_desde: document.getElementById('cl-fecha').value,
+                  motivo: document.getElementById('cl-motivo').value.trim() };
+      if (!v.cargo_id) { Swal.showValidationMessage('Elija el cargo nuevo.'); return false; }
+      if (!v.fecha_desde) { Swal.showValidationMessage('Elija desde qué fecha.'); return false; }
+      if (!v.motivo) { Swal.showValidationMessage('Escriba el motivo.'); return false; }
+      return v;
+    } });
+  if (!paso1.isConfirmed) return;
+  const body = paso1.value;
+  const enviar = async function (url) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(d.detail || 'No se pudo completar el cambio de labor.');
+    return d;
+  };
+  let vp;
+  try { vp = await enviar(`${API_BASE_URL}/empleados/${empleadoId}/cambiar-labor/vista-previa/`); }
+  catch (e) { showToast(e.message, 'warning'); return; }
+  const pesos = function (n) { return '$' + Number(n || 0).toLocaleString('es-CL'); };
+  const efecto = function (r, beneficio) { return !r.aplica ? 'no le corresponde' : (!r.califica ? 'no lo recibe' : (beneficio ? 'lo recibe' : pesos(r.monto))); };
+  const lineas = [vp.anterior + ' → ' + vp.nuevo + ', desde el ' + _fechaCargo(vp.fecha) + ' (período ' + (vp.periodo.nombre || (_fechaCargo(vp.periodo.inicio) + ' al ' + _fechaCargo(vp.periodo.fin))) + ').'];
+  const cambian = vp.bonos.filter(function (b) { return efecto(b.antes, b.beneficio) !== efecto(b.despues, b.beneficio); });
+  if (vp.sin_turno) lineas.push('La persona no tiene turno en ese período: no se pueden calcular sus bonos.');
+  else if (!cambian.length) lineas.push('Sus bonos del período no cambian con lo registrado hasta hoy.');
+  cambian.forEach(function (b) { lineas.push(b.bono + ': ' + efecto(b.antes, b.beneficio) + ' → ' + efecto(b.despues, b.beneficio)); });
+  lineas.push('Se avisa por correo a «Avisos generales» y queda en la auditoría.');
+  if (!(await uiConfirm('¿Guardar el cambio de labor?', { items: lineas, confirmText: 'Guardar cambio' }))) return;
+  try {
+    const d = await enviar(`${API_BASE_URL}/empleados/${empleadoId}/cambiar-labor/`);
+    showToast('Listo. Desde el ' + _fechaCargo(d.fecha) + ' su cargo es «' + d.nuevo + '».' + (d.correo ? ' Se envió el aviso.' : ''), 'success');
+    loadHistorialCargos(empleadoId);
+    if (typeof loadEmpleadoData === 'function') loadEmpleadoData(empleadoId);
+  } catch (e) { showToast(e.message, 'danger'); }
+};
 
 // Lógica de Validación de Cambio de Área (Sync)
 window.openConfirmarAreaModal = function (historialId, empName, oldArea, newArea) {

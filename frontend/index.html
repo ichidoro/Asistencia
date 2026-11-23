@@ -1736,6 +1736,14 @@
                                     <i class="bi bi-clock-history me-1"></i> Historial de Áreas
                                 </button>
                             </li>
+                            <!-- Historial de cargos y cambio de labor (etapa B4b del plan de bonos) -->
+                            <li class="nav-item" role="presentation" id="tab-li-cargos" style="display: none;">
+                                <button class="nav-link fw-bold" id="emp-cargos-tab" data-bs-toggle="tab"
+                                    data-bs-target="#tab-emp-cargos" type="button" role="tab"
+                                    onclick="loadHistorialCargos(currentEmpleadoId)">
+                                    <i class="bi bi-briefcase me-1"></i> Historial de cargos
+                                </button>
+                            </li>
                         </ul>
 
                         <div class="tab-content" id="empModalTabsContent">
@@ -1892,6 +1900,28 @@
                                         <tbody id="historial-areas-tbody">
                                             <!-- Cargado por JS -->
                                         </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Tab 3: Historial de cargos (etapa B4b del plan de bonos) -->
+                            <div class="tab-pane fade" id="tab-emp-cargos" role="tabpanel">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                                    <div class="alert alert-info py-2 small mb-0 flex-grow-1">
+                                        <i class="bi bi-info-circle me-2"></i> Con qué cargo estuvo la persona cada día. Si cambia de labor a
+                                        mitad de período, el bono de cada cargo se paga por los días en ese cargo.
+                                    </div>
+                                    <button type="button" class="btn btn-primary btn-sm text-nowrap" id="btn-cambiar-labor"
+                                        onclick="abrirCambiarLabor(currentEmpleadoId)">
+                                        <i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i> Cambiar labor desde una fecha
+                                    </button>
+                                </div>
+                                <div class="table-responsive" style="max-height: 400px;">
+                                    <table class="table table-sm table-hover align-middle">
+                                        <thead class="table-light">
+                                            <tr><th>Cargo</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr>
+                                        </thead>
+                                        <tbody id="historial-cargos-tbody"></tbody>
                                     </table>
                                 </div>
                             </div>

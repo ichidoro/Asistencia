@@ -160,6 +160,34 @@ class NotificationService:
         subject = f'Justificación registrada · {nombre} · {type_name} {rango}'
         return await self._send_email(recipients, subject, html, cp.imagenes())
 
+    async def send_cambio_labor_email(self, employee_data: dict, cargo_anterior: str, cargo_nuevo: str, desde: str,
+                                      motivo: str, usuario: str, bonos: List[dict], recipients: List[str]):
+        """Avisa un cambio de labor desde una fecha y qué bonos gana o pierde en el período (etapa B4b del plan de bonos,
+        decisión de la persona dueña, 22-11-2026: a «Avisos generales»)."""
+        from backend.services import correo_plantilla as cp
+        nombre = employee_data.get('nombre_completo') or ''
+        pesos = lambda n: '$' + f'{int(n or 0):,}'.replace(',', '.')
+        def efecto(r, beneficio):
+            if not r.get('aplica'):
+                return 'no le corresponde'
+            if not r.get('califica'):
+                return 'no lo recibe'
+            return 'lo recibe' if beneficio else pesos(r.get('monto'))
+        filas = [('Cargo anterior', str(cargo_anterior or '').title()), ('Cargo nuevo', str(cargo_nuevo or '').title()),
+                 ('Desde', cp.fecha(desde)), ('Motivo', motivo), ('Lo registró', usuario)]
+        for b in bonos:
+            a, d = efecto(b['antes'], b.get('beneficio')), efecto(b['despues'], b.get('beneficio'))
+            if a != d:
+                filas.append((b['bono'], f'{a} → {d}'))
+        cuerpo = (cp.persona(nombre, employee_data.get('rut_formateado') or '', str(employee_data.get('area') or '').title())
+                  + '<div style="height:14px"></div>' + cp.filas(filas, '42%') + cp.boton('Ver la ficha en Asistencia'))
+        intro = ('Se registró un cambio de labor. En el período, cada bono ligado a un cargo se paga por los días en ese cargo. '
+                 'Las filas de bonos muestran lo que cambia con lo registrado hasta hoy.')
+        html = cp.correo('Cambio de labor', 'navy', f'{nombre.title()} pasa a {str(cargo_nuevo or "").title()}', intro, cuerpo,
+                         previa=f'{nombre}: de {cargo_anterior} a {cargo_nuevo} desde el {cp.fecha(desde)}.')
+        subject = f'Cambio de labor · {nombre} · desde el {cp.fecha(desde)}'
+        return await self._send_email(recipients, subject, html, cp.imagenes())
+
     async def send_cierre_email(self,
                                   area: str,
                                   fecha_inicio: str,

@@ -886,6 +886,15 @@ class EmpleadoRepository:
         if vigente and vigente['cargo_id'] != cargo_id:
             await self.db.execute("UPDATE historial_cargos SET cargo_id = ? WHERE id = ?", (cargo_id, vigente['id']))
 
+    async def get_historial_cargos(self, empleado_id: int) -> List[Dict]:
+        """El historial de cargos de una persona, del más nuevo al más antiguo (ficha, etapa B4b)."""
+        filas = await self.db.fetch_all(
+            "SELECT h.id, h.cargo_id, c.nombre AS cargo, h.fecha_desde, h.fecha_hasta, h.motivo, h.usuario "
+            "FROM historial_cargos h LEFT JOIN cargos c ON c.id = h.cargo_id WHERE h.empleado_id = ? ORDER BY h.fecha_desde DESC",
+            (empleado_id,))
+        return [dict(f, fecha_desde=str(f["fecha_desde"])[:10], fecha_hasta=str(f["fecha_hasta"])[:10] if f["fecha_hasta"] else None)
+                for f in filas]
+
     async def get_tramos_cargo(self, empleado_ids: List[int], desde: str, hasta: str) -> Dict[int, List[Dict]]:
         """Tramos del historial de cargos que tocan [desde, hasta], por persona y en orden."""
         if not empleado_ids or not await self.db.table_exists("historial_cargos"):

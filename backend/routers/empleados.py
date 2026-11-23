@@ -451,6 +451,61 @@ async def obtener_historial_areas(
     return await service.repository.get_historial_areas(empleado_id)
 
 
+# ── Cambio de labor desde una fecha (etapa B4b del plan de bonos, 22-11-2026) ──
+from pydantic import BaseModel as _BaseModel
+
+
+class CambioLaborRequest(_BaseModel):
+    cargo_id: int
+    fecha_desde: str
+    motivo: Optional[str] = None
+
+
+async def _verificar_area(service: EmpleadoService, empleado_id: int, current_user: SecurityContext):
+    emp = await service.get_empleado(empleado_id)
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos sobre esta persona")
+    return emp
+
+
+@router.get("/{empleado_id}/historial-cargos/", summary="Historial de cargos con fecha")
+async def obtener_historial_cargos(
+    empleado_id: int = Path(..., gt=0),
+    service: EmpleadoService = Depends(get_empleado_service),
+    current_user: SecurityContext = Depends(RequirePermission("empleados.ver"))
+):
+    await _verificar_area(service, empleado_id, current_user)
+    return await service.repository.get_historial_cargos(empleado_id)
+
+
+@router.post("/{empleado_id}/cambiar-labor/vista-previa/", summary="Qué bonos gana o pierde con un cambio de labor (no guarda)")
+async def vista_previa_cambio_labor(
+    req: CambioLaborRequest,
+    empleado_id: int = Path(..., gt=0),
+    service: EmpleadoService = Depends(get_empleado_service),
+    current_user: SecurityContext = Depends(RequirePermission("empleados.editar"))
+):
+    from backend.services.cambio_labor import CambioLaborService
+    await _verificar_area(service, empleado_id, current_user)
+    return await CambioLaborService(service.repository.db).vista_previa(
+        empleado_id, req.cargo_id, req.fecha_desde, areas_permitidas=current_user.get_areas_filter())
+
+
+@router.post("/{empleado_id}/cambiar-labor/", summary="Cambiar la labor (cargo) desde una fecha")
+async def cambiar_labor(
+    req: CambioLaborRequest,
+    empleado_id: int = Path(..., gt=0),
+    service: EmpleadoService = Depends(get_empleado_service),
+    current_user: SecurityContext = Depends(RequirePermission("empleados.editar"))
+):
+    from backend.services.cambio_labor import CambioLaborService
+    await _verificar_area(service, empleado_id, current_user)
+    srv = CambioLaborService(service.repository.db)
+    vista = await srv.vista_previa(empleado_id, req.cargo_id, req.fecha_desde, areas_permitidas=current_user.get_areas_filter())
+    return await srv.guardar(empleado_id, req.cargo_id, req.fecha_desde, req.motivo, current_user.user_id,
+                             current_user.username, vista)
+
+
 @router.post(
     "/confirmar-cambio-area/",
     summary="Confirmar cambio de área",

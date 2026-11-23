@@ -736,6 +736,13 @@ async def ejecutar_cron_sync(request: SyncCronRequest):
             logger.error(f"❌ [Cron Sync] La sincronización terminó con error: {error_sync}")
             return {"status": "error", "message": f"La sincronización falló: {error_sync}", "stats": stats}
         logger.success(f"✅ [Cron Sync] Sincronización automática completada: {stats}")
+        # Un cambio de labor con fecha futura se pone en la ficha el día que empieza (etapa B4b del plan de bonos)
+        try:
+            from backend.core.database import db as _db
+            from backend.services.cambio_labor import CambioLaborService
+            await CambioLaborService(_db).aplicar_cargos_vigentes()
+        except Exception as e_cargos:
+            logger.error(f"❌ [Cron Sync] No se pudo poner al día el cargo de las fichas: {e_cargos}")
         return {
             "status": "ok",
             "message": "Sincronización automática de marcaciones completada con éxito",
