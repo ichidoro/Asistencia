@@ -2765,7 +2765,7 @@ window.cargarMapaCodigo = async function () {
 // Los textos van con comillas y concatenación: el minificador del servidor (rjsmin) come los espacios de las plantillas anidadas.
 (function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
-    const esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    const esc = function (t) { return window.Ayuda.esc(t); };   // el escape común de ayudantes.js (regla del proyecto)
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
     let timer = null, grupos = null, contactos = null, opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
 

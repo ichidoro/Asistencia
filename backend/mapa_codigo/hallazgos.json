@@ -1,7 +1,7 @@
 {
  "archivos_revisados": 185,
  "repetidas": {
-  "total": 146,
+  "total": 148,
   "top": [
    {
     "nombre": "esc",
@@ -33,6 +33,7 @@
      "frontend/js/articulo22_ui.js",
      "frontend/js/bono_semanal_ui.js",
      "frontend/js/buscador.js",
+     "frontend/js/configuracion_ui.js",
      "frontend/js/ficha_persona.js",
      "frontend/js/llaves_ui.js",
      "frontend/js/personas_hd.js",
@@ -80,6 +81,17 @@
     ]
    },
    {
+    "nombre": "_norm",
+    "archivos": [
+     "backend/core/sql_groupby.py",
+     "backend/services/comunas_geo.py",
+     "backend/services/gps_nexacol.py",
+     "backend/services/informe_cierre_pdf.py",
+     "backend/services/telegram_porteria.py",
+     "backend/services/whatsapp_resumen.py"
+    ]
+   },
+   {
     "nombre": "iniciales",
     "archivos": [
      "frontend/js/ayudantes.js",
@@ -112,16 +124,6 @@
     ]
    },
    {
-    "nombre": "_norm",
-    "archivos": [
-     "backend/core/sql_groupby.py",
-     "backend/services/comunas_geo.py",
-     "backend/services/gps_nexacol.py",
-     "backend/services/informe_cierre_pdf.py",
-     "backend/services/telegram_porteria.py"
-    ]
-   },
-   {
     "nombre": "_repo",
     "archivos": [
      "backend/routers/articulo22.py",
@@ -134,7 +136,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1583,
+  "total": 1602,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -206,16 +208,16 @@
    "lineas": 3239
   },
   {
+   "archivo": "frontend/js/configuracion_ui.js",
+   "lineas": 3100
+  },
+  {
    "archivo": "frontend/js/main.js",
    "lineas": 3031
   },
   {
    "archivo": "backend/services/quantum_matrix_engine.py",
    "lineas": 2920
-  },
-  {
-   "archivo": "frontend/js/configuracion_ui.js",
-   "lineas": 2906
   },
   {
    "archivo": "frontend/js/productos_4.js",
