@@ -271,10 +271,14 @@ class BonoService:
             es_feriado = feriados_set is not None and fecha in feriados_set
 
             if es_bolsa:
+                # Bolsa Flexible no tiene horas de turno por día: cuentan los días con presencia o inasistencia y, igual que
+                # en Ciclo, un día justificado que en su horario no es libre ni feriado (vacío M del plan de bonos,
+                # 22-11-2026: antes se saltaba y lo configurado en la justificación no alcanzaba a las personas de Bolsa)
                 es_laborable_turno = (
                     estado not in ESTADOS_NO_LABORABLES
                     and (estado in ESTADOS_PRESENCIA
-                         or estado in ("INASISTENCIA", "FALTA"))
+                         or estado in ("INASISTENCIA", "FALTA")
+                         or (j_dia is not None and not es_libre_turno and not es_feriado))
                 )
             else:
                 es_laborable_turno = (

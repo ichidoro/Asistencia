@@ -223,3 +223,33 @@ def test_nuevo_abre_la_ficha_aunque_la_lista_este_vacia():
     # de práctica, que no tiene justificaciones)
     ficha = (RAIZ / "frontend" / "js" / "config_ficha.js").read_text(encoding="utf-8")
     assert "if (id === 'nuevo' && !o.cont.querySelector('.fcB-ficha')) { montar(o.cont, o); return; }" in ficha
+
+
+def _matriz_bolsa(justificados):
+    # Bolsa Flexible: sin horas de turno por día; lunes a viernes de turno y sábado y domingo libres en su horario
+    m = {"info": {"tipo_programacion": "BOLSA_FLEXIBLE",
+                  "turno_dias": {d: {"es_libre": 1 if d >= 5 else 0} for d in range(7)}}}
+    d, f = date.fromisoformat(PI), date.fromisoformat(PF)
+    while d <= f:
+        k = d.isoformat()
+        if k in justificados:
+            m[k] = {"estado": "LICENCIA DE PRUEBA", "horas_teoricas": 0}
+        elif d.weekday() >= 5:
+            m[k] = {"estado": "LIBRE", "horas_teoricas": 0}
+        else:
+            m[k] = {"estado": "OK", "horas_teoricas": 0}
+        d += timedelta(days=1)
+    return m
+
+
+def test_bolsa_cuenta_los_dias_justificados_como_ciclo():
+    # Vacío M: en Bolsa el día justificado se saltaba y la persona no perdía el bono. Ahora se aplica lo configurado,
+    # igual que en Ciclo; el sábado y el domingo libres de su horario no cuentan.
+    lic = dict(LICENCIA, fecha_inicio="2026-10-16", fecha_fin="2026-10-19")      # viernes a lunes
+    m = _matriz_bolsa({"2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19"})
+    m["2026-10-17"]["estado"] = m["2026-10-18"]["estado"] = "LIBRE"
+    pierde = _calificar(_bono("pierde"), m, justif=(lic,))
+    prop = _calificar(_bono("proporcion"), m, justif=(lic,))
+    turno = _dias_turno(PI, PF)
+    assert pierde["califica"] is False and [d["fecha"] for d in pierde["perdidos"]] == ["2026-10-16", "2026-10-19"]
+    assert prop["califica"] is True and prop["monto"] == round(70000 * (turno - 2) / turno)

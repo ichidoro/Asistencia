@@ -287,7 +287,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - Prueba nueva `test_vista_previa_bono.py` (3 casos); 646 pruebas en verde. Probado en el navegador con la copia de
   práctica (vista previa, aviso y cancelar sin guardar). No cambia ningún cálculo.
 
-**B3d hecho (22-11-2026, falta subir):**
+**B3d hecho (22-11-2026, commit bf36034):**
 - Bono nuevo «4 Productos» de tipo **beneficio** (en especie, sin monto en pesos), en Configuración → Bonos como
   cualquier otro: sus reglas (contrato, cargos) y el efecto de las faltas se configuran ahí. 4 Productos lo lee por su
   identificador (ajuste «bono_productos_4»); ya no busca el bono llamado «compromiso» ni le cambia las reglas en el
@@ -301,6 +301,16 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - Prueba nueva `test_bono_productos_4.py` (7 casos); 653 pruebas en verde.
 - **Visto de paso, sin tocar:** 4 Productos tiene escrita en el código la regla «califica a partir del segundo mes de
   antigüedad». Para la persona dueña: ¿se pasa también a la configuración?
+
+**M (Bolsa) hecho (22-11-2026, falta subir):**
+- En Bolsa Flexible un día justificado cuenta como día de turno igual que en Ciclo: si en su horario no es libre ni
+  feriado (el horario de Bolsa marca lunes a viernes como días de turno). Se le aplica el efecto configurado en la
+  justificación. Antes se saltaba: la persona de Bolsa con licencia sin goce no perdía el bono.
+- **Ensayo en el servidor** con el respaldo del 22-11-2026 (base temporal borrada): cambia una sola persona de Bolsa
+  (Logística Tradicional), con Licencia Común en Septiembre, Octubre y Noviembre. En Septiembre (ya pagado) habría
+  perdido Compromiso y Transporte; en Octubre y Noviembre esos bonos ya daban $0 y ahora dicen por qué; en 4 Productos
+  deja de calificar en los tres períodos. El resto de los bonos y personas no cambia.
+- Prueba nueva en `test_efecto_justificaciones_en_bonos.py`; 654 pruebas en verde.
 
 2. **Se quita la «Asistencia mínima» (E).** No existe en las reglas de Aguacol (decisión de la persona dueña,
    22-11-2026): lo que decide el bono es la relación entre la asistencia del día y las justificaciones (punto 1). Se
