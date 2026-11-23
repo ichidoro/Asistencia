@@ -45,10 +45,12 @@ class WhatsappRepository:
 
     async def opciones_filtro(self) -> Dict[str, List[str]]:
         """Áreas y cargos que existen entre las personas activas, para ofrecerlos como filtro."""
-        filas = await self.db.fetch_all("SELECT DISTINCT a.nombre AS area, e.cargo AS cargo FROM empleados e LEFT JOIN areas a ON a.id = e.area_id WHERE e.activo = 1")
-        areas = sorted({str(r["area"]).strip() for r in filas if r["area"] and str(r["area"]).strip()}, key=str.lower)
-        cargos = sorted({str(r["cargo"]).strip() for r in filas if r["cargo"] and str(r["cargo"]).strip()}, key=str.lower)
-        return {"areas": areas, "cargos": cargos}
+        filas = await self.db.fetch_all("SELECT a.nombre AS area, e.cargo AS cargo, COUNT(*) AS n FROM empleados e LEFT JOIN areas a ON a.id = e.area_id WHERE e.activo = 1 GROUP BY a.nombre, e.cargo")
+        # `pares` (personas por área y cargo) deja que la pantalla encadene los dos filtros sin volver al servidor.
+        pares = [{"area": str(r["area"] or "").strip(), "cargo": str(r["cargo"] or "").strip(), "n": int(r["n"])} for r in filas]
+        areas = sorted({p["area"] for p in pares if p["area"]}, key=str.lower)
+        cargos = sorted({p["cargo"] for p in pares if p["cargo"]}, key=str.lower)
+        return {"areas": areas, "cargos": cargos, "pares": pares}
 
     async def destinos_personas(self) -> Dict[int, Dict[str, Any]]:
         """Contacto o número elegido a mano para cada persona (manda sobre la búsqueda por nombre)."""

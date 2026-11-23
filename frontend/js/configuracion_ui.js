@@ -2767,7 +2767,7 @@ window.cargarMapaCodigo = async function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
     const esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
-    let timer = null, grupos = null, contactos = null, opciones = { areas: [], cargos: [] };
+    let timer = null, grupos = null, contactos = null, opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
 
     async function api(metodo, ruta, cuerpo) {
         const r = await fetch('/api/whatsapp' + ruta, { method: metodo, headers: H(), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
@@ -2846,35 +2846,55 @@ window.cargarMapaCodigo = async function () {
     // Lo elegido de la lista (o, si solo escribió, el texto tal cual: un celular).
     const elegido = function (inp) { const t = inp.value.trim(); return inp._sel && inp._sel.nombre === t ? inp._sel : null; };
 
-    // ── Filtro de varias opciones (áreas, cargos) ──
-    function multiselect(id, titulo, todas, marcadas) {
-        const n = marcadas.length;
-        return '<div class="dropdown wa-ms" data-ms="' + id + '"><button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">'
-            + esc(titulo) + (n ? ' <span class="badge bg-primary">' + n + '</span>' : ' <span class="text-muted">todas</span>') + '</button>'
-            + '<div class="dropdown-menu">'
-            + '<input type="search" class="form-control form-control-sm mb-2 wa-ms-q" placeholder="Buscar…">'
-            + (todas.length ? todas.map(function (o) { return '<label data-t="' + esc(o.toLowerCase()) + '"><input type="checkbox" class="form-check-input mt-0" value="' + esc(o) + '"' + (marcadas.indexOf(o) >= 0 ? ' checked' : '') + '> ' + esc(o) + '</label>'; }).join('') : '<div class="wa-vacio">No hay opciones.</div>')
-            + '</div></div>';
-    }
-    function enlazarMulti(box, aviso, filtros, alCambiar) {
-        const cargar = function () { return { areas: marcadas('areas'), cargos: marcadas('cargos') }; };
-        const marcadas = function (id) { return Array.prototype.map.call(box.querySelectorAll('[data-ms="' + id + '"] input[type=checkbox]:checked'), function (c) { return c.value; }); };
-        box.querySelectorAll('.wa-ms').forEach(function (ms) {
-            ms.querySelector('.wa-ms-q').oninput = function (ev) {
-                const q = ev.target.value.trim().toLowerCase();
-                ms.querySelectorAll('label').forEach(function (l) { l.style.display = !q || l.getAttribute('data-t').indexOf(q) >= 0 ? '' : 'none'; });
-            };
-            ms.querySelectorAll('input[type=checkbox]').forEach(function (c) {
-                c.onchange = async function () {
-                    const f = cargar();
-                    const r = await api('PUT', '/avisos/' + aviso + '/filtros', f);
-                    msg(r.ok ? 'Filtro guardado.' : esc(r.j.detail || 'No se pudo guardar el filtro.'));
-                    const b = ms.querySelector('.dropdown-toggle'), n = f[ms.getAttribute('data-ms')].length;
-                    b.innerHTML = b.firstChild.textContent + (n ? ' <span class="badge bg-primary">' + n + '</span>' : ' <span class="text-muted">todas</span>');
-                    if (alCambiar) alCambiar();
-                };
-            });
+    // ── Filtro de varias opciones (áreas, cargos), encadenados: lo que se elige en uno cambia lo que ofrece el otro ──
+    // `opciones.pares` trae cuántas personas activas hay por área y cargo; las opciones de cada lista salen de las personas que cumplen lo marcado en la otra.
+    function disponibles(tipo, sel) {
+        const mapa = {};
+        (opciones.pares || []).forEach(function (p) {
+            const a = p.area || '', c = p.cargo || '';
+            const okA = !sel.areas.length || sel.areas.indexOf(a) >= 0, okC = !sel.cargos.length || sel.cargos.indexOf(c) >= 0;
+            if (tipo === 'areas' ? okC : okA) { const v = tipo === 'areas' ? a : c; if (v) mapa[v] = (mapa[v] || 0) + p.n; }
         });
+        sel[tipo].forEach(function (v) { if (!(v in mapa)) mapa[v] = 0; }); // lo ya marcado se puede desmarcar aunque ya no haya gente
+        return Object.keys(mapa).sort(function (x, y) { return x.localeCompare(y, 'es'); }).map(function (v) { return [v, mapa[v]]; });
+    }
+    function itemsMulti(tipo, sel) {
+        const lista = disponibles(tipo, sel);
+        return lista.length ? lista.map(function (x) {
+            return '<label data-t="' + esc(x[0].toLowerCase()) + '"><input type="checkbox" class="form-check-input mt-0" value="' + esc(x[0]) + '"' + (sel[tipo].indexOf(x[0]) >= 0 ? ' checked' : '') + '> <span class="flex-grow-1">' + esc(x[0]) + '</span>'
+                + '<span class="badge rounded-pill ' + (x[1] ? 'bg-light text-dark border' : 'bg-secondary') + '">' + x[1] + '</span></label>';
+        }).join('') : '<div class="wa-vacio">No hay opciones con ese filtro.</div>';
+    }
+    const botonMulti = function (titulo, n) { return esc(titulo) + (n ? ' <span class="badge bg-primary">' + n + '</span>' : ' <span class="text-muted">todas</span>'); };
+    function multiselect(tipo, titulo, sel) {
+        return '<div class="dropdown wa-ms" data-ms="' + tipo + '"><button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-titulo="' + esc(titulo) + '" data-bs-toggle="dropdown" data-bs-auto-close="outside">'
+            + botonMulti(titulo, sel[tipo].length) + '</button>'
+            + '<div class="dropdown-menu"><input type="search" class="form-control form-control-sm mb-2 wa-ms-q" placeholder="Buscar…"><div class="wa-ms-lista">' + itemsMulti(tipo, sel) + '</div></div></div>';
+    }
+    function enlazarMulti(box, aviso, sel, alCambiar) {
+        const filtrarTexto = function (ms) {
+            const q = ms.querySelector('.wa-ms-q').value.trim().toLowerCase();
+            ms.querySelectorAll('.wa-ms-lista label').forEach(function (l) { l.style.display = !q || l.getAttribute('data-t').indexOf(q) >= 0 ? '' : 'none'; });
+        };
+        const pintar = function () {
+            box.querySelectorAll('.wa-ms').forEach(function (ms) {
+                const tipo = ms.getAttribute('data-ms'), menu = ms.querySelector('.dropdown-menu'), alto = menu.scrollTop;
+                ms.querySelector('.wa-ms-lista').innerHTML = itemsMulti(tipo, sel);
+                const b = ms.querySelector('.dropdown-toggle'); b.innerHTML = botonMulti(b.getAttribute('data-titulo'), sel[tipo].length);
+                filtrarTexto(ms); menu.scrollTop = alto;
+                ms.querySelectorAll('input[type=checkbox]').forEach(function (c) {
+                    c.onchange = async function () {
+                        sel[tipo] = Array.prototype.map.call(ms.querySelectorAll('input[type=checkbox]:checked'), function (x) { return x.value; });
+                        pintar();
+                        const r = await api('PUT', '/avisos/' + aviso + '/filtros', { areas: sel.areas, cargos: sel.cargos });
+                        msg(r.ok ? 'Filtro guardado.' : esc(r.j.detail || 'No se pudo guardar el filtro.'));
+                        if (alCambiar) alCambiar();
+                    };
+                });
+            });
+        };
+        box.querySelectorAll('.wa-ms').forEach(function (ms) { ms.querySelector('.wa-ms-q').oninput = function () { filtrarTexto(ms); }; });
+        pintar();
     }
 
     // ── Estado, QR, cortar conexión y prueba ──
@@ -2913,14 +2933,14 @@ window.cargarMapaCodigo = async function () {
         opciones = cfg.opciones || opciones;
         c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(lunes 08:00, si el cron está instalado en el servidor)</span></h6>'
             + cfg.avisos.map(function (a) {
-                const usaChats = !!a.usa_chats, f = a.filtros || { areas: [], cargos: [] };
+                const usaChats = !!a.usa_chats, sel = selecciones[a.aviso] = { areas: (a.filtros && a.filtros.areas || []).slice(), cargos: (a.filtros && a.filtros.cargos || []).slice() };
                 let h = '<div class="border rounded p-3 mb-3" data-aviso="' + esc(a.aviso) + '">'
                     + '<div class="d-flex justify-content-between align-items-start gap-3"><div><b>' + esc(a.nombre) + '</b>'
                     + '<div class="text-muted" style="font-size:0.85rem;">' + esc(a.descripcion) + '</div></div>'
                     + '<div class="form-check form-switch"><input class="form-check-input wa-sw" type="checkbox" role="switch"' + (a.activo ? ' checked' : '') + '><label class="form-check-label" style="font-size:0.85rem;">Automático</label></div></div>'
                     + '<div class="d-flex flex-wrap gap-2 align-items-center mt-3"><span class="text-muted" style="font-size:0.85rem;"><i class="bi bi-funnel"></i> Solo de:</span>'
-                    + multiselect('areas', 'Áreas', opciones.areas || [], f.areas) + multiselect('cargos', 'Cargos', opciones.cargos || [], f.cargos)
-                    + '<span class="text-muted" style="font-size:0.78rem;">(sin marcar = todas; con varias, vale cualquiera de ellas)</span></div>';
+                    + multiselect('areas', 'Áreas', sel) + multiselect('cargos', 'Cargos', sel)
+                    + '<span class="text-muted" style="font-size:0.78rem;">(cada lista muestra solo lo que existe en lo que marque en la otra, con cuántas personas hay)</span></div>';
                 if (usaChats) {
                     h += '<div class="mt-3" style="font-size:0.9rem;"><b>Se envía a:</b> ';
                     h += a.destinos.length ? a.destinos.map(function (d) {
@@ -2943,7 +2963,7 @@ window.cargarMapaCodigo = async function () {
         c.querySelectorAll('[data-aviso]').forEach(function (box) {
             const aviso = box.getAttribute('data-aviso');
             const cajaPersonas = box.querySelector('.wa-personas-box');
-            enlazarMulti(box, aviso, null, function () { if (cajaPersonas && cajaPersonas.innerHTML) cargarPersonas(cajaPersonas); });
+            enlazarMulti(box, aviso, selecciones[aviso], function () { if (cajaPersonas && cajaPersonas.innerHTML) cargarPersonas(cajaPersonas); });
             box.querySelector('.wa-sw').onchange = async function (ev) {
                 const r = await api('PUT', '/avisos/' + aviso, { activo: ev.target.checked });
                 if (!r.ok) { msg(esc(r.j.detail || 'No se pudo cambiar.')); ev.target.checked = !ev.target.checked; } else msg('Guardado.');

@@ -83,7 +83,7 @@ def pasa_filtro(area: object, cargo: object, filtro: Dict[str, List[str]] | None
     if not filtro:
         return True
     areas, cargos = {_norm(x) for x in filtro.get("areas") or []}, {_norm(x) for x in filtro.get("cargos") or []}
-    return (not areas or _norm(area) in areas) and (not cargos or _norm(cargo) in cargos)
+    return (not areas or _norm(area) in areas) and (not cargos or _norm(cargo) in cargos)  # los dos filtros se encadenan con Y
 
 
 def _numero_de(jid: str) -> str:
