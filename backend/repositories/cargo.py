@@ -163,6 +163,8 @@ class CargoRepository:
             await self.db.execute("UPDATE empleados SET cargo_id = ?, cargo = ? WHERE cargo_id = ?",
                                   (destino_id, destino['nombre'], origen_id))
             await self.db.execute("UPDATE cargos_alias SET cargo_id = ? WHERE cargo_id = ?", (destino_id, origen_id))
+            if await self.db.table_exists("historial_cargos"):
+                await self.db.execute("UPDATE historial_cargos SET cargo_id = ? WHERE cargo_id = ?", (destino_id, origen_id))
             for r in await self.db.fetch_all("SELECT id, cargos_req_ids, cargos_excl_ids FROM bono_reglas"):
                 nuevos = []
                 for v in (r['cargos_req_ids'], r['cargos_excl_ids']):

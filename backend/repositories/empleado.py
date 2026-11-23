@@ -144,7 +144,35 @@ class EmpleadoRepository:
             except Exception as e:
                 logger.error(f"❌ Error poblando historial inicial: {e}")
         else:
-            logger.debug("⚡ Tabla historial_areas ya existe")        
+            logger.debug("⚡ Tabla historial_areas ya existe")
+
+        # --- Historial de cargos con fecha (etapa B4 del plan de bonos, 22-11-2026) ---
+        # El bono de un cargo se paga por los días en que la persona tuvo ese cargo. La primera vez, cada persona queda
+        # con su cargo de la ficha desde su ingreso (así nada cambia hasta que alguien registre un cambio de labor).
+        if not await self.db.table_exists("historial_cargos"):
+            await self.db.execute("""
+            CREATE TABLE IF NOT EXISTS historial_cargos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                cargo_id INTEGER NOT NULL,
+                fecha_desde TEXT NOT NULL,
+                fecha_hasta TEXT,
+                motivo TEXT,
+                usuario TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (empleado_id) REFERENCES empleados (id),
+                FOREIGN KEY (cargo_id) REFERENCES cargos (id)
+            )
+            """)
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_hist_cargos_emp ON historial_cargos(empleado_id, fecha_desde)")
+            filas = await self.db.fetch_all("SELECT id, cargo_id, fecha_ingreso FROM empleados WHERE cargo_id IS NOT NULL")
+            ops = [("INSERT INTO historial_cargos (empleado_id, cargo_id, fecha_desde, motivo) VALUES (?, ?, ?, ?)",
+                    (f['id'], f['cargo_id'], str(f['fecha_ingreso'] or '2000-01-01')[:10], 'Cargo de la ficha al crear el historial'))
+                   for f in filas]
+            if ops:
+                await self.db.execute_batch(ops)
+            logger.info(f"✨ Tabla historial_cargos creada: {len(ops)} personas con su cargo actual desde su ingreso")
+
         # Migración Inteligente: 1 sola llamada get_column_names() en vez de N column_exists() individuales
         try:
             cols_empleados = set(await self.db.get_column_names("empleados"))
@@ -842,8 +870,36 @@ class EmpleadoRepository:
         ))
         
         logger.info(f"Empleado actualizado: ID {empleado_id}")
-        
+
+        # Un cargo cambiado en la ficha o por la sincronización con BioAlba es una corrección: se corrige el tramo del
+        # historial vigente hoy, sin partir el período (el cambio de labor desde una fecha tiene su propio botón)
+        if empleado.cargo_id and await self.db.table_exists("historial_cargos"):
+            await self.corregir_cargo_vigente(empleado_id, empleado.cargo_id)
+
         return await self.get_by_id(empleado_id)
+
+    async def corregir_cargo_vigente(self, empleado_id: int, cargo_id: int) -> None:
+        hoy = datetime.now().strftime('%Y-%m-%d')
+        vigente = await self.db.fetch_one(
+            "SELECT id, cargo_id FROM historial_cargos WHERE empleado_id = ? AND fecha_desde <= ? "
+            "AND (fecha_hasta IS NULL OR fecha_hasta >= ?) ORDER BY fecha_desde DESC LIMIT 1", (empleado_id, hoy, hoy))
+        if vigente and vigente['cargo_id'] != cargo_id:
+            await self.db.execute("UPDATE historial_cargos SET cargo_id = ? WHERE id = ?", (cargo_id, vigente['id']))
+
+    async def get_tramos_cargo(self, empleado_ids: List[int], desde: str, hasta: str) -> Dict[int, List[Dict]]:
+        """Tramos del historial de cargos que tocan [desde, hasta], por persona y en orden."""
+        if not empleado_ids or not await self.db.table_exists("historial_cargos"):
+            return {}
+        ph = ",".join("?" * len(empleado_ids))
+        filas = await self.db.fetch_all(
+            f"SELECT empleado_id, cargo_id, fecha_desde, fecha_hasta FROM historial_cargos WHERE empleado_id IN ({ph}) "
+            "AND fecha_desde <= ? AND (fecha_hasta IS NULL OR fecha_hasta >= ?) ORDER BY empleado_id, fecha_desde",
+            (*empleado_ids, hasta, desde))
+        out: Dict[int, List[Dict]] = {}
+        for f in filas:
+            out.setdefault(f['empleado_id'], []).append(
+                {"cargo_id": f['cargo_id'], "desde": str(f['fecha_desde'])[:10], "hasta": str(f['fecha_hasta'])[:10] if f['fecha_hasta'] else None})
+        return out
     
     async def delete(self, empleado_id: int) -> bool:
         """Eliminar empleado (soft delete - marcar como inactivo)"""

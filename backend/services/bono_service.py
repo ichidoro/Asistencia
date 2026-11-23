@@ -62,6 +62,9 @@ class BonoService:
         for j in justificaciones_list:
             just_map.setdefault(j["empleado_id"], []).append(j)
 
+        # El cargo de cada día del período (historial de cargos, etapa B4)
+        empleados = await self.con_tramos_de_cargo(empleados, fecha_inicio, fecha_fin)
+
         hoy_str = datetime.now().strftime("%Y-%m-%d")
 
         resultados: Dict[int, Dict[str, Any]] = {}
@@ -84,6 +87,17 @@ class BonoService:
 
         return resultados
 
+    async def con_tramos_de_cargo(self, empleados: List[Dict[str, Any]], fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        """Copia de cada persona con sus tramos de cargo del período («_tramos_cargo»), para que el bono use el cargo de
+        cada día (etapa B4 del plan de bonos)."""
+        from backend.repositories.empleado import EmpleadoRepository
+        try:
+            tramos = await EmpleadoRepository(self.db).get_tramos_cargo([e["id"] for e in empleados], fecha_inicio, fecha_fin)
+        except Exception as e:
+            logger.error(f"[BonoService] No se pudo leer el historial de cargos: {e}")
+            tramos = {}
+        return [dict(e, _tramos_cargo=tramos.get(e["id"], [])) for e in empleados]
+
     async def vista_previa(self, bono: Dict[str, Any], fecha_inicio: str, fecha_fin: str,
                            areas_permitidas: Optional[List] = None) -> Dict[str, Any]:
         """Quién recibe el bono y cuánto en el período [fecha_inicio, fecha_fin] con la configuración que se está editando,
@@ -101,7 +115,7 @@ class BonoService:
         matrix = data.get("matrix", {})
         hoy = datetime.now().strftime("%Y-%m-%d")
         personas, pisan = [], []
-        for emp in data.get("empleados", []):
+        for emp in await self.con_tramos_de_cargo(data.get("empleados", []), fecha_inicio, fecha_fin):
             nombre = " ".join(x for x in (emp.get("apellido_paterno"), emp.get("apellido_materno"), emp.get("nombre")) if x)
             calzan = self.reglas_que_calzan(emp, bono)
             if len(calzan) > 1 and not emp.get("excluido_asistencia"):
@@ -185,8 +199,32 @@ class BonoService:
                     "motivo": "Excluido de asistencia (Art 22)"}
 
         # ── 1. Filtro estructural: cargo / contrato (la primera regla que calza) ──
-        calzan = self.reglas_que_calzan(empleado, bono)
-        regla_activa = bono["reglas"][calzan[0]] if calzan else None
+        # Con el historial de cargos (etapa B4) la regla se elige con el cargo de cada día; sin cambios de labor en el
+        # período es una sola regla para todo el período, como antes.
+        tramos = [t for t in (empleado.get("_tramos_cargo") or [])
+                  if t["desde"] <= periodo_fin and (t["hasta"] is None or t["hasta"] >= periodo_inicio)]
+        cargos_periodo = {t["cargo_id"] for t in tramos}
+        por_dia = bool(tramos) and cargos_periodo != {empleado.get("cargo_id")}
+        regla_de_cargo: Dict[Any, Any] = {}
+
+        def _regla_con_cargo(cid):
+            if cid not in regla_de_cargo:
+                c = self.reglas_que_calzan(dict(empleado, cargo_id=cid), bono)
+                regla_de_cargo[cid] = bono["reglas"][c[0]] if c else None
+            return regla_de_cargo[cid]
+
+        def _cargo_del_dia(fecha):
+            for t in tramos:
+                if t["desde"] <= fecha and (t["hasta"] is None or fecha <= t["hasta"]):
+                    return t["cargo_id"]
+            return empleado.get("cargo_id")
+
+        if por_dia:
+            reglas_usadas = [r for r in (_regla_con_cargo(c) for c in cargos_periodo | {empleado.get("cargo_id")}) if r]
+            regla_activa = reglas_usadas[0] if reglas_usadas else None
+        else:
+            calzan = self.reglas_que_calzan(empleado, bono)
+            regla_activa = bono["reglas"][calzan[0]] if calzan else None
 
         if regla_activa is None:
             return {"aplica": False, "califica": False, "monto": 0,
@@ -244,6 +282,8 @@ class BonoService:
         dias_asistidos   = 0
         dias_asignados   = 0   # días de turno del período que le corresponden (desde su ingreso, hasta su salida)
         dias_periodo     = 0   # días de turno de todo el período (para el proporcional por ingreso o salida)
+        suma_montos      = 0.0  # con cambio de labor: el monto de la regla de cada día asignado
+        reglas_dias      = set()
         pierde           = []  # días que hacen perder el bono, con su causa (para el informe de cierre)
         descuenta        = []  # días que descuentan en proporción, con su causa
 
@@ -295,6 +335,13 @@ class BonoService:
             dias_periodo += 1
             if fecha < fecha_desde or fecha > fecha_hasta:
                 continue
+            if por_dia:
+                regla_dia = _regla_con_cargo(_cargo_del_dia(fecha))
+                if regla_dia is None:
+                    continue          # ese día su cargo no recibe este bono
+                suma_montos += regla_dia.get("monto", 0) or 0
+                reglas_dias.add(id(regla_dia))
+                monto_completo = regla_dia.get("monto", 0)
             dias_asignados += 1
 
             # Solo se revisan los días que ya pasaron
@@ -342,7 +389,11 @@ class BonoService:
         # ── 5b. Se paga por los días asistidos (y por ingreso o salida) ──
         factor_asistencia = dias_asistidos / dias_laborables
         factor_total = factor_asistencia * factor_ingreso
-        monto_final = round(monto_completo * factor_total)
+        if por_dia and len(reglas_dias) > 1:
+            # Cambio de labor entre reglas con montos distintos: cada día vale el monto de la regla de su cargo
+            monto_final = round(suma_montos / dias_periodo * factor_asistencia) if dias_periodo else 0
+        else:
+            monto_final = round(monto_completo * factor_total)
         partes = []
         if descuenta:
             partes.append(f"{dias_asistidos}/{dias_laborables} días asistidos")

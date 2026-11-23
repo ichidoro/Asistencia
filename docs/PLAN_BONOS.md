@@ -302,7 +302,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - **Visto de paso, sin tocar:** 4 Productos tiene escrita en el código la regla «califica a partir del segundo mes de
   antigüedad». Para la persona dueña: ¿se pasa también a la configuración?
 
-**M (Bolsa) hecho (22-11-2026, falta subir):**
+**M (Bolsa) hecho (22-11-2026, commit b6ff0f7):**
 - En Bolsa Flexible un día justificado cuenta como día de turno igual que en Ciclo: si en su horario no es libre ni
   feriado (el horario de Bolsa marca lunes a viernes como días de turno). Se le aplica el efecto configurado en la
   justificación. Antes se saltaba: la persona de Bolsa con licencia sin goce no perdía el bono.
@@ -356,6 +356,20 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
   período. Va a los correos de «Avisos generales» (Configuración → Correo; decisión de la persona dueña, 22-11-2026),
   con el mismo sistema de correos del cierre. Se envía solo con los correos encendidos en el servidor.
 - La tabla de «bonos asignados con fecha» se reemplaza por el historial de cargos (o se elimina si no hace falta).
+
+**B4 en dos partes.** **B4a hecho (22-11-2026, falta subir):**
+- Tabla nueva `historial_cargos` (persona, cargo, desde, hasta, motivo, quién). La primera vez, cada persona queda con
+  su cargo de la ficha desde su ingreso.
+- El bono usa el cargo de cada día del período: un bono ligado a un cargo se paga por los días en ese cargo; un día
+  perdido en una labor hace perder solo el bono de esa labor; si un mismo bono tiene reglas con montos distintos por
+  cargo, cada día vale el monto de la regla de su cargo. Sin cambios de labor en el período, el cálculo es el de
+  siempre. Vale para la grilla, el informe, la vista previa y 4 Productos.
+- Corregir el cargo en la ficha o que lo cambie la sincronización con BioAlba se toma como corrección: corrige el tramo
+  vigente, sin partir el período. Unir cargos también pasa el historial al cargo que queda.
+- **Ensayo en el servidor** con el respaldo del 22-11-2026 (base temporal borrada): 113 personas con su tramo; 0 cambios
+  en los bonos en pesos y en 4 Productos.
+- Prueba nueva `test_bono_por_cargo_de_cada_dia.py` (6 casos); 660 pruebas en verde.
+- **B4b (sigue):** botón «Cambiar labor desde una fecha», ficha con los cargos anteriores y correo a «Avisos generales».
 
 ### Etapa B5 · Bonos guardados al cerrar (corrige I, B)
 

@@ -116,7 +116,7 @@ class Productos4Service:
         resultado_evaluacion = []
         
         for emp in empleados:
-            emp_dict = emp.to_dict()
+            emp_dict = (await bono_service.con_tramos_de_cargo([emp.to_dict()], fecha_inicio, fecha_fin))[0]
             emp_id = emp.id
             nombre = emp.nombre_completo
             
