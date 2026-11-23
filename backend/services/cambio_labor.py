@@ -132,8 +132,14 @@ class CambioLaborService:
             for b in await ConfiguracionRepository(self.db).get_all_bonos():
                 if not b.get("activo"):
                     continue
-                ra = bs._calificar_bono(antes, b, asist, just, m, hoy, fi, ff, feriados)
-                rd = bs._calificar_bono(despues, b, asist, just, m, hoy, fi, ff, feriados)
+                if b.get("periodicidad") == "semanal":
+                    # Bono semanal (Fill Rate): el monto de la semana sale de la regla de su cargo
+                    from backend.services.bono_semanal import evaluar_bono_semanal
+                    ra = (await evaluar_bono_semanal(self.db, bs, b, [antes], fi, ff, hoy)).get(empleado_id, {})
+                    rd = (await evaluar_bono_semanal(self.db, bs, b, [dict(despues, cargo_id=cargo_id)], fi, ff, hoy)).get(empleado_id, {})
+                else:
+                    ra = bs._calificar_bono(antes, b, asist, just, m, hoy, fi, ff, feriados)
+                    rd = bs._calificar_bono(despues, b, asist, just, m, hoy, fi, ff, feriados)
                 if not ra.get("aplica") and not rd.get("aplica"):
                     continue
                 corto = lambda r: {"aplica": bool(r.get("aplica")), "califica": bool(r.get("califica")),

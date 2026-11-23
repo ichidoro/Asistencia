@@ -507,7 +507,7 @@ async def diagnostic_no_shift(
     return {"count": res["count"] if res else 0}
 
 # ── Temas separados en su propio archivo (etapa 6 de la auditoría): mismas direcciones, bajo /api/asistencia ──
-from backend.routers import asistencia_gps, asistencia_libreta, asistencia_compensaciones, asistencia_periodo, asistencia_jornada, asistencia_marcas, asistencia_reprocesos  # noqa: E402
+from backend.routers import asistencia_gps, asistencia_libreta, asistencia_compensaciones, asistencia_periodo, asistencia_jornada, asistencia_marcas, asistencia_reprocesos, asistencia_bono_semanal  # noqa: E402
 
 router.include_router(asistencia_gps.router)
 router.include_router(asistencia_libreta.router)
@@ -516,3 +516,4 @@ router.include_router(asistencia_periodo.router)
 router.include_router(asistencia_jornada.router)
 router.include_router(asistencia_marcas.router)
 router.include_router(asistencia_reprocesos.router)
+router.include_router(asistencia_bono_semanal.router)

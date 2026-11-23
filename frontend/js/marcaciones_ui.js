@@ -57,7 +57,7 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
 // Lo que la persona elige (período, área, horario, empleado, vista y columnas abiertas) se guarda en este navegador y vuelve al
 // recargar o regresar. La clave lleva el usuario: otra cuenta en el mismo navegador entra con los filtros limpios.
 const MX_FILTROS_VERSION = 1;
-const MX_VISTAS = ['conceptos', 'horas', 'he', 'acumulado', 'colacion', 'permisos', 'velocidad'];
+const MX_VISTAS = ['conceptos', 'horas', 'he', 'acumulado', 'colacion', 'permisos', 'velocidad', 'fillrate'];
 const MX_VA_BOOL = ['showBonos', 'showHE', 'showDeudas', 'showIncidencias', 'showSaldoMeta', 'soloNegativo', 'soloConHE'];
 function mxClaveFiltros() {
     let u = 'anon';
@@ -7685,7 +7685,10 @@ function renderVistaAnalitica(respData, container) {
         {key:'he',        icon:'bi-arrow-up-circle',  label:'Horas Extras'},
         {key:'acumulado', icon:'bi-graph-up',         label:'Acumulado'},
         {key:'velocidad', icon:'bi-speedometer2',     label:'Velocidad'}
-    ].map(v => `<button class="btn segmented-btn ${activeVM===v.key ? 'active' : ''}" onclick="vaSetViewMode('${v.key}')" title="${v.label}"><i class="bi ${v.icon} me-1 d-none d-sm-inline"></i>${v.label}</button>`).join('');
+    ].concat(window.mxBsHay && window.mxBsHay(respData)
+        // Bono semanal (Fill Rate, 23-11-2026): solo si alguien de la grilla tiene el bono (bono_semanal_ui.js)
+        ? [{key:'fillrate', icon:'bi-truck', label: window.mxBsNombre(respData)}] : []
+    ).map(v => `<button class="btn segmented-btn ${activeVM===v.key ? 'active' : ''}" onclick="vaSetViewMode('${v.key}')" title="${v.label}"><i class="bi ${v.icon} me-1 d-none d-sm-inline"></i>${v.label}</button>`).join('');
 
     const isUnpinned = window._stickyUnpinned === true;
     const pinBtnText = isUnpinned ? 'Fijar' : 'Desfijar';
@@ -7832,7 +7835,7 @@ function renderVistaAnalitica(respData, container) {
     ${tabsHtml}
     ${sw}
     ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
-        ${activeVM === 'velocidad' && window.mxVelLeyenda ? window.mxVelLeyenda() : _leyendaEstadosHtml()}
+        ${activeVM === 'velocidad' && window.mxVelLeyenda ? window.mxVelLeyenda() : (activeVM === 'fillrate' && window.mxBsLeyenda ? window.mxBsLeyenda() : _leyendaEstadosHtml())}
         ${(() => {
             const cs = gf.esBolsa ? window.getCortesLibreta(rows).filter(c => dates.includes(c)) : [];
             if (!cs.length) return '';
@@ -8652,6 +8655,11 @@ window.vaSetViewMode = function(mode) {
 function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
     // Lámina Velocidad (velocidades_ui.js): solo los choferes llevan algo. Con velocidad del GPS se ve la velocidad; sin velocidad, el estado del
     // día con la misma etiqueta de la vista normal (pendiente, borrador, descanso operativo, licencia, libre, feriado…) (pedido del dueño 05-11-2026)
+    // Vista Fill Rate (bono_semanal_ui.js): cumple / no cumple de cada día y el resultado de la semana en el domingo
+    if (viewMode === 'fillrate') {
+        if (!window.mxBsCelda) return '';
+        return window.mxBsCelda(emp, dateStr, di, () => _analiticaCellContent(di, dateStr, emp, 'conceptos', isFer));
+    }
     if (viewMode === 'velocidad') {
         if (!window.mxVelCelda) return '';
         const trabajo = !!(di && ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO'].includes(di.estado));

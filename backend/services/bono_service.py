@@ -67,11 +67,19 @@ class BonoService:
 
         hoy_str = datetime.now().strftime("%Y-%m-%d")
 
+        # Los bonos semanales (Fill Rate, 23-11-2026) se evalúan de lunes a domingo por su propio cálculo
+        semanales = {}
+        for bono in bonos_activos:
+            if bono.get("periodicidad") == "semanal":
+                from backend.services.bono_semanal import evaluar_bono_semanal
+                semanales[bono["nombre"]] = await evaluar_bono_semanal(self.db, self, bono, empleados, fecha_inicio,
+                                                                      fecha_fin, hoy_str)
+
         resultados: Dict[int, Dict[str, Any]] = {}
         for emp in empleados:
             emp_id = emp["id"]
             resultados[emp_id] = {
-                bono["nombre"]: self._calificar_bono(
+                bono["nombre"]: (semanales[bono["nombre"]].get(emp_id) if bono["nombre"] in semanales else self._calificar_bono(
                     emp,
                     bono,
                     asist_map.get(emp_id, []),
@@ -81,7 +89,7 @@ class BonoService:
                     fecha_inicio,
                     fecha_fin,
                     feriados_set,
-                )
+                ))
                 for bono in bonos_activos
             }
 
@@ -115,13 +123,19 @@ class BonoService:
         matrix = data.get("matrix", {})
         hoy = datetime.now().strftime("%Y-%m-%d")
         personas, pisan = [], []
-        for emp in await self.con_tramos_de_cargo(data.get("empleados", []), fecha_inicio, fecha_fin):
+        empleados_vp = await self.con_tramos_de_cargo(data.get("empleados", []), fecha_inicio, fecha_fin)
+        semanal = None
+        if bono.get("periodicidad") == "semanal":
+            from backend.services.bono_semanal import evaluar_bono_semanal
+            semanal = await evaluar_bono_semanal(self.db, self, bono, empleados_vp, fecha_inicio, fecha_fin, hoy)
+        for emp in empleados_vp:
             nombre = " ".join(x for x in (emp.get("apellido_paterno"), emp.get("apellido_materno"), emp.get("nombre")) if x)
             calzan = self.reglas_que_calzan(emp, bono)
             if len(calzan) > 1 and not emp.get("excluido_asistencia"):
                 pisan.append({"nombre": nombre, "reglas": [i + 1 for i in calzan]})
-            r = self._calificar_bono(emp, bono, asist.get(emp["id"], []), just.get(emp["id"], []),
-                                     matrix.get(emp["id"]) or matrix.get(str(emp["id"])), hoy, fecha_inicio, fecha_fin, feriados)
+            r = semanal.get(emp["id"], {"aplica": False}) if semanal is not None else self._calificar_bono(
+                emp, bono, asist.get(emp["id"], []), just.get(emp["id"], []),
+                matrix.get(emp["id"]) or matrix.get(str(emp["id"])), hoy, fecha_inicio, fecha_fin, feriados)
             if not r.get("aplica"):
                 continue
             if bono.get("tipo") == "beneficio":
@@ -146,6 +160,20 @@ class BonoService:
             return r.get("motivo") or ""
         partes = "; ".join(f"{c}: {n} {'día' if n == 1 else 'días'}" for c, n in cuenta.items())
         return partes if not r.get("califica") else f"{r.get('motivo')} ({partes})"
+
+    @staticmethod
+    def fuera_de_alcance(empleado: Dict[str, Any], bono: Dict[str, Any]) -> Optional[str]:
+        """¿A quién se le paga el bono? (dueño, 23-11-2026): si tiene «solo estas áreas», la persona debe ser de una de
+        ellas; si tiene horarios elegidos, su horario debe ser uno de ellos. Devuelve el motivo si queda fuera, o None.
+        Además, las reglas de cargo y contrato (reglas_que_calzan)."""
+        if bono.get("filtra_areas"):
+            nombres = {str(n).strip().upper() for n in (bono.get("area_nombres") or [])}
+            if str(empleado.get("area") or "").strip().upper() not in nombres:
+                return "No aplica en su área"
+        turnos = {int(t) for t in (bono.get("turnos_ids") or [])}
+        if turnos and (empleado.get("turno_id") is None or int(empleado.get("turno_id")) not in turnos):
+            return "Su horario no tiene este bono"
+        return None
 
     @staticmethod
     def reglas_que_calzan(empleado: Dict[str, Any], bono: Dict[str, Any]) -> List[int]:
@@ -197,6 +225,10 @@ class BonoService:
         if empleado.get("excluido_asistencia"):
             return {"aplica": False, "califica": False, "monto": 0,
                     "motivo": "Excluido de asistencia (Art 22)"}
+        # ¿A quién se le paga? Áreas y horarios del bono (23-11-2026)
+        fuera = self.fuera_de_alcance(empleado, bono)
+        if fuera:
+            return {"aplica": False, "califica": False, "monto": 0, "motivo": fuera}
 
         # ── 1. Filtro estructural: cargo / contrato (la primera regla que calza) ──
         # Con el historial de cargos (etapa B4) la regla se elige con el cargo de cada día; sin cambios de labor en el

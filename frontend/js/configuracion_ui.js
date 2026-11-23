@@ -518,14 +518,14 @@ function renderBonos() {
         items: bonosList.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
         id: function (b) { return b.id; },
         etiqueta: function (b) { return b.nombre; },
-        sub: function (b) { if (b.tipo === 'beneficio') return 'Beneficio · 4 Productos'; const n = (b.reglas || []).length; return n ? n + (n === 1 ? ' regla' : ' reglas') : 'Sin reglas'; },
+        sub: function (b) { if (b.tipo === 'beneficio') return 'Beneficio · 4 Productos'; const n = (b.reglas || []).length; return (b.periodicidad === 'semanal' ? 'Semanal · ' : '') + (n ? n + (n === 1 ? ' regla' : ' reglas') : 'Sin reglas'); },
         apagado: function (b) { return !b.activo; },
         vacio: 'No hay bonos. Cree el primero con «Nuevo bono».',
         ficha: function (b, panel) {
             const reglas = (b.reglas || []).map(function (r) {
                 const cond = [r.tipo_contrato || 'Todo contrato', r.cargo_requerido ? 'lo reciben: ' + r.cargo_requerido : 'todos los cargos',
                               r.cargos_excluidos ? 'no lo reciben: ' + r.cargos_excluidos : ''].filter(Boolean).join(' · ');
-                return '<div class="fcB-campo"><div class="fcB-et"><span class="num">' + F.esc(b.tipo === 'beneficio' ? 'En especie' : pesos(r.monto)) + '</span></div><div class="fcB-ctl"><span>' + F.esc(cond) + '</span></div></div>';
+                return '<div class="fcB-campo"><div class="fcB-et"><span class="num">' + F.esc(b.tipo === 'beneficio' ? 'En especie' : pesos(r.monto) + (b.periodicidad === 'semanal' ? ' por semana' : '')) + '</span></div><div class="fcB-ctl"><span>' + F.esc(cond) + '</span></div></div>';
             }).join('');
             // Efecto de las justificaciones y de la inasistencia sin justificar (etapa B3a)
             const tipos = (tiposJustificacionList || []).slice().sort(function (x, y) { return String(x.nombre).localeCompare(String(y.nombre), 'es'); });
@@ -537,6 +537,9 @@ function renderBonos() {
             panel.innerHTML = F.cabeza(b.nombre, b.descripcion || '')
                 + (b.usa_productos_4 ? '<p class="fcB-nota">Lo usa 4 Productos para decidir quién recibe los productos. No sale en el informe de cierre ni en la grilla, y no se puede eliminar.</p>' : '')
                 + F.campo('En uso', '<span class="fcB-sw" aria-disabled="true"><input type="checkbox" disabled' + (b.activo ? ' checked' : '') + '><span aria-hidden="true"></span>' + (b.activo ? 'Se calcula' : 'No se calcula') + '</span>')
+                + F.campo('Evaluación', '<span>' + F.esc(b.periodicidad === 'semanal' ? 'Semanal, de lunes a domingo' : 'Por período') + '</span>')
+                + F.campo('Áreas', '<span>' + F.esc(b.filtra_areas ? 'Solo ' + ((b.area_nombres || []).join(', ') || 'las elegidas') : 'Todas las áreas') + '</span>')
+                + F.campo('Horarios', '<span>' + F.esc((b.turnos_ids || []).length ? 'Solo ' + (b.turnos_ids.length === 1 ? '1 horario' : b.turnos_ids.length + ' horarios') : 'Todos los horarios') + '</span>')
                 + F.campo('Inasistencia sin justificar', '<span>' + F.esc(b.efecto_inasistencia ? nombreEfecto(b.efecto_inasistencia) : 'Sin configurar') + '</span>')
                 + (b.tipo === 'beneficio' ? F.campo('Antigüedad mínima', '<span>' + F.esc(b.antiguedad_meses == null ? 'Sin configurar'
                     : (b.antiguedad_meses === 0 ? 'Desde el mes en que empieza su turno' : b.antiguedad_meses + (b.antiguedad_meses === 1 ? ' mes' : ' meses') + ' después del mes en que empieza su turno')) + '</span>') : '')
@@ -588,6 +591,13 @@ async function openModalBono(bono = null) {
     document.getElementById('bono-nota-beneficio').style.display = esBeneficio ? '' : 'none';
     document.getElementById('bono-antiguedad-wrap').style.display = esBeneficio ? '' : 'none';
     document.getElementById('bono-antiguedad').value = esBeneficio && bono.antiguedad_meses != null ? bono.antiguedad_meses : '';
+    // Bono semanal (Fill Rate, 23-11-2026): se evalúa de lunes a domingo y solo lo tienen los horarios elegidos
+    document.getElementById('bono-semanal-wrap').style.display = esBeneficio ? 'none' : '';
+    document.getElementById('bono-periodicidad').value = bono && bono.periodicidad === 'semanal' ? 'semanal' : 'mensual';
+    await _pintarHorariosBono(bono ? (bono.turnos_ids || []) : []);
+    document.getElementById('bono-filtra-areas').value = bono && bono.filtra_areas ? 'solo' : 'todas';
+    document.getElementById('bono-filtra-turnos').value = bono && (bono.turnos_ids || []).length ? 'solo' : 'todos';
+    window._bonoPeriodicidadCambio();
     document.getElementById('bono-efecto-inas-wrap').innerHTML =
         _htmlSelectEfecto('bono-efecto-inas', esBeneficio ? sinProporcion(EFECTOS_INASISTENCIA) : EFECTOS_INASISTENCIA, bono ? (bono.efecto_inasistencia || '') : '');
     const tiposJ = await _asegurarTiposJ();
@@ -628,6 +638,38 @@ async function openModalBono(bono = null) {
     // Mostrar modal DESPUES de que las areas esten listas (evita race condition)
     modal.style.display = 'flex';
 }
+
+// Horarios del bono semanal: una casilla por horario en uso
+async function _pintarHorariosBono(elegidos) {
+    const cont = document.getElementById('bono-turnos-container');
+    const esc = window.FichaCfg ? window.FichaCfg.esc : function (x) { return String(x == null ? '' : x); };
+    cont.innerHTML = '<span class="text-muted small">Cargando horarios…</span>';
+    try {
+        const r = await fetch('/api/turnos/?activo=true', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } });
+        const lista = r.ok ? await r.json() : [];
+        const sel = new Set((elegidos || []).map(Number));
+        const items = (Array.isArray(lista) ? lista : (lista.items || [])).slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+        cont.innerHTML = items.length ? items.map(function (t) {
+            return '<div class="form-check form-check-inline m-0"><input class="form-check-input bono-turno-chk" type="checkbox" value="' + t.id + '" id="bono-turno-' + t.id + '"'
+                + (sel.has(Number(t.id)) ? ' checked' : '') + '><label class="form-check-label small" for="bono-turno-' + t.id + '">' + esc(t.nombre) + '</label></div>';
+        }).join('') : '<span class="text-muted small">No hay horarios en uso.</span>';
+    } catch (e) {
+        console.error('[openModalBono] Error cargando horarios:', e);
+        cont.innerHTML = '<span class="text-muted small text-danger">No se pudieron cargar los horarios.</span>';
+    }
+}
+
+window._bonoPeriodicidadCambio = function () {
+    const semanal = document.getElementById('bono-periodicidad').value === 'semanal';
+    document.getElementById('bono-nota-semanal').style.display = semanal ? '' : 'none';
+    window._bonoAlcanceCambio();
+};
+
+// ¿A quién se le paga? Las casillas de áreas y de horarios se ven solo con «solo estas»
+window._bonoAlcanceCambio = function () {
+    document.getElementById('bono-areas-container').style.display = document.getElementById('bono-filtra-areas').value === 'solo' ? '' : 'none';
+    document.getElementById('bono-turnos-container').style.display = document.getElementById('bono-filtra-turnos').value === 'solo' ? '' : 'none';
+};
 
 function closeModalBono(fromSave = false) {
     document.getElementById('modal-bono').style.display = 'none';
@@ -741,7 +783,15 @@ function _leerFormularioBono() {
         if (v === '' || isNaN(parseInt(v, 10)) || parseInt(v, 10) < 0) { showToast('Falta la antigüedad mínima en meses (0 o más).', 'warning'); return null; }
         antiguedad_meses = parseInt(v, 10);
     }
-    return { nombre, descripcion, activo, tipo, antiguedad_meses, reglas, area_ids: totalAreas === 0 ? null : area_ids, efecto_inasistencia: efectoInas, efectos: efJ.valores };
+    const periodicidad = tipo === 'beneficio' ? 'mensual' : (document.getElementById('bono-periodicidad').value || 'mensual');
+    // ¿A quién se le paga? (23-11-2026): áreas y horarios, «todos» o «solo estos»
+    const filtra_areas = document.getElementById('bono-filtra-areas').value === 'solo';
+    if (filtra_areas && !area_ids.length) { showToast('Elija al menos un área, o «Todas las áreas».', 'warning'); return null; }
+    const soloHorarios = document.getElementById('bono-filtra-turnos').value === 'solo';
+    const turnos_ids = soloHorarios
+        ? Array.from(modalBonoEl.querySelectorAll('.bono-turno-chk:checked')).map(function (c) { return parseInt(c.value, 10); }) : [];
+    if (soloHorarios && !turnos_ids.length) { showToast('Elija al menos un horario, o «Todos los horarios».', 'warning'); return null; }
+    return { nombre, descripcion, activo, tipo, antiguedad_meses, reglas, periodicidad, turnos_ids, filtra_areas, area_ids: totalAreas === 0 ? null : area_ids, efecto_inasistencia: efectoInas, efectos: efJ.valores };
 }
 
 // ── Vista previa del bono (etapa B3c del plan de bonos) ──

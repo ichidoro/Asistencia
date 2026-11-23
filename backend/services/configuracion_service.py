@@ -137,12 +137,20 @@ class ConfiguracionService:
             # Con las mismas reglas que el cálculo de bonos (cargo de la lista y contrato, etapa B6 del plan de bonos);
             # antes comparaba si el nombre del cargo «contenía» el de la regla y podía no coincidir con lo que se paga
             from backend.services.bono_service import BonoService
-            emp_dict = {"cargo_id": getattr(empleado, "cargo_id", None), "tipo_contrato": getattr(empleado, "tipo_contrato", None)}
+            emp_dict = {"cargo_id": getattr(empleado, "cargo_id", None), "tipo_contrato": getattr(empleado, "tipo_contrato", None),
+                        "area": getattr(empleado, "area", None)}
+            if any(b.get('turnos_ids') for b in bonos):
+                # El horario de hoy, para los bonos que se pagan solo a algunos horarios (23-11-2026)
+                from backend.repositories.turno import TurnoRepository
+                hoy_iso = today.isoformat()
+                asig = await TurnoRepository(self.repository.db).get_asignaciones_entre(empleado_id, hoy_iso, hoy_iso)
+                emp_dict["turno_id"] = asig[0]["turno_id"] if asig else None
             for bono in bonos:
                 if not bono['activo'] or bono.get('tipo') == 'beneficio':
                     continue
 
-                match = bool(BonoService.reglas_que_calzan(emp_dict, bono))
+                # Las mismas reglas del cálculo: a quién se le paga (áreas y horarios) y cargo y contrato
+                match = not BonoService.fuera_de_alcance(emp_dict, bono) and bool(BonoService.reglas_que_calzan(emp_dict, bono))
 
                 if match:
                     bonos_a_asignar.append(bono)

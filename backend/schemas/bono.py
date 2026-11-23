@@ -53,6 +53,12 @@ class BonoCreate(BonoBase):
     efecto_inasistencia: Optional[Literal["proporcion", "pierde"]] = Field(
         None, description="Qué hace una inasistencia sin justificar: descuenta en proporción o hace perder el bono")
     efectos: Optional[Dict[int, Efecto]] = Field(None, description="{id de la justificación: efecto en este bono}")
+    # Bono semanal (Fill Rate, 23-11-2026): se evalúa de lunes a domingo y solo lo tienen los horarios elegidos. None al
+    # editar: no cambia.
+    periodicidad: Optional[Literal["mensual", "semanal"]] = None
+    turnos_ids: Optional[List[int]] = Field(None, description="Horarios que tienen el bono; vacío: todos los horarios")
+    # ¿A quién se le paga? (23-11-2026): true = solo las personas de las áreas elegidas (area_ids); false = todas las áreas
+    filtra_areas: Optional[bool] = None
 
 class BonoResponse(BonoBase):
     id: int
@@ -63,6 +69,9 @@ class BonoResponse(BonoBase):
     tipo: str = "pesos"
     usa_productos_4: bool = False
     antiguedad_meses: Optional[int] = None
+    periodicidad: str = "mensual"
+    turnos_ids: List[int] = []
+    filtra_areas: bool = False
     created_at: datetime
 
     class Config:

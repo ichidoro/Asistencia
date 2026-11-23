@@ -1,13 +1,14 @@
 {
- "archivos_revisados": 178,
+ "archivos_revisados": 181,
  "repetidas": {
-  "total": 139,
+  "total": 142,
   "top": [
    {
     "nombre": "esc",
     "archivos": [
      "frontend/js/articulo22_ui.js",
      "frontend/js/ayudantes.js",
+     "frontend/js/bono_semanal_ui.js",
      "frontend/js/buscador.js",
      "frontend/js/compensar_inasistencia.js",
      "frontend/js/config_ficha.js",
@@ -70,6 +71,7 @@
     "archivos": [
      "dashboard_build/src/DashboardApp.jsx",
      "frontend/js/ayudantes.js",
+     "frontend/js/bono_semanal_ui.js",
      "frontend/js/calendario_ui.js",
      "frontend/js/ficha_persona.js",
      "frontend/js/tarjeta_dia.js",
@@ -131,7 +133,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1530,
+  "total": 1541,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -151,12 +153,12 @@
    {
     "funcion": "init_tables",
     "archivo": "backend/repositories/configuracion.py",
-    "lineas": 480
+    "lineas": 482
    },
    {
     "funcion": "get_matrix_data_with_projections",
     "archivo": "backend/services/asistencia_service.py",
-    "lineas": 459
+    "lineas": 460
    },
    {
     "funcion": "render_pdf",
@@ -188,7 +190,7 @@
  "archivos_grandes": [
   {
    "archivo": "frontend/js/marcaciones_ui.js",
-   "lineas": 10031
+   "lineas": 10039
   },
   {
    "archivo": "frontend/js/marcaciones_manuales.js",
@@ -196,7 +198,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3438
+   "lineas": 3439
   },
   {
    "archivo": "frontend/js/sync_wizard.js",
@@ -212,7 +214,7 @@
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",
-   "lineas": 2644
+   "lineas": 2694
   },
   {
    "archivo": "frontend/js/productos_4.js",

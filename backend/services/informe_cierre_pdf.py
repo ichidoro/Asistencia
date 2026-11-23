@@ -210,7 +210,9 @@ def bonos_persona(ev: Dict[str, Any]):
         detalle[b] = {'califica': califica, 'monto': m, 'completo': int(round(v.get('monto_completo') or m)),
                       'parcial': (asig, per) if califica and per and asig is not None and asig != per else None,
                       'asistidos': (asis, lab) if califica and lab and asis is not None and asis != lab else None,
-                      'perdidos': list(v.get('perdidos') or [])}
+                      'perdidos': list(v.get('perdidos') or []),
+                      # Bono semanal (Fill Rate, 23-11-2026): cada semana con su resultado
+                      'semanas': list(v.get('semanas') or []) if v.get('semanal') else None}
     return montos, detalle
 
 
@@ -566,6 +568,9 @@ def leyenda(inf: Dict[str, Any], justif: List[Dict[str, Any]], cols: List[Dict[s
         out = list(out) + ['<b>Bajas del período</b>: personas que se van en este período (renuncia, despido, mutuo acuerdo o no renovar), con la fecha de su salida. Van al final de su horario, se pagan y descuentan como el resto y no cuentan en la dotación.']
     if 'Jornadas extra' in titulos:
         out = list(out) + ['<b>Jornadas extra</b>: jornadas especiales validadas como jornada extra; se pagan con un monto fijo por jornada y sus horas no van en las horas extra. Los días están en «Jornadas extra (monto fijo)».']
+    semanales = sorted({b for p in inf['personas'] for b, d in (p.get('bonos_det') or {}).items() if d.get('semanas') is not None})
+    if semanales:
+        out = list(out) + [f'<b>{_y(semanales)}</b>: bono semanal, de lunes a domingo; cada semana se paga en el período donde cae su domingo y un día que no cumple hace perder la semana completa. Las semanas que no se pagan o se pagan en parte están en el detalle de bonos.']
     if hay_bonos:
         out = list(out) + ['<b>Bonos</b> en pesos: el monto a pagar; <b>—</b> no se paga (el motivo va en el detalle de bonos); en blanco, no le corresponde.']
     return out
@@ -594,7 +599,7 @@ def resumen(inf: Dict[str, Any]) -> List[tuple]:
     T = lambda k: sum(p[k] for p in ps)
     nb = bajas_de(ps)
     out = ([('', str(len(ps) - nb), ' en dotación', False), ('', str(nb), ' baja del período' if nb == 1 else ' bajas del período', False)]
-           if nb else [('', str(len(ps)), ' personas', False)])
+           if nb else [('', str(len(ps)), ' persona' if len(ps) == 1 else ' personas', False)])
     if inf['tipo'] == 'BOLSA':
         out += [('Horas extra a pagar ', hms(T('pagar')), '', False), ('Horas no usadas ', hms(T('no_usadas')), ' · no se descuentan', False)]
     else:
@@ -625,7 +630,7 @@ def detalle_bonos(inf: Dict[str, Any]) -> Dict[str, List[str]]:
         det = p.get('bonos_det') or {}
         por_motivo = OrderedDict()
         for b, d in det.items():
-            if d['califica']:
+            if d['califica'] or d.get('semanas') is not None:
                 continue
             causas = OrderedDict()
             for x in d['perdidos']:
@@ -634,6 +639,28 @@ def detalle_bonos(inf: Dict[str, Any]) -> Dict[str, List[str]]:
             por_motivo.setdefault(motivo, []).append(b)
         for motivo, bs in por_motivo.items():
             no_pagados.append(f'<b>{p["nombre"]}</b>: {_y(bs)}. {motivo[0].upper() + motivo[1:]}.')
+        # Bono semanal: qué semanas no se pagan o se pagan en parte, con sus días
+        for b, d in det.items():
+            semanas = d.get('semanas')
+            if semanas is None:
+                continue
+            perdidas = [s for s in semanas if s['estado'] == 'pierde']
+            parciales = [s for s in semanas if s['estado'] == 'proporcional']
+            if not perdidas and not parciales:
+                continue
+            textos = []
+            for s in perdidas:
+                causas = OrderedDict()
+                for x in s.get('perdidos') or []:
+                    causas.setdefault(x['causa'], []).append(_dm(x['fecha']))
+                textos.append(f'no se paga la semana del {_dm(s["desde"])} al {_dm(s["hasta"])} ('
+                              + '; '.join(f'{c[0].lower() + c[1:]} el {_y(f)}' for c, f in causas.items()) + ')')
+            for s in parciales:
+                textos.append(f'la semana del {_dm(s["desde"])} al {_dm(s["hasta"])} se paga en parte: {pesos(s["monto"])} de '
+                              f'{pesos(s["monto_completo"])}' + (f' ({s["dias_proporcion"]} de {s["dias_turno"]} días en proporción)'
+                                                                if s.get("dias_proporcion") else ''))
+            linea = f'<b>{p["nombre"]}</b>: {b} {pesos(d["monto"])} de {pesos(d["completo"])}: {"; ".join(textos)}.'
+            (en_parte if d['monto'] else no_pagados).append(linea)
         for b, d in det.items():
             if d['califica'] and (d['parcial'] or d['asistidos']):
                 partes = []
@@ -770,7 +797,7 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
     ps = inf['personas']
     cols = columnas(inf, justif, bonos)
     nb_inf = bajas_de(ps)
-    texto_total = f'Total · {len(ps)} personas' + (f' ({len(ps) - nb_inf} en dotación + {nb_inf} {"baja" if nb_inf == 1 else "bajas"})'
+    texto_total = f'Total · {len(ps)} {"persona" if len(ps) == 1 else "personas"}' + (f' ({len(ps) - nb_inf} en dotación + {nb_inf} {"baja" if nb_inf == 1 else "bajas"})'
                                                      if nb_inf else '')
 
     # ── texto de cada celda (con la tabla muy ancha, los montos van sin «$» y el grupo dice «Bonos ($)»)

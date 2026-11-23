@@ -2774,6 +2774,7 @@ class AsistenciaService:
                 emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'CICLO_INTELIGENTE'
                 emp['turno'] = t_info.get('turno_nombre')
                 t_id = t_info.get('turno_id')
+                emp['turno_id'] = t_id   # el horario, para los bonos semanales que se asignan por horario (Fill Rate)
                 emp['primer_dia_semana_turno'] = primer_dia_por_turno.get(t_id, 1)  # default Lunes
                 emp['turno_dias'] = dias_por_turno.get(t_id, {})
                 if emp['tipo_programacion'] in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'):

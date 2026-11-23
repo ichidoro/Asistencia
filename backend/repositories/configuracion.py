@@ -492,8 +492,66 @@ class ConfiguracionRepository:
 
         # 7. El bono de 4 Productos (etapa B3d del plan de bonos): necesita la tabla de ajustes, creada más arriba
         await self._init_bono_productos_4()
+        # 8. Bonos semanales (Fill Rate, 23-11-2026): periodicidad, horarios que lo tienen y los días marcados «no cumple»
+        await self._init_bono_semanal()
 
         logger.info("✅ Tablas de configuración, ajustes y periodos inicializadas")
+
+    async def _init_bono_semanal(self):
+        """Columnas bonos.periodicidad ('mensual' por defecto, o 'semanal') y bonos.turnos_ids (los horarios que tienen el
+        bono, separados por coma), y la tabla bono_dias_no_cumple: los días que se marcaron «no cumple» en un bono
+        semanal (dueño, 23-11-2026: bono Fill Rate de choferes y peonetas, evaluado de lunes a domingo)."""
+        get_cols = getattr(self.db, 'get_column_names', None)
+        cols = await get_cols("bonos") if get_cols else []
+        if get_cols and "periodicidad" not in cols:
+            await self.db.execute("ALTER TABLE bonos ADD COLUMN periodicidad TEXT DEFAULT 'mensual'")
+            await self.db.execute("UPDATE bonos SET periodicidad = 'mensual' WHERE periodicidad IS NULL")
+            logger.info("✨ Migración: columna 'periodicidad' agregada a bonos")
+        if get_cols and "turnos_ids" not in cols:
+            await self.db.execute("ALTER TABLE bonos ADD COLUMN turnos_ids TEXT")
+            logger.info("✨ Migración: columna 'turnos_ids' agregada a bonos")
+        # ¿A quién se le paga? (dueño, 23-11-2026): «solo estas áreas» se activa bono por bono. Las áreas que ya tenían
+        # marcadas los bonos quedan guardadas pero no filtran hasta que se elija «solo estas áreas»: así no cambia nada
+        if get_cols and "filtra_areas" not in cols:
+            await self.db.execute("ALTER TABLE bonos ADD COLUMN filtra_areas INTEGER DEFAULT 0")
+            await self.db.execute("UPDATE bonos SET filtra_areas = 0 WHERE filtra_areas IS NULL")
+            logger.info("✨ Migración: columna 'filtra_areas' agregada a bonos (todas en 0: sin cambios)")
+        if not await self.db.table_exists("bono_dias_no_cumple"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS bono_dias_no_cumple (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bono_id INTEGER NOT NULL,
+                    empleado_id INTEGER NOT NULL,
+                    fecha TEXT NOT NULL,
+                    comentario TEXT,
+                    usuario TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (bono_id, empleado_id, fecha)
+                )
+            """)
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_bono_no_cumple_fecha ON bono_dias_no_cumple(fecha)")
+            logger.info("✨ Tabla bono_dias_no_cumple creada (bonos semanales)")
+
+    async def get_dias_no_cumple(self, bono_ids: List[int], desde: str, hasta: str) -> List[Dict]:
+        """Los días marcados «no cumple» de esos bonos semanales entre dos fechas."""
+        if not bono_ids or not await self.db.table_exists("bono_dias_no_cumple"):
+            return []
+        ph = ",".join("?" * len(bono_ids))
+        return [dict(r) for r in await self.db.fetch_all(
+            f"SELECT bono_id, empleado_id, fecha, comentario, usuario FROM bono_dias_no_cumple "
+            f"WHERE bono_id IN ({ph}) AND fecha BETWEEN ? AND ?", (*bono_ids, desde, hasta))]
+
+    async def marcar_dia_no_cumple(self, bono_id: int, empleado_id: int, fecha: str, comentario: Optional[str],
+                                   usuario: Optional[str]) -> None:
+        await self.db.execute("DELETE FROM bono_dias_no_cumple WHERE bono_id = ? AND empleado_id = ? AND fecha = ?",
+                              (bono_id, empleado_id, fecha))
+        await self.db.execute(
+            "INSERT INTO bono_dias_no_cumple (bono_id, empleado_id, fecha, comentario, usuario) VALUES (?, ?, ?, ?, ?)",
+            (bono_id, empleado_id, fecha, comentario, usuario))
+
+    async def quitar_dia_no_cumple(self, bono_id: int, empleado_id: int, fecha: str) -> None:
+        await self.db.execute("DELETE FROM bono_dias_no_cumple WHERE bono_id = ? AND empleado_id = ? AND fecha = ?",
+                              (bono_id, empleado_id, fecha))
 
     EFECTOS = ("asistido", "proporcion", "pierde")
 
@@ -682,6 +740,8 @@ class ConfiguracionRepository:
             )
             bono_id = res.lastrowid
             logger.info(f"Bono Header creado con ID: {bono_id}")
+            if bono_id and int(bono_id) > 0:
+                await self._guardar_periodicidad(bono_id, bono)
 
             if not bono_id or int(bono_id) <= 0:
                 logger.error(f"FATAL: ID de bono inválido obtenido: {bono_id}")
@@ -767,6 +827,7 @@ class ConfiguracionRepository:
                 await self.db.execute("UPDATE bonos SET tipo = ? WHERE id = ?", (bono.tipo, bono_id))
             if bono.antiguedad_meses is not None:
                 await self.db.execute("UPDATE bonos SET antiguedad_meses = ? WHERE id = ?", (bono.antiguedad_meses, bono_id))
+            await self._guardar_periodicidad(bono_id, bono)
             
             # 2. Reemplazar reglas (borrar anteriores e insertar nuevas)
             await self.db.execute("DELETE FROM bono_reglas WHERE bono_id = ?", (bono_id,))
@@ -789,6 +850,16 @@ class ConfiguracionRepository:
         except Exception as e:
             logger.error(f"Error actualizando bono: {e}")
             raise
+
+    async def _guardar_periodicidad(self, bono_id: int, bono: BonoCreate) -> None:
+        """Periodicidad (mensual / semanal) y horarios del bono, si vienen en el pedido."""
+        if getattr(bono, 'periodicidad', None):
+            await self.db.execute("UPDATE bonos SET periodicidad = ? WHERE id = ?", (bono.periodicidad, bono_id))
+        if getattr(bono, 'filtra_areas', None) is not None:
+            await self.db.execute("UPDATE bonos SET filtra_areas = ? WHERE id = ?", (1 if bono.filtra_areas else 0, bono_id))
+        if getattr(bono, 'turnos_ids', None) is not None:
+            ids = ",".join(str(int(i)) for i in dict.fromkeys(bono.turnos_ids)) or None
+            await self.db.execute("UPDATE bonos SET turnos_ids = ? WHERE id = ?", (ids, bono_id))
 
     async def get_bonos_para_asistente(self) -> List[Dict]:
         """Id, nombre y descripción de todos los bonos, por nombre (asistente de alta)."""
@@ -817,6 +888,8 @@ class ConfiguracionRepository:
                 bono_dict['activo'] = bool(b['activo'])
                 bono_dict['tipo'] = b.get('tipo') or 'pesos'
                 bono_dict['usa_productos_4'] = (b['id'] == id_p4)
+                bono_dict['periodicidad'] = b.get('periodicidad') or 'mensual'
+                bono_dict['turnos_ids'] = self._ids(b.get('turnos_ids')) or []
                 
                 query_reglas = "SELECT * FROM bono_reglas WHERE bono_id = ?"
                 reglas = await self.db.fetch_all(query_reglas, (b['id'],))
@@ -825,6 +898,9 @@ class ConfiguracionRepository:
                 query_areas = "SELECT area_id FROM area_bonos WHERE bono_id = ?"
                 areas = await self.db.fetch_all(query_areas, (b['id'],))
                 bono_dict['area_ids'] = [a['area_id'] for a in areas]
+                bono_dict['filtra_areas'] = bool(b.get('filtra_areas'))
+                nombres_area = {r['id']: r['nombre'] for r in await self.db.fetch_all("SELECT id, nombre FROM areas")} if areas else {}
+                bono_dict['area_nombres'] = [nombres_area[i] for i in bono_dict['area_ids'] if i in nombres_area]
 
                 # Efecto de cada justificación en este bono (etapa B3a): {tipo_id: efecto}
                 efectos = await self.db.fetch_all("SELECT tipo_id, efecto FROM bono_efectos WHERE bono_id = ?", (b['id'],))
