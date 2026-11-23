@@ -187,6 +187,12 @@ async def lifespan(app: FastAPI):
                 
                 await config_repo.init_tables()
                 await turno_repo.init_tables()
+                # Lista de bonos por persona con las reglas del cálculo (una sola vez, etapa B6 del plan de bonos)
+                try:
+                    from backend.services.configuracion_service import ConfiguracionService as _CS
+                    await _CS(config_repo).rehacer_asignaciones_una_vez()
+                except Exception as e_asig:
+                    logger.error(f"❌ No se pudo rehacer la lista de bonos por persona: {e_asig}")
                 
                 # Inicializar tablas de beneficios de productos propios
                 from backend.repositories.productos_4 import Productos4Repository

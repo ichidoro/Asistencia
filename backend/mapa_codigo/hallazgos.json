@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1520,
+  "total": 1521,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -171,7 +171,7 @@
    {
     "funcion": "lifespan",
     "archivo": "backend/core/events.py",
-    "lineas": 280
+    "lineas": 286
    },
    {
     "funcion": "_sync_empleado",

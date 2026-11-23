@@ -134,35 +134,15 @@ class ConfiguracionService:
             bonos = await self.repository.get_all_bonos()
             bonos_a_asignar: List[Dict] = []
 
+            # Con las mismas reglas que el cálculo de bonos (cargo de la lista y contrato, etapa B6 del plan de bonos);
+            # antes comparaba si el nombre del cargo «contenía» el de la regla y podía no coincidir con lo que se paga
+            from backend.services.bono_service import BonoService
+            emp_dict = {"cargo_id": getattr(empleado, "cargo_id", None), "tipo_contrato": getattr(empleado, "tipo_contrato", None)}
             for bono in bonos:
                 if not bono['activo'] or bono.get('tipo') == 'beneficio':
                     continue
 
-                match = False
-                for regla in bono.get('reglas', []):
-                    # 3.1 Filtro Tipo Contrato
-                    if regla['tipo_contrato'] and regla['tipo_contrato'] != "Todos":
-                        if regla['tipo_contrato'] != empleado.tipo_contrato:
-                            continue
-
-                    # 3.2 Filtro Cargo
-                    if regla['cargo_requerido']:
-                        cargo_regla = regla['cargo_requerido'].lower().strip()
-                        cargo_emp = (empleado.cargo or "").lower().strip()
-                        if cargo_regla not in cargo_emp:
-                            continue
-
-                    # 3.3 Filtro Cargos Excluidos
-                    if regla.get('cargos_excluidos'):
-                        excluidos = [c.strip().lower() for c in regla['cargos_excluidos'].split(',')]
-                        cargo_emp = (empleado.cargo or "").lower().strip()
-                        if any(excl in cargo_emp for excl in excluidos if excl):
-                            logger.info(f" -> Skip Bono '{bono['nombre']}' para {empleado.nombre}: Cargo '{empleado.cargo}' excluido.")
-                            continue
-
-                    # Si pasa todos los filtros, match
-                    match = True
-                    break
+                match = bool(BonoService.reglas_que_calzan(emp_dict, bono))
 
                 if match:
                     bonos_a_asignar.append(bono)
@@ -586,6 +566,21 @@ class ConfiguracionService:
         
     async def delete_notificaciones_area(self, area: str) -> bool:
         return await self.repository.delete_notificaciones_area(area)
+
+    async def rehacer_asignaciones_una_vez(self) -> int:
+        """Rehace una sola vez la lista de bonos por persona con las reglas del cálculo (etapa B6); se marca en ajustes
+        para no repetirlo en cada arranque. Devuelve cuántas personas revisó."""
+        db = self.repository.db
+        if await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'bono_asignaciones_con_reglas'"):
+            return 0
+        emp_repo = EmpleadoRepository(db)
+        empleados = await emp_repo.get_all(limit=2000, activo=True)
+        for emp in empleados:
+            await self.recalculate_assignments(emp)
+        await db.execute("INSERT INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
+                         ('bono_asignaciones_con_reglas', '1', 'Lista de bonos por persona rehecha con las reglas del cálculo'))
+        logger.info(f"✨ Lista de bonos por persona rehecha con las reglas del cálculo: {len(empleados)} personas")
+        return len(empleados)
 
     async def get_destinatarios_rrhh(self, area: str = None) -> List[str]:
         """Combina los correos globales con los específicos del área (si se provee) para notificaciones generales (contratos, justificaciones)"""

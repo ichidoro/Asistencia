@@ -15,7 +15,6 @@ class BonoReglaBase(BaseModel):
     # de nombre no la rompe. None = todos los cargos (requeridos) / ninguno (excluidos).
     cargos_req_ids: Optional[List[int]] = Field(None, description="Cargos que reciben el bono (vacío: todos)")
     cargos_excl_ids: Optional[List[int]] = Field(None, description="Cargos que no lo reciben")
-    labor_requerida: Optional[str] = Field(None, description="Labor específica para este bono")
     es_proporcional: bool = Field(False, description="Si es True, se descuenta por día faltado")
     version: int = Field(1, ge=1)
     fecha_inicio: date = Field(default_factory=date.today)

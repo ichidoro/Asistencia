@@ -388,7 +388,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - Al cerrar un período se guarda el resultado de los bonos de cada persona (bono, monto, motivo).
 - El informe y el Excel de un período cerrado leen lo guardado: volver a sacarlos da siempre lo mismo.
 - Mayo a Octubre se dejan como están: lo que ya se pagó no se toca (decisión de la persona dueña, 22-11-2026).
-- **Hecho (22-11-2026, falta subir):** al cerrar un área se guarda en la tabla nueva `bonos_cierre` el resultado completo
+- **Hecho (22-11-2026, commit b8505bf):** al cerrar un área se guarda en la tabla nueva `bonos_cierre` el resultado completo
   de cada bono por persona (el mismo cálculo del informe: monto, motivo, días). El informe PDF y el Excel de un período
   cerrado leen lo guardado; al reabrir se borra y al cerrar de nuevo se guarda otra vez. Mayo a Octubre no tienen nada
   guardado y se calculan como antes. Probado contra la copia de práctica: con el período cerrado, cambiar la regla del
@@ -398,6 +398,13 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 ### Etapa B6 · Orden (J, K)
 
 - La Bolsa por sus dos nombres de tipo; quitar el campo «labor requerida» que no existe.
+- **Hecho (22-11-2026, falta subir):** el cálculo de bonos reconoce la Bolsa por sus dos nombres de tipo (hoy ningún
+  horario usa el segundo); se quitó «labor requerida» del esquema; la lista de bonos por persona (Empleados →
+  Asignación masiva) se arma con las mismas reglas que el cálculo (antes comparaba nombres escritos y nunca calzaba una
+  regla con varios cargos) y se rehízo una vez al arrancar. Ensayo con el respaldo: 0 cambios en bonos y 4 Productos;
+  la lista agrega Supervisor a 3 personas que ya lo cobraban. Prueba nueva `test_orden_bonos_b6.py` (4 casos).
+- B5 probado además con el cierre real: en una copia de los datos se reabrió Octubre de las 4 áreas y se cerró con el
+  código del botón; se guardaron los bonos, el informe cerrado no cambió al modificar una regla y al reabrir se borró.
 
 ### Orden recomendado
 
