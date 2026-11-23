@@ -2913,7 +2913,7 @@ window.cargarMapaCodigo = async function () {
     }
 
     async function cargarAvisos() {
-        const [cfg, gr, co] = await Promise.all([api('GET', '/config'), grupos ? Promise.resolve(null) : api('GET', '/grupos'), contactos ? Promise.resolve(null) : api('GET', '/contactos')]);
+        const [cfg, gr, co] = await Promise.all([api('GET', '/config'), grupos && grupos.length ? Promise.resolve(null) : api('GET', '/grupos'), contactos && contactos.length ? Promise.resolve(null) : api('GET', '/contactos')]);
         if (gr && gr.ok) grupos = gr.j.grupos || [];
         if (co && co.ok) contactos = co.j.contactos || [];
         if (cfg.ok) pintarAvisos(cfg.j, true);
