@@ -2883,23 +2883,41 @@ window.cargarMapaCodigo = async function () {
     const ETIQ = { manual: 'Manual', ok: 'Por nombre', ambiguo: 'Ambiguo', ninguno: 'Sin contacto' };
     const COL = { manual: 'bg-primary', ok: 'bg-success', ambiguo: 'bg-warning text-dark', ninguno: 'bg-danger' };
     async function cargarPersonas(caja) {
-        caja.innerHTML = 'Cargando…';
+        const previo = caja.querySelector('.wp-scroll');
+        const scrollY = previo ? previo.scrollTop : 0, filtroPrev = caja.querySelector('.wp-estado') ? caja.querySelector('.wp-estado').value : '', textoPrev = caja.querySelector('.wp-buscar') ? caja.querySelector('.wp-buscar').value : '';
+        if (!previo) caja.innerHTML = 'Cargando…';
         const r = await api('GET', '/personas');
         if (!r.ok) { caja.innerHTML = esc(r.j.detail || 'No se pudo cargar.'); return; }
         const orden = { ninguno: 0, ambiguo: 1, ok: 2, manual: 3 };
         const lista = r.j.personas.slice().sort(function (a, b) { return orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre, 'es'); });
-        caja.innerHTML = '<div style="max-height:380px;overflow:auto;"><table class="table table-sm align-middle" style="font-size:0.82rem;"><thead><tr><th>Persona</th><th>Estado</th><th>Contacto / número</th><th>Asignar a mano</th></tr></thead><tbody>'
+        const n = function (e) { return lista.filter(function (p) { return p.estado === e; }).length; };
+        caja.innerHTML = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">'
+            + '<input class="form-control form-control-sm wp-buscar" placeholder="Buscar persona…" style="max-width:240px;">'
+            + '<select class="form-select form-select-sm wp-estado" style="max-width:220px;">'
+            + '<option value="">Todas (' + lista.length + ')</option><option value="ninguno">Sin contacto (' + n('ninguno') + ')</option><option value="ambiguo">Ambiguo (' + n('ambiguo') + ')</option>'
+            + '<option value="ok">Por nombre (' + n('ok') + ')</option><option value="manual">Manual (' + n('manual') + ')</option></select>'
+            + '<span class="text-muted" style="font-size:0.8rem;">Escriba el nombre del contacto o un celular y pulse Enter o Guardar.</span></div>'
+            + '<div class="wp-scroll" style="max-height:62vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;">'
+            + '<table class="table table-sm align-middle mb-0" style="font-size:0.85rem;min-width:760px;"><thead style="position:sticky;top:0;background:#f8fafc;z-index:1;"><tr><th>Persona</th><th>Estado</th><th>Contacto / número</th><th style="width:340px;">Asignar a mano</th></tr></thead><tbody>'
             + lista.map(function (p) {
                 const cand = p.candidatos && p.candidatos.length ? '<div class="text-muted">¿' + esc(p.candidatos.join(' o ')) + '?</div>' : '';
-                return '<tr data-emp="' + p.emp_id + '"><td>' + esc(p.nombre) + '</td><td><span class="badge ' + COL[p.estado] + '">' + ETIQ[p.estado] + '</span></td>'
-                    + '<td>' + (p.contacto ? esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
-                    + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" list="wa-lista" placeholder="Contacto o celular" style="min-width:170px;">'
-                    + '<button class="btn btn-sm btn-outline-primary wp-ok">Guardar</button>'
+                return '<tr data-emp="' + p.emp_id + '" data-estado="' + p.estado + '" data-nombre="' + esc(p.nombre.toLowerCase()) + '"><td style="white-space:nowrap;">' + esc(p.nombre) + '</td><td><span class="badge ' + COL[p.estado] + '">' + ETIQ[p.estado] + '</span></td>'
+                    + '<td style="white-space:nowrap;">' + (p.contacto ? esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
+                    + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" list="wa-lista" placeholder="Contacto o celular" style="min-width:200px;">'
+                    + '<button class="btn btn-sm btn-outline-primary wp-ok" style="white-space:nowrap;">Guardar</button>'
                     + (p.estado === 'manual' ? '<button class="btn btn-sm btn-outline-danger wp-no" title="Volver a buscar por nombre">✕</button>' : '') + '</div></td></tr>';
             }).join('') + '</tbody></table></div>';
-        caja.querySelectorAll('tr[data-emp]').forEach(function (tr) {
+        const filas = caja.querySelectorAll('tr[data-emp]');
+        const filtrar = function () {
+            const q = caja.querySelector('.wp-buscar').value.trim().toLowerCase(), e = caja.querySelector('.wp-estado').value;
+            filas.forEach(function (tr) { tr.style.display = (!e || tr.getAttribute('data-estado') === e) && (!q || tr.getAttribute('data-nombre').indexOf(q) >= 0) ? '' : 'none'; });
+        };
+        caja.querySelector('.wp-buscar').value = textoPrev; caja.querySelector('.wp-estado').value = filtroPrev;
+        caja.querySelector('.wp-buscar').oninput = filtrar; caja.querySelector('.wp-estado').onchange = filtrar; filtrar();
+        caja.querySelector('.wp-scroll').scrollTop = scrollY;
+        filas.forEach(function (tr) {
             const emp = tr.getAttribute('data-emp');
-            tr.querySelector('.wp-ok').onclick = async function () {
+            const guardar = async function () {
                 const texto = tr.querySelector('.wp-in').value.trim();
                 if (!texto) { msg('Elija un contacto o escriba un celular.'); return; }
                 const hit = elegibles.get(texto);
@@ -2907,6 +2925,8 @@ window.cargarMapaCodigo = async function () {
                 if (!g.ok) { msg(esc(g.j.detail || 'No se pudo guardar.')); return; }
                 msg('Guardado.'); cargarPersonas(caja);
             };
+            tr.querySelector('.wp-ok').onclick = guardar;
+            tr.querySelector('.wp-in').onkeydown = function (ev) { if (ev.key === 'Enter') guardar(); };
             const no = tr.querySelector('.wp-no');
             if (no) no.onclick = async function () { await api('DELETE', '/personas/' + emp + '/destino'); cargarPersonas(caja); };
         });
@@ -2922,7 +2942,7 @@ window.cargarMapaCodigo = async function () {
     window.cargarWhatsapp = async function () {
         clearInterval(timer);
         const c = document.getElementById('whatsapp-container');
-        c.innerHTML = '<div class="p-3" style="max-width:700px;"><h5 class="mb-1">WhatsApp de avisos</h5>'
+        c.innerHTML = '<div class="p-3" style="max-width:1200px;"><h5 class="mb-1">WhatsApp de avisos</h5>'
             + '<p class="text-muted" style="font-size:0.9rem;">Número propio que envía los avisos. Se vincula una vez escaneando un código QR; luego se asigna qué aviso va a qué chat.</p>'
             + '<div id="wa-estado">Consultando…</div><div id="wa-avisos"></div><div id="wa-msg" class="mt-3" style="font-size:0.9rem;"></div></div>';
         grupos = null; contactos = null;
