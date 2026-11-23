@@ -2111,6 +2111,73 @@ window.cargarCatalogoGeneros = async function() {
 };
 
 // ==========================================
+// RAZONES DE NOTA DE CRÉDITO (Fill Rate, 23-11-2026)
+// Cada razón dice si es culpa del chofer: entonces el día no cumple el Fill Rate y se pierde la semana. No se borran:
+// las que ya se usaron quedan en el historial; se desactivan.
+// ==========================================
+window.cargarRazonesNotaCredito = async function () {
+    const razones = await leerCatalogo('/api/configuracion/razones-nota-credito/', 'razones-nc-container', 'las razones de nota de crédito');
+    if (!razones) return;
+    const F = window.FichaCfg, canEdit = F.puede('configuracion.editar');
+    montarCatalogoB('razones-nc-container', {
+        clave: 'razones-nc',
+        titulo: 'Notas de crédito',
+        descripcion: 'Razones de nota de crédito que se eligen al evaluar el Fill Rate de un día. Si la razón es culpa del chofer, ese día no cumple y la semana no se paga.',
+        acciones: (canEdit ? '<button type="button" class="fcB-btn pri" onclick="window.nuevaRazonNotaCredito()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva razón</button>' : '')
+            + '<button type="button" class="fcB-btn" onclick="cargarRazonesNotaCredito()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Actualizar</button>',
+        items: razones,
+        id: function (r) { return r.id; },
+        etiqueta: function (r) { return r.nombre; },
+        sub: function (r) { return (r.culpa_chofer ? 'Culpa del chofer' : 'No es culpa del chofer') + (r.usos ? ' · usada ' + r.usos + (r.usos === 1 ? ' vez' : ' veces') : ''); },
+        apagado: function (r) { return !r.activa; },
+        vacio: 'Todavía no hay razones. Cree la primera con «Nueva razón».',
+        ficha: function (r, panel) {
+            panel.innerHTML = F.cabeza(r.nombre, canEdit ? 'Cambie lo que necesite y guarde.' : 'Solo lectura.')
+                + F.campo('Nombre', F.texto('rnc-nombre', r.nombre, canEdit ? ' maxlength="120"' : ' disabled'))
+                + F.campo('¿Es culpa del chofer?', F.seg('rnc-culpa', [['1', 'Sí: no cumple'], ['0', 'No: cumple']], r.culpa_chofer ? '1' : '0', !canEdit),
+                    'Si es culpa del chofer, el día no cumple y la semana no se paga.')
+                + F.campo('En uso', F.interruptor('rnc-activa', !!r.activa, 'Se puede elegir al evaluar un día'))
+                + F.campo('Historial', '<span>' + (r.usos ? 'Usada en ' + r.usos + (r.usos === 1 ? ' día' : ' días') + ': se guarda tal como estaba ese día.' : 'Aún no se usa.') + '</span>')
+                + (canEdit ? F.pie('', '<button type="button" class="fcB-btn pri" onclick="window.guardarRazonNotaCredito(' + r.id + ', this)"><i class="bi bi-check2" aria-hidden="true"></i>Guardar</button>') : '');
+            if (!canEdit) { const sw = panel.querySelector('#rnc-activa'); if (sw) sw.disabled = true; }
+        }
+    });
+};
+
+async function _pedirRazonNC(url, metodo, cuerpo) {
+    const r = await fetch(url, { method: metodo, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('access_token') }, body: JSON.stringify(cuerpo) });
+    const d = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(d.detail || 'No se pudo guardar.');
+    return d;
+}
+
+window.nuevaRazonNotaCredito = async function () {
+    const v = await uiPedir({ titulo: 'Nueva razón de nota de crédito', confirmText: 'Crear',
+        campos: [{ nombre: 'nombre', etiqueta: 'Nombre', tipo: 'text', requerido: true, ayuda: 'Por ejemplo: producto dañado en el traslado' }] });
+    if (!v) return;
+    const culpa = await uiConfirm('¿Esta razón es culpa del chofer?', { items: ['Sí: el día no cumple y la semana no se paga.', 'No: el día cumple.'],
+        confirmText: 'Sí, es culpa del chofer', cancelText: 'No es culpa del chofer', danger: false });
+    try {
+        await _pedirRazonNC('/api/configuracion/razones-nota-credito/', 'POST', { nombre: v.nombre, culpa_chofer: !!culpa, activa: true });
+        showToast('Razón creada.', 'success');
+        cargarRazonesNotaCredito();
+    } catch (e) { showToast(e.message, 'error'); }
+};
+
+window.guardarRazonNotaCredito = async function (id, btn) {
+    const panel = btn.closest('.fcB-ficha') || document;
+    const nombre = (panel.querySelector('#rnc-nombre').value || '').trim();
+    if (!nombre) { showToast('Falta el nombre de la razón.', 'warning'); return; }
+    try {
+        await _pedirRazonNC('/api/configuracion/razones-nota-credito/' + id + '/', 'PUT', {
+            nombre: nombre, culpa_chofer: window.FichaCfg.leerSeg(panel, 'rnc-culpa') === '1', activa: panel.querySelector('#rnc-activa').checked });
+        showToast('Razón guardada.', 'success');
+        window.FichaCfg.recordar('razones-nc', id);
+        cargarRazonesNotaCredito();
+    } catch (e) { showToast(e.message, 'error'); }
+};
+
+// ==========================================
 // TRAMOS DE CIERRE (PERIODOS RRHH)
 // ==========================================
 window.loadPeriodosRRHH = async function() {
@@ -2556,6 +2623,7 @@ window.abrirModalCrearCargo = async function() {
         'horarios-tab': 'turnos horarios jornada', 'periodos-tab': 'tramos cierre periodos liquidacion', 'justificaciones-tab': 'justificaciones permisos licencias',
         'calendario-tab': 'calendario feriados festivos', 'estados-tab': 'estados asistencia colores', 'areas-tab': 'areas departamentos bioalba',
         'cargos-tab': 'cargos puestos', 'generos-tab': 'generos', 'pagadores-tab': 'pagadores empresas', 'bonos-tab': 'bonos beneficios',
+        'notas-credito-tab': 'notas de credito razones fill rate chofer culpa',
         'correo-tab': 'correo email smtp alertas notificaciones', 'robot-bioalba-tab': 'robot bioalba sincronizacion relojes',
         'catalogo-hallazgos-config-tab': 'porteria hallazgos anomalias rondas', 'porteria-ubicaciones-config-tab': 'porteria ubicacion puntos control qr',
         'flota-config-tab': 'flota camiones vehiculos', 'productos-propios-tab': 'productos propios entregas', 'seguridad-config-tab': 'seguridad usuarios roles permisos auditoria',

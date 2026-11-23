@@ -1310,6 +1310,7 @@
                                     <div class="cfg-group-title" aria-hidden="true">Remuneración</div>
                                     <button class="nav-link cfg-item" id="pagadores-tab" data-bs-toggle="tab" data-bs-target="#tab-pagadores" type="button" role="tab" onclick="if(typeof openTabPagadores === 'function') openTabPagadores()"><i class="bi bi-bank" aria-hidden="true"></i> Pagadores</button>
                                     <button class="nav-link cfg-item" id="bonos-tab" data-bs-toggle="tab" data-bs-target="#tab-bonos" type="button" role="tab"><i class="bi bi-cash-coin" aria-hidden="true"></i> Bonos</button>
+                                    <button class="nav-link cfg-item" id="notas-credito-tab" data-bs-toggle="tab" data-bs-target="#tab-notas-credito" type="button" role="tab" onclick="if(typeof cargarRazonesNotaCredito === 'function') cargarRazonesNotaCredito()"><i class="bi bi-receipt" aria-hidden="true"></i> Notas de crédito</button>
                                 </div>
                                 <div class="cfg-group" role="presentation">
                                     <div class="cfg-group-title" aria-hidden="true">Comunicación e integraciones</div>
@@ -1389,6 +1390,11 @@
                                         </div>
                                     </div>
                                 </div>
+                                <!-- Tab Notas de crédito: razones (Fill Rate, 23-11-2026) -->
+                                <div class="tab-pane fade" id="tab-notas-credito" role="tabpanel">
+                                    <div id="razones-nc-container"></div>
+                                </div>
+
                                 <!-- Tab Géneros (Catálogo) -->
                                 <div class="tab-pane fade" id="tab-generos" role="tabpanel">
                                     <div class="d-flex justify-content-between align-items-center mb-4">

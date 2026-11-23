@@ -121,7 +121,28 @@
             + (puedeEditar() ? '<span class="text-muted">Clic en un día: «Cumple» o «No cumple»</span>' : '');
     };
 
-    // Clic en un día de la vista: «Cumple» o «No cumple» (con comentario). Solo los días de turno que se pueden evaluar.
+    // Razones de nota de crédito (Configuración › Notas de crédito), leídas una vez
+    let RAZONES = null;
+    async function razones() {
+        if (RAZONES) return RAZONES;
+        try {
+            const r = await fetch('/api/configuracion/razones-nota-credito/', { headers: authHead() });
+            RAZONES = r.ok ? await r.json() : [];
+        } catch (e) { RAZONES = []; }
+        return RAZONES;
+    }
+
+    // Peonetas de la grilla que tienen el bono (para elegir con quién iba el chofer ese día)
+    function peonetasConBono() {
+        const d = datos();
+        const esPeoneta = e => typeof window.categoriaCargo === 'function' && window.categoriaCargo(e.cargo || '') === 'peoneta';
+        return ((d && d.empleados) || []).filter(e => esPeoneta(e) && evalDe(e))
+            .sort((a, b) => String(a.nombre_completo || '').localeCompare(String(b.nombre_completo || ''), 'es'));
+    }
+
+    // Clic en un día de la vista (dueño, 23-11-2026): «Cumple» o «No cumple», con nota de crédito y su razón (si la razón
+    // es culpa del chofer, no cumple; si no, cumple), comentario y, para un chofer, los peonetas que iban con él ese día
+    // (reciben la misma marca). Se abre con lo que ya estaba, para corregirlo.
     window.mxBsMarcar = async function (empId, fecha) {
         const b = bonoSemanal();
         const d = datos();
@@ -137,35 +158,104 @@
             return;
         }
         if (!puedeEditar()) { if (window.Avisos) window.Avisos.info('Período cerrado o sin permiso para cambiarlo.'); return; }
-        const marcado = cod === 'nc';
         const quien = emp.nombre_completo || emp.nombre || '';
-        const previo = ((r.perdidos || []).find(x => x.fecha === fecha) || {}).causa || '';
-        let res;
-        if (window.Swal) {
-            res = await window.Swal.fire({
-                title: b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha),
-                html: '<div class="av-quien">' + esc(quien) + '</div><div class="av-tx">Si un día no cumple, la semana no se paga.</div>'
-                    + '<div class="av-campos"><label for="bs-coment">Comentario (si no cumple)<input id="bs-coment" type="text" placeholder="Por ejemplo: no completó la carga" value="'
-                    + esc(previo.replace(/^No cumple:?\s*/, '')) + '"></label></div>',
-                showDenyButton: true, showCancelButton: true, reverseButtons: true, focusConfirm: false,
-                confirmButtonText: 'No cumple', denyButtonText: 'Cumple', cancelButtonText: 'Cancelar',
-                customClass: { confirmButton: 'av-btn av-btn-borra', denyButton: 'av-btn av-btn-pri' },
-                preConfirm: () => (document.getElementById('bs-coment').value || '').trim()
-            });
-            if (res.isDismissed) return;
-        } else {
-            res = { isConfirmed: window.confirm('¿No cumple? (Cancelar = Cumple)'), value: '' };
+        const previa = (r.marcas || {})[fecha] || {};
+        const lista = (await razones()).filter(x => x.activa || x.id === previa.razon_nc_id);
+        const esChofer = typeof window.categoriaCargo === 'function' && window.categoriaCargo(emp.cargo || '') === 'chofer';
+        let peon = [], propuestos = [];
+        if (esChofer) {
+            peon = peonetasConBono();
+            try {
+                const rr = await fetch('/api/asistencia/bono-semanal/acompanantes/?chofer_id=' + Number(empId) + '&fecha=' + fecha, { headers: authHead() });
+                propuestos = rr.ok ? ((await rr.json()).peonetas_ids || []) : [];
+            } catch (e) { propuestos = []; }
         }
-        const noCumple = !!res.isConfirmed;
-        if (!noCumple && cod === 'cumple') return;   // ya estaba marcado «Cumple»
-        const comentario = noCumple ? (res.value || null) : null;
+        const nombreDe = p => (window.nombreTitulo ? window.nombreTitulo(p.nombre_completo) : p.nombre_completo);
+        const opsPeon = sel => '<option value="">Ninguno</option>' + peon.map(p => '<option value="' + p.id + '"'
+            + (Number(sel) === Number(p.id) ? ' selected' : '') + '>' + esc(nombreDe(p)) + '</option>').join('');
+        const opsRazon = '<option value="">Elija la razón…</option>' + lista.map(x => '<option value="' + x.id + '" data-culpa="' + (x.culpa_chofer ? 1 : 0) + '"'
+            + (previa.razon_nc_id === x.id ? ' selected' : '') + '>' + esc(x.nombre) + (x.culpa_chofer ? ' · culpa del chofer' : ' · no es culpa del chofer') + '</option>').join('');
+        const html = '<div class="av-quien">' + esc(quien) + '</div><div class="av-tx">Si un día no cumple, la semana no se paga.'
+            + (previa.marca ? ' Hoy está marcado «' + (previa.marca === 'cumple' ? 'Cumple' : 'No cumple') + '»' + (previa.usuario ? ' por ' + esc(previa.usuario) : '') + '.' : '') + '</div>'
+            + '<div class="av-campos">'
+            + '<label for="bs-nc">¿Tiene nota de crédito?<select id="bs-nc"><option value="0">No</option><option value="1"' + (previa.tiene_nc ? ' selected' : '') + '>Sí</option></select></label>'
+            + '<label for="bs-razon" id="bs-razon-wrap" style="' + (previa.tiene_nc ? '' : 'display:none') + '">Razón de la nota de crédito<select id="bs-razon">' + opsRazon + '</select>'
+            + (lista.length ? '' : '<small>No hay razones: créelas en Configuración › Notas de crédito.</small>') + '</label>'
+            + '<div id="bs-efecto" class="av-tx" style="display:none"></div>'
+            + '<label for="bs-coment">Comentario<input id="bs-coment" type="text" placeholder="Por ejemplo: no completó la carga" value="' + esc(previa.comentario || '') + '"></label>'
+            + (esChofer ? '<label for="bs-p1">Peonetas que iban con el chofer (reciben la misma marca)<select id="bs-p1">' + opsPeon(propuestos[0]) + '</select>'
+                + '<select id="bs-p2" style="margin-top:6px">' + opsPeon(propuestos[1]) + '</select>'
+                + (propuestos.length ? '<small>Propuestos desde la libreta de ese día; se pueden cambiar.</small>' : '') + '</label>' : '')
+            + '</div>';
+        if (!window.Swal) { if (window.Avisos) window.Avisos.error('No se pudo abrir la ventana.'); return; }
+        const res = await window.Swal.fire({
+            title: b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha),
+            html: html,
+            showDenyButton: true, showCancelButton: true, reverseButtons: true, focusConfirm: false,
+            confirmButtonText: 'No cumple', denyButtonText: 'Cumple', cancelButtonText: 'Cancelar',
+            customClass: { confirmButton: 'av-btn av-btn-borra', denyButton: 'av-btn av-btn-pri' },
+            didOpen: () => {
+                // Con nota de crédito, la razón decide: se oculta «Cumple» / «No cumple» y queda un solo «Guardar»
+                const nc = document.getElementById('bs-nc'), razon = document.getElementById('bs-razon');
+                const pintar = () => {
+                    const con = nc.value === '1';
+                    document.getElementById('bs-razon-wrap').style.display = con ? '' : 'none';
+                    const op = razon.options[razon.selectedIndex];
+                    const efecto = document.getElementById('bs-efecto');
+                    const deny = window.Swal.getDenyButton(), conf = window.Swal.getConfirmButton();
+                    if (con) {
+                        deny.style.display = 'none';
+                        conf.textContent = 'Guardar';
+                        efecto.style.display = op && op.value ? '' : 'none';
+                        efecto.textContent = op && op.value ? (op.dataset.culpa === '1' ? 'Culpa del chofer: el día queda «No cumple» y la semana no se paga.' : 'No es culpa del chofer: el día queda «Cumple».') : '';
+                    } else {
+                        deny.style.display = '';
+                        conf.textContent = 'No cumple';
+                        efecto.style.display = 'none';
+                    }
+                };
+                nc.addEventListener('change', pintar);
+                razon.addEventListener('change', pintar);
+                pintar();
+            },
+            preConfirm: () => {
+                const con = document.getElementById('bs-nc').value === '1';
+                const rid = document.getElementById('bs-razon').value;
+                if (con && !rid) { window.Swal.showValidationMessage('Elija la razón de la nota de crédito.'); return false; }
+                return {
+                    tiene_nc: con, razon_nc_id: rid ? Number(rid) : null,
+                    comentario: (document.getElementById('bs-coment').value || '').trim() || null,
+                    peonetas: esChofer ? [...new Set(['bs-p1', 'bs-p2'].map(id => Number(document.getElementById(id).value || 0)).filter(Boolean))] : []
+                };
+            },
+            preDeny: () => {
+                if (document.getElementById('bs-nc').value === '1') { window.Swal.showValidationMessage('Con nota de crédito, la razón decide: use «Guardar».'); return false; }
+                return {
+                    comentario: (document.getElementById('bs-coment').value || '').trim() || null,
+                    peonetas: esChofer ? [...new Set(['bs-p1', 'bs-p2'].map(id => Number(document.getElementById(id).value || 0)).filter(Boolean))] : []
+                };
+            }
+        });
+        if (res.isDismissed) return;
+        const v = res.value || {};
+        const cuerpo = { bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: !!res.isConfirmed && !v.tiene_nc,
+            comentario: v.comentario || null, tiene_nc: !!v.tiene_nc, razon_nc_id: v.razon_nc_id || null, peonetas_ids: v.peonetas || [] };
         try {
-            const resp = await fetch('/api/asistencia/bono-semanal/no-cumple/', { method: 'POST', headers: authHead(),
-                body: JSON.stringify({ bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: noCumple, comentario }) });
+            const resp = await fetch('/api/asistencia/bono-semanal/no-cumple/', { method: 'POST', headers: authHead(), body: JSON.stringify(cuerpo) });
             const out = await resp.json().catch(() => ({}));
             if (!resp.ok) throw new Error(out.detail || 'No se pudo guardar.');
-            if (window.Avisos) window.Avisos.listo(noCumple ? 'Marcado «no cumple»' : 'Marcado «cumple»');
-            if (typeof window.reloadSingleEmployeeRow === 'function') await window.reloadSingleEmployeeRow(empId);
+            const n = (v.peonetas || []).length;
+            if (window.Avisos) window.Avisos.listo((out.no_cumple ? 'Marcado «no cumple»' : 'Marcado «cumple»')
+                + (n ? ' · también ' + (n === 1 ? 'su peoneta' : 'sus 2 peonetas') : ''));
+            // Las filas a la vista se refrescan; si un peoneta está en otra pestaña, se vuelven a pedir los datos de la grilla
+            const personas = out.personas || [Number(empId)];
+            if (personas.some(pid => !document.getElementById('row-empleado-' + pid)) && typeof window.loadMarcacionesData === 'function') {
+                await window.loadMarcacionesData();
+            } else {
+                for (const pid of personas) {
+                    if (typeof window.reloadSingleEmployeeRow === 'function') await window.reloadSingleEmployeeRow(pid);
+                }
+            }
         } catch (e) {
             if (window.Avisos) window.Avisos.error(e.message || 'No se pudo guardar.'); else alert(e.message);
         }

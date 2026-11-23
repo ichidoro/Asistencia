@@ -31,6 +31,7 @@
     "nombre": "pintar",
     "archivos": [
      "frontend/js/articulo22_ui.js",
+     "frontend/js/bono_semanal_ui.js",
      "frontend/js/buscador.js",
      "frontend/js/ficha_persona.js",
      "frontend/js/llaves_ui.js",
@@ -133,7 +134,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1540,
+  "total": 1547,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -214,7 +215,7 @@
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",
-   "lineas": 2694
+   "lineas": 2762
   },
   {
    "archivo": "frontend/js/productos_4.js",

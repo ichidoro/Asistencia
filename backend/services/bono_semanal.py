@@ -208,11 +208,19 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
         "SELECT fecha FROM feriados WHERE fecha BETWEEN ? AND ?", (desde, hasta))}
     nc_emp: Dict[int, Dict[str, Optional[str]]] = {}
     cumple_emp: Dict[int, Set[str]] = {}
+    marcas_emp: Dict[int, Dict[str, Dict[str, Any]]] = {}
     for m in await ConfiguracionRepository(db).get_dias_no_cumple([bono["id"]], desde, hasta):
+        # Lo marcado de cada día, para que la ventana de la grilla lo muestre al abrirla
+        marcas_emp.setdefault(int(m["empleado_id"]), {})[str(m["fecha"])[:10]] = {
+            "marca": m.get("marca") or "no_cumple", "comentario": m.get("comentario"), "tiene_nc": bool(m.get("tiene_nc")),
+            "razon_nc_id": m.get("razon_nc_id"), "razon_nc": m.get("razon_nc_nombre"), "usuario": m.get("usuario")}
         if (m.get("marca") or "no_cumple") == "cumple":
             cumple_emp.setdefault(int(m["empleado_id"]), set()).add(str(m["fecha"])[:10])
         else:
-            nc_emp.setdefault(int(m["empleado_id"]), {})[str(m["fecha"])[:10]] = m.get("comentario")
+            # El detalle del «no cumple»: la nota de crédito y su razón, si la hubo, y el comentario
+            detalle = "; ".join(x for x in ((f"nota de crédito por {m['razon_nc_nombre']}" if m.get("tiene_nc") and m.get("razon_nc_nombre") else None),
+                                           m.get("comentario")) if x) or None
+            nc_emp.setdefault(int(m["empleado_id"]), {})[str(m["fecha"])[:10]] = detalle
     from backend.services.bolsa_prorrateo import salida_decidida
     for e, regla in candidatos:
         salida = salida_decidida(e.get("fecha_salida"), e.get("activo"), e.get("decision_vencimiento"))
@@ -225,6 +233,7 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
         for f in cumple_emp.get(e["id"], ()):
             if res[e["id"]].get("dias", {}).get(f) in ("ok", "pendiente"):
                 res[e["id"]]["dias"][f] = "cumple"
+        res[e["id"]]["marcas"] = marcas_emp.get(e["id"], {})
     for r in res.values():
         r["bono_id"] = bono["id"]   # la grilla lo usa para marcar los días
     return res

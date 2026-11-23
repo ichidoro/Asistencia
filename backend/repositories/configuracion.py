@@ -537,6 +537,26 @@ class ConfiguracionRepository:
             await self.db.execute("ALTER TABLE bono_dias_no_cumple ADD COLUMN marca TEXT DEFAULT 'no_cumple'")
             await self.db.execute("UPDATE bono_dias_no_cumple SET marca = 'no_cumple' WHERE marca IS NULL")
             logger.info("✨ Migración: columna 'marca' agregada a bono_dias_no_cumple")
+        # Nota de crédito del día (dueño, 23-11-2026): si la hubo y su razón, copiada tal como estaba ese día (nombre y si
+        # era culpa del chofer) para que el historial no cambie si después se edita la razón
+        cols_nc = await get_cols("bono_dias_no_cumple") if get_cols else []
+        for col, tipo in (("tiene_nc", "INTEGER DEFAULT 0"), ("razon_nc_id", "INTEGER"), ("razon_nc_nombre", "TEXT"),
+                          ("razon_nc_culpa", "INTEGER")):
+            if get_cols and col not in cols_nc:
+                await self.db.execute(f"ALTER TABLE bono_dias_no_cumple ADD COLUMN {col} {tipo}")
+                logger.info(f"✨ Migración: columna '{col}' agregada a bono_dias_no_cumple")
+        # Maestro de razones de nota de crédito (Configuración › Notas de crédito): cada una dice si es culpa del chofer
+        if not await self.db.table_exists("razones_nota_credito"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS razones_nota_credito (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    culpa_chofer INTEGER NOT NULL DEFAULT 0,
+                    activa INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            logger.info("✨ Tabla razones_nota_credito creada")
 
     async def get_dias_no_cumple(self, bono_ids: List[int], desde: str, hasta: str) -> List[Dict]:
         """Los días marcados («no_cumple» o «cumple») de esos bonos semanales entre dos fechas."""
@@ -544,17 +564,42 @@ class ConfiguracionRepository:
             return []
         ph = ",".join("?" * len(bono_ids))
         return [dict(r) for r in await self.db.fetch_all(
-            f"SELECT bono_id, empleado_id, fecha, comentario, usuario, COALESCE(marca, 'no_cumple') AS marca FROM bono_dias_no_cumple "
+            f"SELECT bono_id, empleado_id, fecha, comentario, usuario, COALESCE(marca, 'no_cumple') AS marca, "
+            f"COALESCE(tiene_nc, 0) AS tiene_nc, razon_nc_id, razon_nc_nombre, razon_nc_culpa FROM bono_dias_no_cumple "
             f"WHERE bono_id IN ({ph}) AND fecha BETWEEN ? AND ?", (*bono_ids, desde, hasta))]
 
     async def marcar_dia_no_cumple(self, bono_id: int, empleado_id: int, fecha: str, comentario: Optional[str],
-                                   usuario: Optional[str], marca: str = "no_cumple") -> None:
-        """Guarda la marca del día: «no_cumple» (pierde la semana) o «cumple»."""
+                                   usuario: Optional[str], marca: str = "no_cumple",
+                                   razon_nc: Optional[Dict[str, Any]] = None) -> None:
+        """Guarda la marca del día: «no_cumple» (pierde la semana) o «cumple»; con razon_nc, la nota de crédito del día
+        (su razón copiada tal como está hoy)."""
         await self.db.execute("DELETE FROM bono_dias_no_cumple WHERE bono_id = ? AND empleado_id = ? AND fecha = ?",
                               (bono_id, empleado_id, fecha))
         await self.db.execute(
-            "INSERT INTO bono_dias_no_cumple (bono_id, empleado_id, fecha, comentario, usuario, marca) VALUES (?, ?, ?, ?, ?, ?)",
-            (bono_id, empleado_id, fecha, comentario, usuario, marca))
+            "INSERT INTO bono_dias_no_cumple (bono_id, empleado_id, fecha, comentario, usuario, marca, tiene_nc, razon_nc_id, "
+            "razon_nc_nombre, razon_nc_culpa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (bono_id, empleado_id, fecha, comentario, usuario, marca, 1 if razon_nc else 0,
+             razon_nc["id"] if razon_nc else None, razon_nc["nombre"] if razon_nc else None,
+             (1 if razon_nc["culpa_chofer"] else 0) if razon_nc else None))
+
+    async def get_razones_nota_credito(self) -> List[Dict]:
+        """Las razones de nota de crédito, activas primero y por nombre."""
+        if not await self.db.table_exists("razones_nota_credito"):
+            return []
+        return [dict(r) for r in await self.db.fetch_all(
+            "SELECT r.id, r.nombre, r.culpa_chofer, r.activa, "
+            "(SELECT COUNT(*) FROM bono_dias_no_cumple d WHERE d.razon_nc_id = r.id) AS usos "
+            "FROM razones_nota_credito r ORDER BY r.activa DESC, r.nombre")]
+
+    async def crear_razon_nota_credito(self, nombre: str, culpa_chofer: bool) -> int:
+        res = await self.db.execute("INSERT INTO razones_nota_credito (nombre, culpa_chofer, activa) VALUES (?, ?, 1)",
+                                    (nombre, 1 if culpa_chofer else 0))
+        return res.lastrowid
+
+    async def actualizar_razon_nota_credito(self, razon_id: int, nombre: str, culpa_chofer: bool, activa: bool) -> bool:
+        res = await self.db.execute("UPDATE razones_nota_credito SET nombre = ?, culpa_chofer = ?, activa = ? WHERE id = ?",
+                                    (nombre, 1 if culpa_chofer else 0, 1 if activa else 0, razon_id))
+        return (res.rowcount or 0) > 0
 
     EFECTOS = ("asistido", "proporcion", "pierde")
 

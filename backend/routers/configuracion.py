@@ -1104,6 +1104,55 @@ async def get_catalogo_generos(
     return [dict(r) for r in rows]
 
 
+# ============================================
+# RAZONES DE NOTA DE CRÉDITO (Fill Rate, 23-11-2026)
+# ============================================
+
+class RazonNotaCredito(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=120)
+    culpa_chofer: bool = False
+    activa: bool = True
+
+
+@router.get("/razones-nota-credito/")
+async def get_razones_nota_credito(
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.ver", "marcaciones.ver"]))
+):
+    """Las razones de nota de crédito: cada una dice si es culpa del chofer (entonces el día no cumple el Fill Rate)."""
+    return await ConfiguracionRepository(db).get_razones_nota_credito()
+
+
+@router.post("/razones-nota-credito/")
+async def crear_razon_nota_credito(
+    req: RazonNotaCredito,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    repo = ConfiguracionRepository(db)
+    nombre = req.nombre.strip()
+    if any(str(r["nombre"]).strip().upper() == nombre.upper() for r in await repo.get_razones_nota_credito()):
+        raise HTTPException(status_code=400, detail="Ya existe una razón con ese nombre.")
+    return {"id": await repo.crear_razon_nota_credito(nombre, req.culpa_chofer)}
+
+
+@router.put("/razones-nota-credito/{razon_id}/")
+async def actualizar_razon_nota_credito(
+    razon_id: int,
+    req: RazonNotaCredito,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Edita una razón. No se borran: las que ya se usaron quedan en el historial; se desactivan."""
+    repo = ConfiguracionRepository(db)
+    nombre = req.nombre.strip()
+    if any(r["id"] != razon_id and str(r["nombre"]).strip().upper() == nombre.upper() for r in await repo.get_razones_nota_credito()):
+        raise HTTPException(status_code=400, detail="Ya existe una razón con ese nombre.")
+    if not await repo.actualizar_razon_nota_credito(razon_id, nombre, req.culpa_chofer, req.activa):
+        raise HTTPException(status_code=404, detail="La razón no existe.")
+    return {"ok": True}
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # PERIODOS RRHH (Tramos de Cierre)
 # ──────────────────────────────────────────────────────────────────────────────
