@@ -116,3 +116,13 @@ def test_un_bono_por_periodo_respeta_el_alcance():
     assert r["Compromiso"]["aplica"] is False and r["Compromiso"]["motivo"] == "No aplica en su área"
     r, _ = _ev_mensual(FI, FF, _matriz(FI, FF), empleado={"area": "PRODUCCION"}, bonos=(solo_prod,))
     assert r["Compromiso"]["aplica"] is not False and r["Compromiso"]["monto"] == 70000
+
+
+def test_justificacion_que_cuenta_como_cumplida_no_descuenta():
+    # 23-11-2026: el Descanso Operativo no es causal de descuento; configurado «asistido», la semana se paga completa
+    bono = dict(BONO, efectos={DEOP: "asistido", LICC: "pierde"})
+    r = evaluar_persona(bono, 40000, semanas_del_periodo(FI, FF), _dias("2026-10-26", "2026-11-22"),
+                        {"2026-11-04": {"tipo_id": DEOP, "tipo_nombre": "Descanso Operativo"}}, {}, set(), TURNO, False,
+                        None, None, "2026-11-30")
+    assert r["semanas"][1]["estado"] == "obtiene" and r["semanas"][1]["monto"] == 40000
+    assert r["dias"]["2026-11-04"] == "justificado"

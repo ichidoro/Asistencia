@@ -6979,12 +6979,18 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
             ? 'Día por revisar: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d) + '. Una regla de marcaciones dejó este día en revisión.'
             : 'Acciones de asistencia: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d);
         const clasePostBaja = (bajaF && d > bajaF) ? ' gc-post-baja' : '';
+        // Vista Fill Rate (23-11-2026): el clic en el día marca «Cumple» o «No cumple» (no abre las acciones de asistencia) y
+        // después de cada domingo va la columna con el total de la semana (bono_semanal_ui.js)
+        const vistaFr = stateMarcacionesApp.viewMode === 'fillrate' && !!window.mxBsCelda;
+        const accionCelda = vistaFr
+            ? 'onclick="window.mxBsMarcar(' + emp.id + ',\'' + d + '\')"'
+            : 'onclick="openAsistenciaActionModal(' + emp.id + ',\'' + d + '\',\'' + empNameEsc + '\',' + hEnt + ',' + hSal + ')" ondblclick="openJustifyModal(' + emp.id + ',\'' + empNameEsc + '\',\'' + d + '\')"';
+        const totalSemana = (vistaFr && dt.getDay() === 0 && window.mxBsSemanaCelda) ? window.mxBsSemanaCelda(emp, d) : '';
         return `<td class="col-day text-center p-0 align-middle cell-clickable${claseRev}${clasePostBaja}" tabindex="0" role="button" aria-label="${ariaCelda}" data-fecha="${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
-                    onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
-                    ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
+                    ${accionCelda}
                     data-grid-tooltip data-tip="${tipKey}">
                     ${cellContent}
-                </td>`;
+                </td>${totalSemana}`;
     }).join('');
 
     const hasHE = !r.esBolsa && r.he_pend > 0;
@@ -7590,6 +7596,9 @@ function renderVistaAnalitica(respData, container) {
 
     // ── 6. Cabeceras de días ─────────────────────────────────────────────────
     const monthNamesShort = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    // Vista Fill Rate: una columna más tras cada domingo con el total de la semana (23-11-2026)
+    const _vistaFr = stateMarcacionesApp.viewMode === 'fillrate' && !!window.mxBsSemanaCelda && !!(window.mxBsHay && window.mxBsHay(respData));
+    const _nSemanasFr = _vistaFr ? dates.filter(d => new Date(d + 'T00:00:00').getDay() === 0).length : 0;
     const dayHeaders = dates.map(d => {
         const dt = new Date(d+'T00:00:00');
         const isFer = feriadosArray.includes(d);
@@ -7615,7 +7624,7 @@ function renderVistaAnalitica(respData, container) {
                     <div class="dh-wd">${dayShortName}</div>
                     <div class="dh-dn">${dt.getDate().toString().padStart(2, '0')}</div>
                     ${window._perdonazoState?.activo ? '<div style="font-size: 0.75rem;color:#10b981;font-weight:600;"><i class="bi bi-gift" aria-hidden="true"></i></div>' : ''}
-                </th>`;
+                </th>${(_vistaFr && dt.getDay() === 0) ? '<th class="col-day bs-sem-th text-center p-1" title="Total de la semana del bono"><div class="dh-wd">Total</div><div class="dh-wd">semana</div></th>' : ''}`;
     }).join('');
 
 
@@ -7669,7 +7678,7 @@ function renderVistaAnalitica(respData, container) {
                 : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px;${getStickyWidthStyle('espera')}"></td>`
         ) : ''}
-        <td colspan="${dates.length}"></td>
+        <td colspan="${dates.length + _nSemanasFr}"></td>
     </tr>`;
 
     // ── 8. Switches ──────────────────────────────────────────────────────────
@@ -7817,7 +7826,7 @@ function renderVistaAnalitica(respData, container) {
                 // Los meses sobre los días (en vez de «Días del período»): una celda por mes con su cantidad de días
                 const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
                 const grupos = [];
-                dates.forEach(d => { const k = d.slice(0, 7); const g = grupos[grupos.length - 1]; if (g && g.k === k) g.n++; else grupos.push({ k, n: 1, t: meses[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4) }); });
+                dates.forEach(d => { const k = d.slice(0, 7); const g = grupos[grupos.length - 1]; const extra = (_vistaFr && new Date(d + 'T00:00:00').getDay() === 0) ? 1 : 0; if (g && g.k === k) g.n += 1 + extra; else grupos.push({ k, n: 1 + extra, t: meses[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4) }); });
                 return grupos.map(g => `<th colspan="${g.n}" class="text-start px-2 dh-mes">${g.t}</th>`).join('');
             })()}
         </tr>

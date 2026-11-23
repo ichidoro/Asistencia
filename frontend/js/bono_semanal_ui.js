@@ -82,63 +82,87 @@
         if (!r) return '<span class="bs-na">·</span>';
         const cod = (r.dias || {})[fecha];
         const editable = puedeEditar();
-        const boton = (clase, texto, tit) => editable
-            ? '<button type="button" class="bs-dia ' + clase + '" title="' + esc(tit) + '" onclick="event.stopPropagation(); window.mxBsMarcar(' + Number(emp.id) + ', \'' + fecha + '\')">' + texto + '</button>'
-            : '<span class="bs-dia ' + clase + '" title="' + esc(tit) + '">' + texto + '</span>';
+        const boton = (clase, texto, tit) => '<span class="bs-dia ' + clase + (editable ? ' bs-click' : '') + '" title="' + esc(tit) + '">' + texto + '</span>';
         let html;
-        if (cod === 'ok') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para marcar «no cumple»' : ''));
+        // En blanco: el Fill Rate se gana; solo se ve lo que cambia la semana (dueño, 23-11-2026)
+        if (cod === 'ok') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Cumple' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
         else if (cod === 'nc') {
             const p = (r.perdidos || []).find(x => x.fecha === fecha);
-            html = boton('bs-x', 'N/C', (p ? p.causa : 'No cumple') + (editable ? ' · clic para quitar' : ''));
-        } else if (cod === 'pendiente') html = boton('bs-pend', '·', 'Día por llegar' + (editable ? ' · clic para marcar «no cumple»' : ''));
+            html = boton('bs-x', 'N/C', (p ? p.causa : 'No cumple') + (editable ? ' · clic para cambiar' : ''));
+        } else if (cod === 'pendiente') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Día por llegar' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
         else if (cod === 'pierde' || cod === 'proporcion') {
             const p = (r.perdidos || []).find(x => x.fecha === fecha);
             html = '<span class="bs-just ' + (cod === 'pierde' ? 'bs-x' : 'bs-pr') + '" title="' + esc(cod === 'pierde' ? 'Hace perder la semana: ' + (p ? p.causa : '') : 'Descuenta en proporción') + '">'
                 + (typeof normal === 'function' ? normal() : '') + '</span>';
-        } else if (cod === 'libre') html = '<span class="bs-libre">' + (typeof normal === 'function' ? normal() : '') + '</span>';
+        } else if (cod === 'justificado') html = '<span class="bs-just bs-okj" title="Justificado: cuenta como cumplido">' + (typeof normal === 'function' ? normal() : '') + '</span>';
+        else if (cod === 'libre') html = '<span class="bs-libre">' + (typeof normal === 'function' ? normal() : '') + '</span>';
         else if (cod === 'fuera') html = '<span class="bs-na" title="Sin turno ese día">·</span>';
         else html = '<span class="bs-na" title="Esta semana termina en el período siguiente y se evalúa ahí">' + (typeof normal === 'function' ? normal() : '') + '</span>';
-        return '<div class="bs-cel">' + html + chipSemana(r, fecha) + '</div>';
+        return '<div class="bs-cel">' + html + '</div>';
+    };
+
+    // Columna «Total semana», después de cada domingo: el resultado de la semana que termina ese día
+    window.mxBsSemanaCelda = function (emp, domingo) {
+        const r = evalDe(emp);
+        const cont = r ? chipSemana(r, domingo) : '';
+        return '<td class="col-day bs-sem-td text-center p-0 align-middle">' + (cont || '<span class="bs-na">·</span>') + '</td>';
     };
 
     window.mxBsLeyenda = function () {
         const b = bonoSemanal();
         return '<span class="bs-ley"><b>' + esc(b ? b.nombre : 'Fill Rate') + '</b> · semana de lunes a domingo:</span>'
-            + '<span><span class="bs-dia bs-ok">✓</span> cumple</span>'
+            + '<span>En blanco: cumple</span>'
             + '<span><span class="bs-dia bs-x">N/C</span> no cumple: pierde la semana</span>'
-            + '<span><span class="bs-just bs-pr">DEOP</span> justificación en proporción</span>'
-            + '<span><span class="bs-sem bs-ok">$40.000</span> resultado de la semana, en el domingo</span>'
-            + (puedeEditar() ? '<span class="text-muted">Clic en un día para marcar o quitar «no cumple»</span>' : '');
+            + '<span><span class="bs-just bs-okj">DEOP</span> justificado que cuenta como cumplido</span>'
+            + '<span><span class="bs-just bs-pr">DEOP</span> justificado en proporción</span>'
+            + '<span>«Total semana»: el resultado de cada semana</span>'
+            + (puedeEditar() ? '<span class="text-muted">Clic en un día: «Cumple» o «No cumple»</span>' : '');
     };
 
-    // Clic en un día: marca «no cumple» (con comentario) o lo quita
+    // Clic en un día de la vista: «Cumple» o «No cumple» (con comentario). Solo los días de turno que se pueden evaluar.
     window.mxBsMarcar = async function (empId, fecha) {
         const b = bonoSemanal();
         const d = datos();
         if (!b || !d) return;
         const emp = (d.empleados || []).find(e => Number(e.id) === Number(empId)) || { id: empId };
-        const r = evalDe(emp) || {};
-        const marcado = (r.dias || {})[fecha] === 'nc';
-        const quien = emp.nombre_completo || emp.nombre || '';
-        let comentario = null;
-        if (marcado) {
-            const ok = await window.uiConfirm('¿Quitar el «no cumple» del ' + window.formatFechaDDMMYYYY(fecha) + '?',
-                { quien, items: ['La semana vuelve a contar ese día como cumplido.'], confirmText: 'Quitar', danger: false });
-            if (!ok) return;
-        } else {
-            const v = await window.uiPedir({ titulo: 'No cumple · ' + window.formatFechaDDMMYYYY(fecha),
-                texto: quien + ': la semana de este día no se paga en ' + b.nombre + '.',
-                campos: [{ nombre: 'comentario', etiqueta: 'Comentario', tipo: 'text', ayuda: 'Por ejemplo: no completó la carga' }],
-                confirmText: 'Marcar no cumple' });
-            if (v === null) return;
-            comentario = v.comentario || null;
+        const r = evalDe(emp);
+        if (!r) return;
+        const cod = (r.dias || {})[fecha];
+        if (!['ok', 'nc', 'pendiente'].includes(cod)) {
+            if (window.Avisos) window.Avisos.info(cod === 'libre' ? 'Día libre o feriado: no se evalúa.'
+                : cod === 'justificado' || cod === 'proporcion' || cod === 'pierde' ? 'Día justificado o con inasistencia: lo decide la configuración del bono.'
+                    : 'Este día no se evalúa en este período.');
+            return;
         }
+        if (!puedeEditar()) { if (window.Avisos) window.Avisos.info('Período cerrado o sin permiso para cambiarlo.'); return; }
+        const marcado = cod === 'nc';
+        const quien = emp.nombre_completo || emp.nombre || '';
+        const previo = ((r.perdidos || []).find(x => x.fecha === fecha) || {}).causa || '';
+        let res;
+        if (window.Swal) {
+            res = await window.Swal.fire({
+                title: b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha),
+                html: '<div class="av-quien">' + esc(quien) + '</div><div class="av-tx">Si un día no cumple, la semana no se paga.</div>'
+                    + '<div class="av-campos"><label for="bs-coment">Comentario (si no cumple)<input id="bs-coment" type="text" placeholder="Por ejemplo: no completó la carga" value="'
+                    + esc(previo.replace(/^No cumple:?\s*/, '')) + '"></label></div>',
+                showDenyButton: true, showCancelButton: true, reverseButtons: true, focusConfirm: false,
+                confirmButtonText: 'No cumple', denyButtonText: 'Cumple', cancelButtonText: 'Cancelar',
+                customClass: { confirmButton: 'av-btn av-btn-borra', denyButton: 'av-btn av-btn-pri' },
+                preConfirm: () => (document.getElementById('bs-coment').value || '').trim()
+            });
+            if (res.isDismissed) return;
+        } else {
+            res = { isConfirmed: window.confirm('¿No cumple? (Cancelar = Cumple)'), value: '' };
+        }
+        const noCumple = !!res.isConfirmed;
+        if (noCumple === marcado && !noCumple) return;   // ya cumplía
+        const comentario = noCumple ? (res.value || null) : null;
         try {
             const resp = await fetch('/api/asistencia/bono-semanal/no-cumple/', { method: 'POST', headers: authHead(),
-                body: JSON.stringify({ bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: !marcado, comentario }) });
-            const res = await resp.json().catch(() => ({}));
-            if (!resp.ok) throw new Error(res.detail || 'No se pudo guardar.');
-            if (window.Avisos) window.Avisos.listo(marcado ? 'Se quitó el «no cumple»' : 'Marcado «no cumple»');
+                body: JSON.stringify({ bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: noCumple, comentario }) });
+            const out = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(out.detail || 'No se pudo guardar.');
+            if (window.Avisos) window.Avisos.listo(noCumple ? 'Marcado «no cumple»' : 'Marcado «cumple»');
             if (typeof window.reloadSingleEmployeeRow === 'function') await window.reloadSingleEmployeeRow(empId);
         } catch (e) {
             if (window.Avisos) window.Avisos.error(e.message || 'No se pudo guardar.'); else alert(e.message);

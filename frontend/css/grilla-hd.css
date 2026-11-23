@@ -280,3 +280,9 @@ button.bs-dia:focus-visible { outline: 2px solid #1b2f8f; outline-offset: 1px; }
 .bs-sem.bs-curso, .bs-sem.bs-nada { background: #eef1f7; color: #4a5468; }
 .bs-na, .bs-libre { color: #94a3b8; }
 .bs-ley { color: #1e293b; }
+.bs-click { cursor: pointer; }
+.bs-just.bs-okj { box-shadow: inset 0 0 0 1.5px #5bb98a; }
+th.bs-sem-th, td.bs-sem-td { background: #eef1fb !important; border-left: 1.5px solid #c9d2ef !important; min-width: 64px; }
+th.bs-sem-th .dh-wd { font-size: 10px; color: #1b2f8f; }
+td.bs-sem-td .bs-sem { font-size: 11px; padding: 1px 6px; }
+.bs-vacio { display: block; min-width: 34px; min-height: 18px; }

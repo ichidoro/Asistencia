@@ -101,7 +101,7 @@ def evaluar_persona(bono: Dict[str, Any], monto_semana: float, semanas: List[tup
                     codigos[f] = "proporcion"
                     proporcion += 1
                 else:
-                    codigos[f] = "ok"
+                    codigos[f] = "justificado"   # cuenta como cumplido (por ejemplo Descanso Operativo)
                 continue
             if estado in INASISTENCIA:
                 if efecto_inas == "proporcion":
