@@ -49,4 +49,6 @@ http.createServer(async (req, res) => {
   } catch (e) { responder(res, 500, { error: String(e.message || e) }); }
 }).listen(3000, () => console.log('[wa] puerta lista en :3000'));
 
+// Un fallo suelto (p. ej. no poder guardar credenciales) se registra y no tumba la puerta.
+process.on('unhandledRejection', (e) => console.error('[wa] error no controlado', e));
 conectar().catch(e => console.error('[wa] no pudo iniciar', e));
