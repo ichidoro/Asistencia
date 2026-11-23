@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-23T02:56:02+00:00",
- "publicado": "2026-11-23T02:56:02+00:00",
- "commit": "7949140",
+ "armado": "2026-11-23T12:20:42+00:00",
+ "publicado": "2026-11-23T12:20:42+00:00",
+ "commit": "dd136f5",
  "archivos_leidos": 288,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -107,7 +107,7 @@
   "backend/services/gemini_vision_service.py": "b00f50a16652917d6289db95642e86a2",
   "backend/services/google_drive.py": "edc4cdc4edd5d8026691dd112bf42991",
   "backend/services/gps_nexacol.py": "cff6ee96ffaedf831c2cf6733adb4607",
-  "backend/services/informe_cierre_pdf.py": "f126af6e9840805868180e5c2834a5a7",
+  "backend/services/informe_cierre_pdf.py": "a33f1304b79767899170bf078e6b7ece",
   "backend/services/libreta_corte.py": "3c087b526ba1de85b22a8bed7da71c60",
   "backend/services/libreta_orden.py": "f06ba5e7a489300243f3a7174187b9da",
   "backend/services/libreta_revision.py": "294cb9456d40a056e92a2e34ea04e7e7",

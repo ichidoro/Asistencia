@@ -78,7 +78,7 @@ def dias_persona(dias_dict: Dict[str, Any], rango_dias: List, es_bolsa: bool, et
         if cod:
             por_clave[_norm(cod)] = cod
             por_clave[_norm(t.get('nombre'))] = cod
-    out = {'trab': 0, 'aus': {}, 'per': 0, 'comp': 0, 'ina': 0, 'ano': 0, 'dias_aus': {}}
+    out = {'trab': 0, 'aus': {}, 'per': 0, 'comp': 0, 'ina': 0, 'ano': 0, 'dias_aus': {}, 'jextra': 0, 'jextra_dias': []}
     for d in rango_dias:
         k = f'{d.year}-{d.month:02d}-{d.day:02d}'
         di = dias_dict.get(k)
@@ -86,6 +86,11 @@ def dias_persona(dias_dict: Dict[str, Any], rango_dias: List, es_bolsa: bool, et
             continue
         sigla = (etiqueta(di, es_bolsa)[0] or '').split('\n')[0].strip()
         estado = str(di.get('estado') or '')
+        # Jornada extra (jornada especial validada «como jornada extra»): se paga con un monto fijo por jornada, que
+        # RR.HH. tramita aparte; sus horas no entran en las horas extra (pedido de la persona dueña, 23-11-2026)
+        if estado.upper() in ESTADOS_JORNADA_EXTRA:
+            out['jextra'] += 1
+            out['jextra_dias'].append(f'{d.day:02d}-{d.month:02d}')
         clave = None
         if sigla in SIGLAS_TRABAJADAS:
             out['trab'] += 1
@@ -109,6 +114,9 @@ def dias_persona(dias_dict: Dict[str, Any], rango_dias: List, es_bolsa: bool, et
         # LIB, FER, DEOP y las jornadas en días no programados (ESP, EXT, HE, +2) no son días del balance
     return out
 
+
+# Estados de un día con jornada extra de monto fijo (la jornada especial validada como jornada extra)
+ESTADOS_JORNADA_EXTRA = ('EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA')
 
 # Clase de un día programado no trabajado: las propias y las ausencias justificadas ('aus:' + su código)
 CLASES_DIA = ('per', 'comp', 'ina', 'ano')
@@ -389,6 +397,9 @@ def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str,
                           'n': f"{cuenta('pagar')} de {n} personas"},
                          {'t': 'No usadas · no se descuentan', 'v': hms(nou), 'c': 'nu', 'q': pct(nou, meta) + ' de la meta' if meta else '',
                           'n': f"{cuenta('no_usadas')} de {n} personas"}]
+        if T('jextra'):
+            out['cargar'].append({'t': 'Jornadas extra · monto fijo', 'v': str(T('jextra')), 'c': 'he', 'q': '',
+                                  'n': f"{cuenta('jextra')} de {n} personas"})
         out['de_donde'] = []
         out['quienes'] = [{'t': 'A quién se pagan horas extra', 'c': 'he', 'filas': _quienes(ps, 'pagar')}]
         return out
@@ -430,6 +441,9 @@ def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str,
                       'n': f"{cuenta('descontar')} de {n} personas"},
                      {'t': 'Pagar horas extra', 'v': hms(T('pagar')), 'c': 'he', 'q': pct(T('pagar'), base) + ' de lo programado' if base else '',
                       'n': f"{cuenta('pagar')} de {n} personas"}]
+    if T('jextra'):
+        out['cargar'].append({'t': 'Jornadas extra · monto fijo', 'v': str(T('jextra')), 'c': 'he', 'q': '',
+                              'n': f"{cuenta('jextra')} de {n} personas"})
     nt_rows = ([fila('Sin descuento', sin, nt)] if sin else []) \
         + ([fila('Inasistencias compensadas', T('comp_inas'), nt)] if T('comp_inas') else []) \
         + [fila('Se cubren con horas extra', T('cubren'), nt), fila('Se descuentan', T('descontar'), nt, 'tot')]
@@ -507,6 +521,9 @@ def columnas(inf: Dict[str, Any], justif: List[Dict[str, Any]], bonos: List[str]
         C.append(col(g, 'Cubren descuentos', lambda p: -p['cubren'], 'h', 'cp'))
         C += [col('A cargar', 'Descontar', lambda p: p['descontar'], 'h', 'tot', True),
               col('A cargar', 'Pagar', lambda p: p['pagar'], 'h', 'he', True)]
+    # Jornadas extra de monto fijo (23-11-2026): cuántas hizo cada persona, para que RR.HH. las tramite
+    if hay(lambda p: p.get('jextra')):
+        C.append(col('A cargar', 'Jornadas extra', lambda p: p.get('jextra', 0), 'n', 'he', True))
     # Bonos (etapa B2 del plan de bonos): el monto a pagar de cada bono que le corresponde a alguien del informe, según
     # las reglas de cada bono (decisión de la persona dueña, 22-11-2026: «que se muestre todo lo que corresponde»)
     bonos_inf = [b for b in bonos if any(b in p['bonos'] for p in ps)]
@@ -541,6 +558,8 @@ def leyenda(inf: Dict[str, Any], justif: List[Dict[str, Any]], cols: List[Dict[s
               + (' <b>De +2 y EME</b>: parte de las horas extra trabajadas que viene de un +2 o de un llamado de emergencia '
                  '(no se resta, ya está dentro de ellas).' if 'De +2 y EME' in titulos else ''))
     out = [l1, l2 + ' El detalle día a día está en el Excel del cierre, que se descarga desde la aplicación.']
+    if 'Jornadas extra' in titulos:
+        out = list(out) + ['<b>Jornadas extra</b>: jornadas especiales validadas como jornada extra; se pagan con un monto fijo por jornada y sus horas no van en las horas extra. Los días están en «Jornadas extra (monto fijo)».']
     if hay_bonos:
         out = list(out) + ['<b>Bonos</b> en pesos: el monto a pagar; <b>—</b> no se paga (el motivo va en el detalle de bonos); en blanco, no le corresponde.']
     return out
@@ -558,6 +577,9 @@ def resumen(inf: Dict[str, Any]) -> List[tuple]:
                 ('Horas extra que cubren descuentos ', hms(T('cubren')), '', False)]
         if T('he_decidir'):
             out.append(('', hms(T('he_decidir')), ' de horas extra sin decidir', True))
+    jx = sum(p.get('jextra', 0) for p in ps)
+    if jx:
+        out.append(('Jornadas extra ', str(jx), ' · monto fijo', False))
     if any(p.get('bonos') for p in ps):
         out.append(('Bonos a pagar ', pesos(sum(sum(p['bonos'].values()) for p in ps)), '', False))
     ano = T('ano')
@@ -904,6 +926,14 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
 
     historia = [enc, Spacer(1, 8), t_chips, Spacer(1, 6), tabla, Spacer(1, 7)]
     historia += [Paragraph(x, st_ley) for x in leyenda(inf, justif, cols)]
+    lineas_jx = [f'<b>{p["nombre"]}</b>: {p["jextra"]} ({_y(p["jextra_dias"])}).' for p in inf['personas'] if p.get('jextra')]
+    if lineas_jx:
+        st_jx_t = ParagraphStyle('jxt', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY))
+        st_jx = ParagraphStyle('jx', fontName=_f('Barlow'), fontSize=8.3, leading=11, textColor=H(C_INK), leftIndent=8,
+                               bulletIndent=0, spaceAfter=2)
+        historia += [Spacer(1, 10), KeepTogether([Paragraph('Jornadas extra (monto fijo)', st_jx_t), Spacer(1, 3),
+                                                  Paragraph(lineas_jx[0], st_jx, bulletText='•')])]
+        historia += [Paragraph(x, st_jx, bulletText='•') for x in lineas_jx[1:]]
     det_b = detalle_bonos(inf)
     if det_b['no_pagados'] or det_b['en_parte']:
         st_db_t = ParagraphStyle('dbt', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY))

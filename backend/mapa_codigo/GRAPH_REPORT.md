@@ -1,17 +1,17 @@
-# Graph Report - Asistencia  (2026-11-22)
+# Graph Report - Asistencia  (2026-11-23)
 
 ## Corpus Check
-- 283 files · ~548,485 words
+- 283 files · ~548,925 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 63 file(s) not represented in the graph (top: .css 33, .woff2 14, .ttf 6)
 
 ## Summary
-- 5705 nodes · 13312 edges · 255 communities (181 shown, 74 thin omitted)
+- 5705 nodes · 13313 edges · 255 communities (181 shown, 74 thin omitted)
 - Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 1871 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3ad62051`
+- Built from commit: `dd136f5a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -23,7 +23,7 @@
 - test_vista_previa_bono.py
 - routers/productos_4.py
 - DashboardApp.jsx
-- Any
+- informe_cierre_pdf.py
 - sql_compat.py
 - configuracion_ui + index
 - main
@@ -55,7 +55,7 @@
 - test_reglas_motor + quantum_matrix_engine
 - asistencia_marcas.py
 - EmpleadoService
-- generar_informes_cierre
+- _check_flowable
 - pasos_por_direccion
 - test_gps_entregas
 - marcaciones_ui
@@ -185,7 +185,7 @@
 - _rebote_defecto
 - reincorporacion_ui + index
 - compensaciones_he_panel
-- informe_cierre_pdf.py
+- separar_informes
 - login
 - test_visor_turnos_asignados.py
 - test_procesar_dia_con_force_deja_fuera_los_dias_cerrados
@@ -299,9 +299,9 @@ Nodes (16): api_cerrar_periodo(), api_reabrir_periodo(), AsignacionGuardarReques
 Cohesion: 0.06
 Nodes (63): dependencies, react@^18.3.1, react-dom@^18.3.1, devDependencies, @types/react@^18.3.3, @types/react-dom@^18.3.0, vite@^5.3.1, @vitejs/plugin-react@^4.3.1 (+55 more)
 
-### Community 7 - "Any"
-Cohesion: 0.14
-Nodes (16): armar_personas(), coberturas(), dias_persona(), he_mas2_persona(), he_por_dia(), horas_ausencias(), horas_bolsa(), horas_ciclo() (+8 more)
+### Community 7 - "informe_cierre_pdf.py"
+Cohesion: 0.10
+Nodes (25): Fuentes Barlow TTF para el informe de cierre PDF, armar_personas(), cierre_completo(), coberturas(), dias_persona(), generar_informes_cierre(), he_mas2_persona(), he_por_dia() (+17 more)
 
 ### Community 8 - "sql_compat.py"
 Cohesion: 0.10
@@ -415,9 +415,9 @@ Nodes (27): agregar_marcacion_manual(), _armar_salida_manual(), ciclo_para_marca
 Cohesion: 0.04
 Nodes (6): Empleado, actualizar_empleado(), eliminar_empleado(), reactivar_empleado(), registrar_periodo_anterior(), EmpleadoService
 
-### Community 39 - "generar_informes_cierre"
-Cohesion: 0.15
-Nodes (5): generar_informes_cierre(), informes_del_area(), test_generar_un_solo_tipo_o_solo_la_lista(), run(), test_preinforme_si_el_area_no_esta_cerrada()
+### Community 39 - "_check_flowable"
+Cohesion: 0.50
+Nodes (4): _check_flowable(), draw(), __init__(), 3. Limpieza confirmada
 
 ### Community 40 - "pasos_por_direccion"
 Cohesion: 0.20
@@ -441,7 +441,7 @@ Nodes (5): get_db(), RequirePermission(), _area_de(), test_la_purga_del_registro
 
 ### Community 45 - "ReportService"
 Cohesion: 0.10
-Nodes (5): _personas_del_area(), ReportService, test_el_informe_usa_lo_guardado_y_no_recalcula(), test_excel_muestra_el_monto_y_el_total_de_bonos(), test_excel_lee_las_columnas_del_libro()
+Nodes (4): ReportService, test_el_informe_usa_lo_guardado_y_no_recalcula(), test_excel_muestra_el_monto_y_el_total_de_bonos(), test_excel_lee_las_columnas_del_libro()
 
 ### Community 47 - "recalculo_service.py"
 Cohesion: 0.13
@@ -660,8 +660,8 @@ Cohesion: 0.21
 Nodes (4): _base(), BaseSqlite, test_cada_cierre_trae_el_nombre_de_su_periodo(), test_cero_trae_todos_y_el_limite_se_sigue_respetando()
 
 ### Community 105 - "render_pdf"
-Cohesion: 0.16
-Nodes (13): _check_flowable(), draw(), __init__(), _f(), pesos(), _registrar_fuentes(), render_pdf(), medir() (+5 more)
+Cohesion: 0.18
+Nodes (12): detalle_bonos(), _dm(), _f(), pesos(), _registrar_fuentes(), render_pdf(), medir(), pie() (+4 more)
 
 ### Community 106 - "hallazgos_codigo.py"
 Cohesion: 0.14
@@ -740,8 +740,8 @@ Cohesion: 0.53
 Nodes (4): _leer(), test_el_resumen_entrega_otros_y_compensaciones(), test_la_pantalla_del_cierre_muestra_ambas_lineas(), test_los_textos_sobreviven_al_minificador()
 
 ### Community 129 - "test_informe_cierre_pdf.py"
-Cohesion: 0.10
-Nodes (12): columnas(), leyenda(), nombre_archivo(), _dias(), _persona(), test_balance_de_horas_cuadra_al_segundo_sin_perdonazos(), test_bolsa_no_usadas_no_es_descuento(), test_el_mas_dos_se_muestra_aparte_dentro_de_las_horas_extra() (+4 more)
+Cohesion: 0.08
+Nodes (10): horas_dias(), sin_descuento(), _dias(), test_balance_de_horas_cuadra_al_segundo_sin_perdonazos(), test_bolsa_no_usadas_no_es_descuento(), test_horas_de_otros_dias_entran_al_balance(), test_horas_dias_redondea_cada_dia_a_segundos(), test_jornadas_programadas_menos_ausencias() (+2 more)
 
 ### Community 131 - "sync_monitor.py"
 Cohesion: 0.22
@@ -867,9 +867,9 @@ Nodes (4): REINC_PASOS, reincFetchBioAlbaDiff(), reincState, reincUpdateUI()
 Cohesion: 0.43
 Nodes (5): actualizarMinutosSugeridos(), cargarCompensacionesEmpleado(), cargarHE_Disponibles(), formatMinutesReadable(), minutesToTimeString()
 
-### Community 174 - "informe_cierre_pdf.py"
-Cohesion: 0.13
-Nodes (17): Fuentes Barlow TTF para el informe de cierre PDF, cierre_completo(), detalle_bonos(), _dm(), hms(), horas_txt(), nombre_clase(), nombres_justif() (+9 more)
+### Community 174 - "separar_informes"
+Cohesion: 0.15
+Nodes (13): columnas(), hms(), horas_txt(), _quienes(), separar_informes(), _persona(), test_el_mas_dos_se_muestra_aparte_dentro_de_las_horas_extra(), test_generar_un_solo_tipo_o_solo_la_lista() (+5 more)
 
 ### Community 175 - "login"
 Cohesion: 0.33
