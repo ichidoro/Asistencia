@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Dict, List, Literal, Optional
 from datetime import date, datetime
 
 # ==========================================
@@ -30,7 +30,8 @@ class JustificacionTipoBase(BaseModel):
     activo: bool = True
 
 class JustificacionTipoCreate(JustificacionTipoBase):
-    pass
+    # Efecto de esta justificación en cada bono (etapa B3a del plan de bonos): {id del bono: efecto}
+    efectos_bonos: Optional[Dict[int, Literal["asistido", "proporcion", "pierde"]]] = None
 
 class JustificacionTipoResponse(JustificacionTipoBase):
     id: int

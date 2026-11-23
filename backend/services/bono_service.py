@@ -99,13 +99,15 @@ class BonoService:
         feriados_set: Optional[set] = None,
     ) -> Dict[str, Any]:
         """
-        Nueva lógica:
-          • El empleado PARTE con el bono adjudicado.
-          • Solo lo PIERDE por:
-              1. Inasistencia injustificada.
-              2. Justificación sin goce de sueldo (o pagador externo).
-          • Ingreso o salida a mitad del período → monto proporcional a sus días de turno en el período.
-          • TRANSPORTE (es_proporcional=1) → siempre proporcional, nunca pérdida total.
+        La persona parte con el bono. Cada día de turno del período que ya pasó:
+          • con presencia → cuenta como asistido;
+          • con justificación → lo que diga la configuración de esa justificación en este bono (etapa B3a del plan de
+            bonos, 22-11-2026): cuenta como asistido, descuenta en proporción o hace perder el bono;
+          • sin presencia ni justificación (inasistencia sin justificar) → lo que diga el bono: descuenta en proporción o
+            hace perder el bono.
+        Un día que hace perder el bono lo deja en 0. Si no, se paga monto × días asistidos / días revisados.
+        Ingreso o salida a mitad del período → además, monto proporcional a sus días de turno en el período.
+        Nada de esto está escrito en el código: sale de bono["efectos"] y bono["efecto_inasistencia"].
         """
 
         def _match_cargo(emp_cargo: str, req_val: str) -> bool:
@@ -141,8 +143,23 @@ class BonoService:
             return {"aplica": False, "califica": False, "monto": 0,
                     "motivo": "No aplica por Cargo/Contrato"}
 
-        es_proporcional_bono = bool(regla_activa.get("es_proporcional", 0))
         monto_completo = regla_activa.get("monto", 0)
+        efectos = bono.get("efectos") or {}
+        efecto_inas = bono.get("efecto_inasistencia")
+
+        def _efecto_justificacion(j):
+            """(efecto, causa) de un día con esta justificación. Si falta configurarlo, el bono no se paga y el motivo
+            lo dice: no hay un valor escondido en el código."""
+            nombre = j.get("tipo_nombre") or "la justificación"
+            ef = efectos.get(j.get("tipo_id")) or efectos.get(str(j.get("tipo_id")))
+            if ef in ("asistido", "proporcion", "pierde"):
+                return ef, nombre
+            return "pierde", f"Falta configurar el efecto de «{nombre}» en este bono"
+
+        def _efecto_inasistencia():
+            if efecto_inas in ("proporcion", "pierde"):
+                return efecto_inas, "Inasistencia sin justificar"
+            return "pierde", "Falta configurar el efecto de la inasistencia sin justificar en este bono"
 
         # ── 2. Días del período que le corresponden: desde su ingreso y hasta su salida ─────
         fecha_desde = max((empleado.get("fecha_ingreso") or periodo_inicio)[:10], periodo_inicio)
@@ -163,11 +180,12 @@ class BonoService:
                         (j for j in justificaciones
                          if j["fecha_inicio"] <= a["fecha"] <= j["fecha_fin"]), None
                     )
-                    if not j_dia:
+                    ef, causa = _efecto_justificacion(j_dia) if j_dia else _efecto_inasistencia()
+                    if ef == "pierde":
                         return {"aplica": True, "califica": False, "monto": 0,
                                 "proporcional": False,
-                                "perdidos": [{"fecha": a["fecha"], "causa": "Inasistencia sin justificar"}],
-                                "motivo": f"Inasistencia injustificada el {a['fecha']}"}
+                                "perdidos": [{"fecha": a["fecha"], "causa": causa}],
+                                "motivo": f"{causa} el {a['fecha']}"}
             return {"aplica": True, "califica": True, "monto": monto_completo,
                     "proporcional": False, "motivo": "OK (Fallback sin proyecciones)"}
 
@@ -177,8 +195,8 @@ class BonoService:
         dias_asistidos   = 0
         dias_asignados   = 0   # días de turno del período que le corresponden (desde su ingreso, hasta su salida)
         dias_periodo     = 0   # días de turno de todo el período (para el proporcional por ingreso o salida)
-        motivo_perdida   = ""
-        perdidos         = []  # días que no cuentan como asistidos, con su causa (para el informe de cierre)
+        pierde           = []  # días que hacen perder el bono, con su causa (para el informe de cierre)
+        descuenta        = []  # días que descuentan en proporción, con su causa
 
         for fecha, dia_data in emp_matrix_data.items():
             if fecha == "info" or not (periodo_inicio <= fecha <= periodo_fin):
@@ -232,34 +250,16 @@ class BonoService:
 
             dias_laborables += 1
 
-            # ¿Justificación en este día?
-            j_dia = next(
-                (j for j in justificaciones
-                 if j["fecha_inicio"] <= fecha <= j["fecha_fin"]), None
-            )
-
-            # ¿Asistió?
-            es_presencia = estado in ESTADOS_PRESENCIA
-
-            # ¿Justificación con goce válida para bono?
-            es_justificado_valido = False
-            if j_dia and j_dia.get("con_goce_sueldo") and j_dia.get("aplica_bono_pagador", 1):
-                es_justificado_valido = True
-
-            dia_ok = es_presencia or es_justificado_valido
-
-            if dia_ok:
+            if estado in ESTADOS_PRESENCIA:
                 dias_asistidos += 1
+                continue
+            ef, causa = _efecto_justificacion(j_dia) if j_dia else _efecto_inasistencia()
+            if ef == "asistido":
+                dias_asistidos += 1
+            elif ef == "proporcion":
+                descuenta.append({"fecha": fecha, "causa": causa})
             else:
-                # Día perdido: ¿es inasistencia o justificación sin goce?
-                if j_dia:
-                    label    = j_dia.get("tipo_nombre", estado)
-                    pagador  = j_dia.get("pagador", "")
-                    motivo_perdida += f"{fecha}: {label} (pagador: {pagador}). "
-                    perdidos.append({"fecha": fecha, "causa": label})
-                else:
-                    motivo_perdida += f"{fecha}: Inasistencia injustificada. "
-                    perdidos.append({"fecha": fecha, "causa": "Inasistencia sin justificar"})
+                pierde.append({"fecha": fecha, "causa": causa})
 
         # ── 5. Calcular resultado ─────────────────────────────────────────
         if dias_laborables == 0:
@@ -277,58 +277,36 @@ class BonoService:
         else:
             factor_ingreso = 1.0
 
-        es_ingreso_parcial = factor_ingreso < 1.0
-
-        # ── 5a. BONOS DE MUERTE SÚBITA (COMPROMISO, OP. LINEA, CLORO…) ──
-        if not es_proporcional_bono:
-            if dias_asistidos < dias_laborables:
-                return {
-                    "aplica": True, "califica": False, "monto": 0,
-                    "proporcional": False,
-                    "perdidos": sorted(perdidos, key=lambda d: d["fecha"]),
-                    "motivo": motivo_perdida.strip(),
-                }
-            # 100% de asistencia → otorgar (proporcional si ingresó tarde)
-            monto_final = round(monto_completo * factor_ingreso)
+        # ── 5a. Un día que hace perder el bono lo deja en 0 ──────────────
+        if pierde:
             return {
-                "aplica": True, "califica": True,
-                "monto": monto_final,
-                "monto_completo": monto_completo,
-                "proporcional": es_ingreso_parcial,
-                "factor": round(factor_ingreso, 4),
-                "dias_laborables": dias_laborables,
-                "dias_asignados": dias_asignados,
-                "dias_periodo": dias_periodo,
-                "motivo": (
-                    f"Proporcional {dias_asignados}/{dias_periodo} días de turno del período "
-                    f"(ingreso {(empleado.get('fecha_ingreso') or '?')[:10]}"
-                    f"{', salida ' + salida[:10] if salida else ''})"
-                    if es_ingreso_parcial
-                    else f"Asistencia completa {dias_asistidos}/{dias_laborables}"
-                ),
+                "aplica": True, "califica": False, "monto": 0,
+                "proporcional": False,
+                "perdidos": pierde,
+                "motivo": " ".join(f"{d['fecha']}: {d['causa']}." for d in pierde),
             }
 
-        # ── 5b. BONOS PROPORCIONALES (TRANSPORTE) ─────────────────────────
-        #    Siempre se paga en proporción a días asistidos / días laborables asignados
-        factor_asistencia = dias_asistidos / dias_laborables if dias_laborables else 0
-        # Combinar factor de asistencia con factor de ingreso parcial
+        # ── 5b. Se paga por los días asistidos (y por ingreso o salida) ──
+        factor_asistencia = dias_asistidos / dias_laborables
         factor_total = factor_asistencia * factor_ingreso
-        monto_final  = round(monto_completo * factor_total)
-
+        monto_final = round(monto_completo * factor_total)
+        partes = []
+        if descuenta:
+            partes.append(f"{dias_asistidos}/{dias_laborables} días asistidos")
+        if factor_ingreso < 1.0:
+            partes.append(f"{dias_asignados}/{dias_periodo} días de turno del período (ingreso "
+                          f"{(empleado.get('fecha_ingreso') or '?')[:10]}{', salida ' + salida[:10] if salida else ''})")
         return {
             "aplica": True, "califica": True,
             "monto": monto_final,
             "monto_completo": monto_completo,
-            "proporcional": True,
+            "proporcional": factor_total < 1.0,
             "factor": round(factor_total, 4),
             "dias_asistidos": dias_asistidos,
             "dias_laborables": dias_laborables,
             "dias_asignados": dias_asignados,
             "dias_periodo": dias_periodo,
-            "perdidos": sorted(perdidos, key=lambda d: d["fecha"]),
-            "motivo": (
-                f"Proporcional: {dias_asistidos}/{dias_laborables} días "
-                f"asistidos × factor ingreso o salida {factor_ingreso:.2f} "
-                f"= ${monto_final:,.0f}"
-            ),
+            "perdidos": descuenta,
+            "motivo": ("Proporcional: " + " × ".join(partes)) if partes
+                      else f"Asistencia completa {dias_asistidos}/{dias_laborables}",
         }

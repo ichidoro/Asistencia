@@ -2103,6 +2103,18 @@
                                 </div>
                             </div>
 
+                            <!-- Efecto de las faltas en el bono (etapa B3a del plan de bonos) -->
+                            <div class="form-group mb-3">
+                                <label for="bono-efecto-inas" class="fw-bold small text-muted mb-1">Inasistencia sin justificar *</label>
+                                <div id="bono-efecto-inas-wrap" style="max-width: 260px;"></div>
+                            </div>
+                            <div class="form-group mb-3">
+                                <div class="fw-bold small text-muted mb-1">Efecto de cada justificación en este bono *</div>
+                                <div id="bono-efectos-container" class="p-2 border rounded bg-light" style="max-height: 220px; overflow-y: auto;">
+                                    <span class="text-muted small">Cargando justificaciones...</span>
+                                </div>
+                            </div>
+
                             <div class="rules-section mt-4">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="fw-bold mb-0">Reglas de Aplicación</h6>
@@ -2193,6 +2205,12 @@
                                         <option value="false">Días Corridos (L-D)</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            <!-- Efecto en cada bono (etapa B3a del plan de bonos) -->
+                            <div class="mb-3">
+                                <div class="form-label fw-bold small">Efecto en los bonos *</div>
+                                <div id="tipo-j-efectos" class="p-2 border rounded bg-light"></div>
                             </div>
 
                             <!-- RULES SECTION -->

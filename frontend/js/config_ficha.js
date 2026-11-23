@@ -82,6 +82,8 @@ window.FichaCfg = (function () {
         elegido[clave] = id;
         const o = opciones[clave];
         if (!o) return;
+        // Con la lista vacía no hay espacio para la ficha: «Nuevo» vuelve a dibujar la vista con ella (antes no abría nada)
+        if (id === 'nuevo' && !o.cont.querySelector('.fcB-ficha')) { montar(o.cont, o); return; }
         o.cont.querySelectorAll('.fcB-it').forEach(function (b) { const on = b.dataset.id === String(id); b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on); });
         pintarFicha(clave);
         // En el celular la ficha queda debajo de la lista: se lleva a la vista

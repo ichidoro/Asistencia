@@ -13,8 +13,9 @@ from datetime import date, timedelta
 
 from backend.services.bono_service import BonoService
 
-COMPROMISO = {"nombre": "Compromiso", "activo": 1, "reglas": [{"monto": 70000, "es_proporcional": 0}]}
-TRANSPORTE = {"nombre": "Transporte", "activo": 1, "reglas": [{"monto": 30000, "es_proporcional": 1}]}
+# Desde la etapa B3a el efecto de las faltas sale de la configuración del bono, no del «Prop.» de la regla
+COMPROMISO = {"nombre": "Compromiso", "activo": 1, "reglas": [{"monto": 70000}], "efecto_inasistencia": "pierde", "efectos": {}}
+TRANSPORTE = {"nombre": "Transporte", "activo": 1, "reglas": [{"monto": 30000}], "efecto_inasistencia": "proporcion", "efectos": {}}
 
 
 class _DB:

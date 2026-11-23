@@ -514,6 +514,59 @@ async function _doLoadMetadata() {
 }
 
 // ==========================================
+// EFECTO DE LAS JUSTIFICACIONES EN LOS BONOS (etapa B3a del plan de bonos, 22-11-2026)
+// Qué pasa con cada bono en un día con una justificación, y con una inasistencia sin justificar. Se configura aquí;
+// el cálculo solo lee lo configurado.
+// ==========================================
+const EFECTOS_BONO = [['asistido', 'Cuenta como asistido'], ['proporcion', 'Descuenta en proporción'], ['pierde', 'Hace perder el bono']];
+const EFECTOS_INASISTENCIA = [['pierde', 'Hace perder el bono'], ['proporcion', 'Descuenta en proporción']];
+const nombreEfecto = function (v) { const o = EFECTOS_BONO.find(function (x) { return x[0] === v; }); return o ? o[1] : 'Sin configurar'; };
+
+async function _asegurarBonos() {
+    if (!bonosList || !bonosList.length) {
+        try { const r = await fetch(`${API_CONFIG}bonos/`); if (r.ok) bonosList = await r.json(); } catch (e) { console.error(e); }
+    }
+    return (bonosList || []).slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+}
+
+async function _asegurarTiposJ() {
+    if (!tiposJustificacionList || !tiposJustificacionList.length) {
+        try { const r = await fetch(`${API_CONFIG}justificaciones/tipos/?all=true`); if (r.ok) tiposJustificacionList = await r.json(); } catch (e) { console.error(e); }
+    }
+    return (tiposJustificacionList || []).slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+}
+
+function _htmlSelectEfecto(id, ops, valor, attrs) {
+    const esc = window.FichaCfg ? window.FichaCfg.esc : function (x) { return String(x == null ? '' : x); };
+    return '<select class="form-select form-select-sm" id="' + esc(id) + '" ' + (attrs || '') + '><option value="">Elegir…</option>'
+        + ops.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === valor ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('')
+        + '</select>';
+}
+
+// Filas «nombre · efecto» con un <select> por cada elemento (bonos en la justificación, justificaciones en el bono)
+function _htmlFilasEfecto(prefijo, items, valorDe) {
+    const esc = window.FichaCfg ? window.FichaCfg.esc : function (x) { return String(x == null ? '' : x); };
+    if (!items.length) return '<span class="text-muted small">No hay nada que configurar todavía.</span>';
+    return items.map(function (it) {
+        const id = prefijo + it.id;
+        return '<div class="d-flex align-items-center gap-2 mb-1"><label class="small flex-grow-1 mb-0" for="' + esc(id) + '">' + esc(it.nombre)
+            + (it.activo === false ? ' <span class="text-muted">(no se calcula)</span>' : '') + '</label>'
+            + '<div style="min-width: 210px">' + _htmlSelectEfecto(id, EFECTOS_BONO, valorDe(it) || '', 'data-ef-id="' + it.id + '" data-ef-nombre="' + esc(it.nombre) + '"') + '</div></div>';
+    }).join('');
+}
+
+// Lee los <select> de efecto dentro de raiz. Devuelve {valores: {id: efecto}, falta: nombre del primero sin elegir}
+function _leerEfectos(raiz) {
+    const valores = {};
+    let falta = null;
+    raiz.querySelectorAll('select[data-ef-id]').forEach(function (s) {
+        if (!s.value && !falta) falta = s.dataset.efNombre;
+        if (s.value) valores[s.dataset.efId] = s.value;
+    });
+    return { valores: valores, falta: falta };
+}
+
+// ==========================================
 // BONOS: DATOS Y RENDER
 // ==========================================
 async function loadBonos() {
@@ -550,13 +603,23 @@ function renderBonos() {
         ficha: function (b, panel) {
             const reglas = (b.reglas || []).map(function (r) {
                 const cond = [r.tipo_contrato || 'Todo contrato', r.asistencia_minima < 100 ? 'asistencia sobre ' + r.asistencia_minima + ' %' : 'asistencia completa',
-                              r.cargo_requerido ? 'cargo ' + r.cargo_requerido : '', r.es_proporcional ? 'proporcional a los días trabajados' : ''].filter(Boolean).join(' · ');
+                              r.cargo_requerido ? 'cargo ' + r.cargo_requerido : ''].filter(Boolean).join(' · ');
                 return '<div class="fcB-campo"><div class="fcB-et"><span class="num">' + F.esc(pesos(r.monto)) + '</span></div><div class="fcB-ctl"><span>' + F.esc(cond) + '</span></div></div>';
+            }).join('');
+            // Efecto de las justificaciones y de la inasistencia sin justificar (etapa B3a)
+            const tipos = (tiposJustificacionList || []).slice().sort(function (x, y) { return String(x.nombre).localeCompare(String(y.nombre), 'es'); });
+            const porEfecto = {};
+            tipos.forEach(function (t) { const e = (b.efectos || {})[t.id]; (porEfecto[e || ''] = porEfecto[e || ''] || []).push(t.nombre); });
+            const efectosHtml = EFECTOS_BONO.concat([['', 'Sin configurar']]).filter(function (o) { return porEfecto[o[0]]; }).map(function (o) {
+                return F.campo(o[1], '<span>' + F.esc(porEfecto[o[0]].join(', ')) + '</span>');
             }).join('');
             panel.innerHTML = F.cabeza(b.nombre, b.descripcion || '')
                 + F.campo('En uso', '<span class="fcB-sw" aria-disabled="true"><input type="checkbox" disabled' + (b.activo ? ' checked' : '') + '><span aria-hidden="true"></span>' + (b.activo ? 'Se calcula' : 'No se calcula') + '</span>')
+                + F.campo('Inasistencia sin justificar', '<span>' + F.esc(b.efecto_inasistencia ? nombreEfecto(b.efecto_inasistencia) : 'Sin configurar') + '</span>')
                 + F.seccion('Reglas de aplicación')
                 + (reglas || '<p class="fcB-nota">Este bono no tiene reglas: no se paga a nadie.</p>')
+                + F.seccion('Efecto de las justificaciones')
+                + (efectosHtml || '<p class="fcB-nota">No hay justificaciones.</p>')
                 + (canEdit ? F.pie('<button type="button" class="fcB-btn borra" onclick="confirmDeleteBono(' + b.id + ')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar bono</button>',
                     '<button type="button" class="fcB-btn pri" onclick="editBono(' + b.id + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Editar bono</button>') : '');
         }
@@ -594,6 +657,13 @@ async function openModalBono(bono = null) {
         document.getElementById('bono-id').value = '';
         addBonoReglaRow();
     }
+
+    // Efecto de la inasistencia sin justificar y de cada justificación en este bono (etapa B3a)
+    document.getElementById('bono-efecto-inas-wrap').innerHTML =
+        _htmlSelectEfecto('bono-efecto-inas', EFECTOS_INASISTENCIA, bono ? (bono.efecto_inasistencia || '') : '');
+    const tiposJ = await _asegurarTiposJ();
+    document.getElementById('bono-efectos-container').innerHTML =
+        _htmlFilasEfecto('bono-ef-', tiposJ, function (t) { return bono ? (bono.efectos || {})[t.id] : ''; });
 
     // FIX RACE CONDITION: cargar areas ANTES de mostrar el modal.
     // Si mostramos el modal primero y el fetch es async, el usuario puede
@@ -666,6 +736,8 @@ function addBonoReglaRow(regla = null) {
     const rowIdx = container.querySelectorAll('.regla-row').length; // ID único basado en el conteo actual
     const div = document.createElement('div');
     div.className = 'regla-row card p-3 mb-2 bg-light border-0 shadow-sm';
+    // «Prop.» ya no se muestra (etapa B3a: lo reemplaza el efecto de cada justificación); se guarda el valor que tenía
+    div.dataset.prop = regla && regla.es_proporcional ? '1' : '0';
 
     div.innerHTML = `
         <div class="row g-2 mb-2">
@@ -692,13 +764,7 @@ function addBonoReglaRow(regla = null) {
                     <input type="number" id="rule-asistencia-${rowIdx}" class="rule-asistencia form-control" value="${regla ? regla.asistencia_minima : 0}" min="0" max="100" step="1">
                 </div>
             </div>
-            <div class="col-md-2 text-center">
-                <label for="rule-proporcional-${rowIdx}" class="small text-muted" title="¿Descontar proporcional?">Prop.</label>
-                <div class="form-check form-switch d-flex justify-content-center pt-1">
-                    <input id="rule-proporcional-${rowIdx}" class="rule-proporcional form-check-input" type="checkbox" ${regla && regla.es_proporcional ? 'checked' : ''}>
-                </div>
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req. <span class="text-muted" style="font-size: 0.75rem">(multi)</span></label>
                 <div class="input-group input-group-sm cargo-req-wrapper">
                     <input type="text" id="rule-cargo-${rowIdx}" class="rule-cargo form-control form-control-sm"
@@ -821,9 +887,14 @@ async function saveBono() {
             asistencia_minima: parseFloat(row.querySelector('.rule-asistencia').value) || 0.0,
             cargo_requerido: row.querySelector('.rule-cargo').value || null,
             cargos_excluidos: row.querySelector('.rule-excluidos').value || null,
-            es_proporcional: row.querySelector('.rule-proporcional').checked
+            es_proporcional: row.dataset.prop === '1'
         });
     });
+    // Efectos (etapa B3a): no se guarda sin elegirlos todos
+    const efectoInas = document.getElementById('bono-efecto-inas').value;
+    if (!efectoInas) { showToast('Falta elegir qué hace una inasistencia sin justificar con el bono.', 'warning'); return; }
+    const efJ = _leerEfectos(document.getElementById('bono-efectos-container'));
+    if (efJ.falta) { showToast('Falta elegir el efecto de «' + efJ.falta + '» en el bono.', 'warning'); return; }
     // Recolectar áreas asignadas — buscar dentro del modal (no en todo el doc)
     const modalBonoEl = document.getElementById('modal-bono');
     const areaChecks = modalBonoEl
@@ -838,7 +909,7 @@ async function saveBono() {
     // Si hay checkboxes pero ninguno marcado, area_ids=[] es válido (desmarcar todo)
     const area_ids_payload = totalAreas === 0 ? null : area_ids;
 
-    const body = { nombre, descripcion, activo, reglas, area_ids: area_ids_payload };
+    const body = { nombre, descripcion, activo, reglas, area_ids: area_ids_payload, efecto_inasistencia: efectoInas, efectos: efJ.valores };
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_CONFIG}bonos/${id}/` : `${API_CONFIG}bonos/`;
 
@@ -973,6 +1044,7 @@ async function fichaTipoJ(t, panel, canEdit) {
                activo: true, min_dias: 1, max_dias: null, frecuencia_anual: null, sobreescribe_feriados: false, es_horas_sindicales: false,
                es_por_horas: false, genera_deuda_horaria: false };
     const pag = await pagadoresParaFicha();
+    const bonosEf = await _asegurarBonos();
     const opsPag = pag.map(function (p) { return [p.nombre, p.nombre]; });
     if (t.pagador && !opsPag.some(function (o) { return o[0] === t.pagador; })) opsPag.unshift([t.pagador, t.pagador]);
     const ro = !canEdit;
@@ -982,10 +1054,17 @@ async function fichaTipoJ(t, panel, canEdit) {
         + F.campo('Sigla', F.texto('fj-sigla', t.nomenclatura || '', ' maxlength="8"'), 'La que se ve en la grilla, por ejemplo LM o VAC.', 'fj-sigla')
         + F.campo('Cómo se cuentan los días', F.seg('fj-periodo', [['true', 'Días hábiles'], ['false', 'Días corridos']], t.dias_corridos ? 'false' : 'true', ro),
             'Hábiles: de lunes a viernes. Corridos: todos los días.')
-        + F.campo('Goce de sueldo', F.seg('fj-goce', [['true', 'Sí, se paga'], ['false', 'No se paga']], t.con_goce_sueldo ? 'true' : 'false', ro))
+        + F.campo('Goce de sueldo', F.seg('fj-goce', [['true', 'Sí, se paga'], ['false', 'No se paga']], t.con_goce_sueldo ? 'true' : 'false', ro),
+            'Solo dice si el día se paga en el sueldo. Lo que pasa con cada bono se elige en «Efecto en los bonos».')
         + F.campo('Quién paga', F.lista('fj-pagador', opsPag, t.pagador || 'Empleador'), '', 'fj-pagador')
         + F.campo('Días por defecto', F.numero('fj-dias', t.dias_defecto, ' min="0"'), 'Los que se proponen al registrarla. Vacío: se eligen a mano.', 'fj-dias')
         + F.campo('En uso', F.interruptor('fj-activo', t.activo, 'Se puede elegir al justificar un día'))
+        + F.seccion('Efecto en los bonos')
+        + '<p class="fcB-nota">Qué pasa con cada bono en un día con esta justificación.</p>'
+        + (bonosEf.length ? bonosEf.map(function (b) {
+            return F.campo(b.nombre + (b.activo ? '' : ' (no se calcula)'),
+                F.lista('fj-ef-' + b.id, [['', 'Elegir…']].concat(EFECTOS_BONO), esNuevo ? '' : ((b.efectos || {})[t.id] || '')), '', 'fj-ef-' + b.id);
+        }).join('') : '<p class="fcB-nota">No hay bonos.</p>')
         + F.mas('Más opciones',
             F.campo('Mínimo de días', F.numero('fj-min', t.min_dias || 1, ' min="1"'), '', 'fj-min')
             + F.campo('Máximo de días', F.numero('fj-max', t.max_dias, ' min="1"'), 'Vacío: sin máximo.', 'fj-max')
@@ -1011,12 +1090,20 @@ async function guardarFichaTipoJ(t, panel, btn) {
     const nombre = v('fj-nombre');
     if (!nombre) { showToast('Falta el nombre del tipo.', 'warning'); panel.querySelector('#fj-nombre').focus(); return; }
     const goce = F.leerSeg(panel, 'fj-goce') === 'true', habiles = F.leerSeg(panel, 'fj-periodo') === 'true';
+    // Efecto en cada bono (etapa B3a): no se guarda sin elegirlo en todos
+    const efectos_bonos = {};
+    for (const b of (bonosList || [])) {
+        const sel = panel.querySelector('#fj-ef-' + b.id), e = sel ? sel.value : '';
+        if (!e) { showToast('Falta elegir el efecto en el bono «' + b.nombre + '».', 'warning'); return; }
+        efectos_bonos[b.id] = e;
+    }
     const body = {
         nombre: nombre, nomenclatura: v('fj-sigla'), descripcion: v('fj-desc'), con_goce_sueldo: goce,
         dias_habiles: habiles, dias_corridos: !habiles, pagador: panel.querySelector('#fj-pagador').value, dias_defecto: num('fj-dias'),
         activo: panel.querySelector('#fj-activo').checked, min_dias: num('fj-min') || 1, max_dias: num('fj-max'), frecuencia_anual: num('fj-frec'),
         sobreescribe_feriados: F.leerSeg(panel, 'fj-feriados') === 'true', es_horas_sindicales: F.leerSeg(panel, 'fj-sindical') === 'true',
-        descuenta_remuneracion: !goce, es_por_horas: F.leerSeg(panel, 'fj-parcial') === 'true', genera_deuda_horaria: F.leerSeg(panel, 'fj-deuda') === 'true'
+        descuenta_remuneracion: !goce, es_por_horas: F.leerSeg(panel, 'fj-parcial') === 'true', genera_deuda_horaria: F.leerSeg(panel, 'fj-deuda') === 'true',
+        efectos_bonos: efectos_bonos
     };
     await F.trabajando(btn, async function () {
         const r = await fetch(API_CONFIG + 'justificaciones/tipos/' + (t.id ? t.id + '/' : ''), {
@@ -1028,6 +1115,7 @@ async function guardarFichaTipoJ(t, panel, btn) {
         if (!r.ok) { showToast(d.detail || 'No se pudo guardar el tipo.', 'danger'); return; }
         showToast(t.id ? 'Listo. Cambios guardados.' : 'Listo. Tipo creado.', 'success');
         if (d && d.id) F.recordar('just', d.id);
+        await loadBonos();
         await loadTiposJustificacion();
     });
 }
@@ -1083,6 +1171,13 @@ window.openModalTipoJ = function(tipo = null) {
         document.getElementById('tipo-j-parcial').value = 'false';
         document.getElementById('tipo-j-deuda').value = 'false';
     }
+
+    // Efecto en cada bono (etapa B3a)
+    const cont = document.getElementById('tipo-j-efectos');
+    cont.innerHTML = '<span class="text-muted small">Cargando bonos…</span>';
+    _asegurarBonos().then(function (bonos) {
+        cont.innerHTML = _htmlFilasEfecto('tipo-j-ef-', bonos, function (b) { return tipo ? (b.efectos || {})[tipo.id] : ''; });
+    });
 
     modal.style.display = 'flex';
 }
@@ -1165,6 +1260,10 @@ async function saveTipoJustificacion() {
         es_por_horas: document.getElementById('tipo-j-parcial').value === 'true',
         genera_deuda_horaria: document.getElementById('tipo-j-deuda').value === 'true'
     };
+    // Efecto en cada bono (etapa B3a): no se guarda sin elegirlo en todos
+    const efT = _leerEfectos(document.getElementById('tipo-j-efectos'));
+    if (efT.falta) { showToast('Falta elegir el efecto en el bono «' + efT.falta + '».', 'warning'); return; }
+    body.efectos_bonos = efT.valores;
 
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_CONFIG}justificaciones/tipos/${id}/` : `${API_CONFIG}justificaciones/tipos/`;
@@ -1180,6 +1279,7 @@ async function saveTipoJustificacion() {
 
         showToast("Listo. Cambios guardados.", "success");
         closeModalTipoJ(true);
+        bonosList = [];
         loadTiposJustificacion();
 
         if (window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {

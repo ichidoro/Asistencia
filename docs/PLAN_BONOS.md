@@ -208,7 +208,7 @@ Cada etapa es un cambio aparte, con pruebas, ensayo y la pregunta «¿Subo a Git
 - Bono perdido: «—» y, en el detalle, el motivo (por ejemplo «inasistencia sin justificar el 08-10»).
 - El resumen de arriba del informe suma lo que se paga en bonos.
 - Depende de B1 (si el cálculo está mal, el monto también).
-- **Hecho (22-11-2026, falta subir):**
+- **Hecho (22-11-2026, commit b0f33a2):**
   - Informe PDF: el monto de cada bono por persona (en pesos), una columna «Total» por persona, la fila de total por
     bono, «Bonos a pagar» en el resumen de arriba y una sección «Detalle de bonos» con los que no se pagan (causa y
     días, por ejemplo «Inasistencia sin justificar el 08-10; Licencia Común el 15-10 y 16-10») y los que se pagan en
@@ -241,6 +241,28 @@ Todo se agrega a la pantalla de Configuración → Bonos; el cálculo solo lee l
    proporción si el bono es proporcional), así nada cambia hasta que alguien lo cambie. Ejemplo: en una licencia se
    elige «Descuenta en proporción» en Compromiso y Transporte, y lo que se decida en el bono del cargo.
    El «Goce de sueldo» queda solo para lo que dice del sueldo, sin decidir los bonos.
+**Partes de B3** (cada una con su ensayo y su «¿Subo?»): **B3a** efecto de cada justificación en cada bono e
+inasistencia sin justificar en el bono (puntos 1 y la mitad de 5); **B3b** cargos desde la lista, renombrar y unir
+cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que se pisan y vista previa (4 y 6);
+**B3d** Productos 4 como un bono (7).
+
+**B3a hecho (22-11-2026, falta subir):**
+- Tabla nueva `bono_efectos` (bono × justificación → cuenta como asistido / descuenta en proporción / hace perder el
+  bono) y en cada bono «Inasistencia sin justificar» (hace perder el bono / descuenta en proporción). Al crearlas se
+  llenaron con lo de hoy. El cálculo solo lee lo configurado; si algo falta, el bono no se paga y el motivo dice
+  «Falta configurar…».
+- Pantallas: sección «Efecto en los bonos» en la ficha de cada justificación (y en la ventana del asistente de
+  configuración), y en la ventana del bono la inasistencia sin justificar y el efecto de cada justificación. No se
+  guarda sin elegirlos todos. El interruptor «Prop.» de la regla ya no se muestra (lo reemplazan los efectos); su
+  valor se conserva en la base.
+- Arreglo de paso: en una lista vacía de Configuración, «Nuevo» no abría la ficha.
+- **Ensayo en el servidor** con el respaldo del 22-11-2026 (base temporal borrada al terminar): con lo llenado de hoy,
+  0 cambios en todos los períodos (informe y grilla). Cambiando en la base temporal Licencia Común en Compromiso a
+  «Descuenta en proporción», solo cambia Compromiso: 19 casos que antes lo perdían lo cobran en proporción.
+- Prueba nueva `test_efecto_justificaciones_en_bonos.py` (13 casos); 638 pruebas en verde.
+- **Sigue abierto M (Bolsa):** en Bolsa Flexible los días justificados no se cuentan, así que el efecto configurado
+  solo alcanza a Ciclo Inteligente. Corregirlo cambia lo que cobran personas de Bolsa: va aparte, con su ensayo.
+
 2. **Se quita la «Asistencia mínima» (E).** No existe en las reglas de Aguacol (decisión de la persona dueña,
    22-11-2026): lo que decide el bono es la relación entre la asistencia del día y las justificaciones (punto 1). Se
    quita el campo «% Asist.» de la pantalla y de la regla.

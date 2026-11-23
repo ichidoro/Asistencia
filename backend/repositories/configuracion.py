@@ -131,6 +131,10 @@ class ConfiguracionRepository:
                 )
             """)
         
+        # 5b. Efecto de cada justificación en cada bono (etapa B3a del plan de bonos, 22-11-2026). Antes lo decidía el
+        # «Goce de sueldo» para todos los bonos por igual; ahora se configura por bono en Configuración → Justificaciones.
+        await self._init_efectos_bonos()
+
         # ⚡ Índice compuesto para justificaciones (acelera cruce fecha↔empleado en el motor)
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_justif_emp_fechas ON justificaciones(empleado_id, fecha_inicio, fecha_fin)")
 
@@ -465,6 +469,78 @@ class ConfiguracionRepository:
 
         logger.info("✅ Tablas de configuración, ajustes y periodos inicializadas")
 
+    EFECTOS = ("asistido", "proporcion", "pierde")
+
+    async def _init_efectos_bonos(self):
+        """Crea la tabla bono_efectos y la columna bonos.efecto_inasistencia. La primera vez las llena con lo que hacía el
+        cálculo hasta hoy, para que nada cambie hasta que alguien lo configure:
+        - justificación con goce de sueldo → cuenta como asistido;
+        - sin goce → hace perder el bono, o descuenta en proporción si el bono tenía «Prop.» encendido;
+        - inasistencia sin justificar → hace perder el bono, o en proporción si el bono tenía «Prop.» encendido."""
+        get_cols = getattr(self.db, 'get_column_names', None)
+        prop = {}
+        for r in await self.db.fetch_all("SELECT bono_id, es_proporcional FROM bono_reglas"):
+            prop.setdefault(r['bono_id'], set()).add(1 if r['es_proporcional'] else 0)
+        for bono_id, vals in prop.items():
+            if len(vals) > 1:
+                logger.error(f"❗ Bono {bono_id}: sus reglas tienen «Prop.» distinto según el contrato; los efectos se llenan "
+                             "como «hace perder el bono». Revise su configuración en Configuración → Bonos.")
+        es_prop = lambda bono_id: prop.get(bono_id) == {1}
+
+        if get_cols and "efecto_inasistencia" not in await get_cols("bonos"):
+            await self.db.execute("ALTER TABLE bonos ADD COLUMN efecto_inasistencia TEXT")
+            for b in await self.db.fetch_all("SELECT id FROM bonos"):
+                await self.db.execute("UPDATE bonos SET efecto_inasistencia = ? WHERE id = ?",
+                                      ("proporcion" if es_prop(b['id']) else "pierde", b['id']))
+            logger.info("✨ Migración: columna 'efecto_inasistencia' agregada a bonos y llenada con lo de hoy")
+
+        if not await self.db.table_exists("bono_efectos"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS bono_efectos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bono_id INTEGER NOT NULL,
+                    tipo_id INTEGER NOT NULL,
+                    efecto TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (bono_id) REFERENCES bonos (id) ON DELETE CASCADE,
+                    FOREIGN KEY (tipo_id) REFERENCES justificacion_tipos (id) ON DELETE CASCADE,
+                    UNIQUE(bono_id, tipo_id)
+                )
+            """)
+            tipos = await self.db.fetch_all("SELECT id, con_goce_sueldo FROM justificacion_tipos")
+            ops = []
+            for b in await self.db.fetch_all("SELECT id FROM bonos"):
+                for t in tipos:
+                    ef = "asistido" if t['con_goce_sueldo'] else ("proporcion" if es_prop(b['id']) else "pierde")
+                    ops.append(("INSERT INTO bono_efectos (bono_id, tipo_id, efecto) VALUES (?, ?, ?)", (b['id'], t['id'], ef)))
+            if ops:
+                await self.db.execute_batch(ops)
+            logger.info(f"✨ Tabla 'bono_efectos' creada y llenada con lo de hoy ({len(ops)} combinaciones)")
+
+    async def set_efectos_de_bono(self, bono_id: int, efectos: Dict[int, str]) -> None:
+        """Reemplaza el efecto de cada justificación en un bono."""
+        ConfiguracionRepository._bonos_cache = None
+        ops = [("DELETE FROM bono_efectos WHERE bono_id = ?", (bono_id,))]
+        ops += [("INSERT INTO bono_efectos (bono_id, tipo_id, efecto) VALUES (?, ?, ?)", (bono_id, int(t), e)) for t, e in efectos.items()]
+        await self.db.execute_batch(ops)
+
+    async def set_efectos_de_tipo(self, tipo_id: int, efectos: Dict[int, str]) -> None:
+        """Reemplaza el efecto de una justificación en cada bono."""
+        ConfiguracionRepository._bonos_cache = None
+        ops = [("DELETE FROM bono_efectos WHERE tipo_id = ?", (tipo_id,))]
+        ops += [("INSERT INTO bono_efectos (bono_id, tipo_id, efecto) VALUES (?, ?, ?)", (int(b), tipo_id, e)) for b, e in efectos.items()]
+        await self.db.execute_batch(ops)
+
+    async def set_efecto_inasistencia(self, bono_id: int, efecto: str) -> None:
+        ConfiguracionRepository._bonos_cache = None
+        await self.db.execute("UPDATE bonos SET efecto_inasistencia = ? WHERE id = ?", (efecto, bono_id))
+
+    async def get_ids_bonos(self) -> List[int]:
+        return [r['id'] for r in await self.db.fetch_all("SELECT id FROM bonos")]
+
+    async def get_ids_tipos_justificacion(self) -> List[int]:
+        return [r['id'] for r in await self.db.fetch_all("SELECT id FROM justificacion_tipos")]
+
     # --- BONOS ---
     async def create_bono(self, bono: BonoCreate) -> int:
         ConfiguracionRepository._bonos_cache = None
@@ -528,6 +604,7 @@ class ConfiguracionRepository:
             # Por ON DELETE CASCADE las reglas deberían borrarse solas si la DB lo soporta, 
             # pero lo hacemos explícito por seguridad en SQLite si PRAGMA foreign_keys no está activo
             await self.db.execute("DELETE FROM bono_reglas WHERE bono_id = ?", (bono_id,))
+            await self.db.execute("DELETE FROM bono_efectos WHERE bono_id = ?", (bono_id,))
             res = await self.db.execute("DELETE FROM bonos WHERE id = ?", (bono_id,))
             return res.rowcount > 0
         except Exception as e:
@@ -597,6 +674,10 @@ class ConfiguracionRepository:
                 query_areas = "SELECT area_id FROM area_bonos WHERE bono_id = ?"
                 areas = await self.db.fetch_all(query_areas, (b['id'],))
                 bono_dict['area_ids'] = [a['area_id'] for a in areas]
+
+                # Efecto de cada justificación en este bono (etapa B3a): {tipo_id: efecto}
+                efectos = await self.db.fetch_all("SELECT tipo_id, efecto FROM bono_efectos WHERE bono_id = ?", (b['id'],))
+                bono_dict['efectos'] = {int(e['tipo_id']): e['efecto'] for e in efectos}
                 
                 # Formatear reglas
                 reglas_fmt = []
@@ -684,6 +765,8 @@ class ConfiguracionRepository:
 
     async def delete_tipo_justificacion(self, tipo_id: int) -> bool:
         try:
+            ConfiguracionRepository._bonos_cache = None
+            await self.db.execute("DELETE FROM bono_efectos WHERE tipo_id = ?", (tipo_id,))
             res = await self.db.execute("DELETE FROM justificacion_tipos WHERE id = ?", (tipo_id,))
             return res.rowcount > 0
         except Exception as e:

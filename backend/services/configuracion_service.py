@@ -17,10 +17,33 @@ class ConfiguracionService:
         """Inicializar tablas si no existen"""
         await self.repository.init_tables()
 
+    # --- EFECTO DE LAS JUSTIFICACIONES EN LOS BONOS (etapa B3a del plan de bonos) ---
+    @staticmethod
+    def _faltan(ids_esperados, dados, que: str):
+        from fastapi import HTTPException
+        faltan = sorted(set(ids_esperados) - set(int(k) for k in (dados or {})))
+        if faltan:
+            raise HTTPException(status_code=400, detail=f"Falta elegir el efecto en {len(faltan)} {que}.")
+
+    async def _validar_efectos_bono(self, bono: BonoCreate, creando: bool):
+        from fastapi import HTTPException
+        if creando and not bono.efecto_inasistencia:
+            raise HTTPException(status_code=400, detail="Falta elegir qué hace una inasistencia sin justificar con el bono.")
+        if creando or bono.efectos is not None:
+            self._faltan(await self.repository.get_ids_tipos_justificacion(), bono.efectos, "justificaciones")
+
+    async def _guardar_efectos_bono(self, bono_id: int, bono: BonoCreate):
+        if bono.efecto_inasistencia:
+            await self.repository.set_efecto_inasistencia(bono_id, bono.efecto_inasistencia)
+        if bono.efectos is not None:
+            await self.repository.set_efectos_de_bono(bono_id, bono.efectos)
+
     # --- BONOS ---
     async def create_bono(self, bono: BonoCreate) -> int:
+        await self._validar_efectos_bono(bono, creando=True)
         bono_id = await self.repository.create_bono(bono)
         if bono_id:
+            await self._guardar_efectos_bono(bono_id, bono)
             # Persistir relación area_bonos si se proporcionaron area_ids
             if bono.area_ids:
                 try:
@@ -46,8 +69,10 @@ class ConfiguracionService:
         return bono_id
 
     async def update_bono(self, bono_id: int, bono: BonoCreate) -> bool:
+        await self._validar_efectos_bono(bono, creando=False)
         updated = await self.repository.update_bono(bono_id, bono)
         if updated:
+            await self._guardar_efectos_bono(bono_id, bono)
             # Sincronizar relación area_bonos si se proporcionaron area_ids
             if bono.area_ids is not None:
                 try:
@@ -174,10 +199,19 @@ class ConfiguracionService:
         return await self.repository.get_all_tipos_justificacion()
 
     async def create_tipo_justificacion(self, tipo: JustificacionTipoCreate) -> int:
-        return await self.repository.create_tipo_justificacion(tipo)
+        # Una justificación nueva no se guarda sin elegir su efecto en cada bono (sin valor por defecto escondido)
+        self._faltan(await self.repository.get_ids_bonos(), tipo.efectos_bonos, "bonos")
+        tipo_id = await self.repository.create_tipo_justificacion(tipo)
+        await self.repository.set_efectos_de_tipo(tipo_id, tipo.efectos_bonos)
+        return tipo_id
 
     async def update_tipo_justificacion(self, tipo_id: int, tipo: JustificacionTipoCreate) -> bool:
-        return await self.repository.update_tipo_justificacion(tipo_id, tipo)
+        if tipo.efectos_bonos is not None:
+            self._faltan(await self.repository.get_ids_bonos(), tipo.efectos_bonos, "bonos")
+        ok = await self.repository.update_tipo_justificacion(tipo_id, tipo)
+        if ok and tipo.efectos_bonos is not None:
+            await self.repository.set_efectos_de_tipo(tipo_id, tipo.efectos_bonos)
+        return ok
 
     async def delete_tipo_justificacion(self, tipo_id: int) -> bool:
         return await self.repository.delete_tipo_justificacion(tipo_id)

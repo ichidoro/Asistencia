@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1465,
+  "total": 1476,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -151,7 +151,7 @@
    {
     "funcion": "init_tables",
     "archivo": "backend/repositories/configuracion.py",
-    "lineas": 451
+    "lineas": 455
    },
    {
     "funcion": "get_matrix_data_with_projections",
@@ -212,7 +212,7 @@
   },
   {
    "archivo": "frontend/js/configuracion_ui.js",
-   "lineas": 2600
+   "lineas": 2700
   },
   {
    "archivo": "frontend/js/productos_4.js",

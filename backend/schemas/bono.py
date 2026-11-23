@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Dict, List, Literal, Optional
 from datetime import date, datetime
 
 # ==========================================
@@ -35,14 +35,23 @@ class BonoBase(BaseModel):
     descripcion: Optional[str] = None
     activo: bool = True
 
+# Qué hace un día con justificación (o una inasistencia sin justificar) con el bono (etapa B3a del plan de bonos)
+Efecto = Literal["asistido", "proporcion", "pierde"]
+
+
 class BonoCreate(BonoBase):
     reglas: List[BonoReglaBase] = []
     area_ids: Optional[List[int]] = Field(None, description="IDs de áreas a las que asignar el bono")
+    efecto_inasistencia: Optional[Literal["proporcion", "pierde"]] = Field(
+        None, description="Qué hace una inasistencia sin justificar: descuenta en proporción o hace perder el bono")
+    efectos: Optional[Dict[int, Efecto]] = Field(None, description="{id de la justificación: efecto en este bono}")
 
 class BonoResponse(BonoBase):
     id: int
     reglas: List[BonoReglaResponse] = []
     area_ids: List[int] = []   # IDs de áreas asignadas — necesario para el frontend
+    efecto_inasistencia: Optional[str] = None
+    efectos: Dict[int, str] = {}
     created_at: datetime
 
     class Config:
