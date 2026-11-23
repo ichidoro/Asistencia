@@ -72,6 +72,20 @@ def resolver_destino(nombre: str, paterno: str, materno: str, manual: Dict[str, 
     return buscar_contacto(nombre, paterno, materno, contactos)
 
 
+def _norm(t: object) -> str:
+    """Mayúsculas, sin tildes ni espacios sobrantes: «Logística  Retail» y «logistica retail» son lo mismo."""
+    sin_tildes = unicodedata.normalize("NFKD", str(t or "")).encode("ascii", "ignore").decode()
+    return " ".join(sin_tildes.upper().split())
+
+
+def pasa_filtro(area: object, cargo: object, filtro: Dict[str, List[str]] | None) -> bool:
+    """Sin filtro entran todas. Con filtro de áreas y/o cargos entra quien cumple CADA uno que se haya puesto (varias áreas o cargos = cualquiera de ellos)."""
+    if not filtro:
+        return True
+    areas, cargos = {_norm(x) for x in filtro.get("areas") or []}, {_norm(x) for x in filtro.get("cargos") or []}
+    return (not areas or _norm(area) in areas) and (not cargos or _norm(cargo) in cargos)
+
+
 def _numero_de(jid: str) -> str:
     n = str(jid).split("@")[0]
     return ("+" + n) if jid.endswith("@s.whatsapp.net") else n
@@ -120,7 +134,7 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
     return "\n".join(lineas)
 
 
-async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None) -> Dict[str, Any]:
+async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None, filtro: Dict[str, List[str]] | None = None) -> Dict[str, Any]:
     """Una fila por persona activa en Bolsa Flexible y el tramo vigente. El destino sale de los contactos del teléfono (por nombre):
     los números de la ficha no se usan porque pueden estar mal. `estado`: ok | ambiguo | ninguno."""
     from backend.services.cuadre_service import CuadreService
@@ -128,7 +142,7 @@ async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]
     db = asistencia_service.repository.db
     inicio, fin = await CuadreService(asistencia_service).tramo_de(hoy)
     datos = await ReportService(asistencia_service).datos_periodo(inicio, fin, None)
-    fichas = {int(r["id"]): r for r in await db.fetch_all("SELECT id, nombre, apellido_paterno, apellido_materno FROM empleados")}
+    fichas = {int(r["id"]): r for r in await db.fetch_all("SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, a.nombre AS area FROM empleados e LEFT JOIN areas a ON a.id = e.area_id")}
     personas = []
     for f in datos["filas"]:
         if not f.get("esBolsa") or f.get("activo") != "SÍ":
@@ -138,6 +152,7 @@ async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]
         con = estado in ("ok", "manual")
         personas.append({
             "emp_id": f["emp_id"], "nombre": f["nombre"], "acum": f["acumBolsa"], "meta": f["metaMin"], "estado": estado,
+            "area": c.get("area") or "", "cargo": c.get("cargo") or "", "incluida": pasa_filtro(c.get("area"), c.get("cargo"), filtro),
             "telefono": hallado["id"] if con else None, "contacto": hallado["nombre"] if con else None,
             "candidatos": [x["nombre"] for x in hallado] if estado == "ambiguo" else [],
             "mensaje": armar_mensaje(c.get("nombre") or "", f["acumBolsa"], f["metaMin"], inicio, fin, hoy),
@@ -145,18 +160,19 @@ async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]
     return {"inicio": inicio, "fin": fin, "personas": personas}
 
 
-async def listar_personas(asistencia_service, hoy: str, manuales: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def listar_personas(asistencia_service, hoy: str, manuales: Dict[int, Dict[str, Any]], filtro: Dict[str, List[str]] | None = None) -> List[Dict[str, Any]]:
     """Cada persona de Bolsa con el contacto que se le encontró (o su estado), para revisarlo y fijarlo a mano en la pantalla."""
-    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales)
-    return [{"emp_id": i["emp_id"], "nombre": i["nombre"], "estado": i["estado"], "contacto": i["contacto"],
+    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales, filtro)
+    return [{"emp_id": i["emp_id"], "nombre": i["nombre"], "area": i["area"], "cargo": i["cargo"], "incluida": i["incluida"], "estado": i["estado"], "contacto": i["contacto"],
              "numero": _numero_de(i["telefono"]) if i["telefono"] else None, "candidatos": i["candidatos"]} for i in base["personas"]]
 
 
 async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, aviso: str = "resumen_personal",
-                         destinos: List[str] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None) -> Dict[str, Any]:
+                         destinos: List[str] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None,
+                         filtro: Dict[str, List[str]] | None = None) -> Dict[str, Any]:
     """simular=True no envía nada: devuelve a quién y qué se enviaría. `destinos` solo para el aviso a chats."""
-    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales)
-    personas = base["personas"]
+    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales, filtro)
+    personas = [p for p in base["personas"] if p["incluida"]]  # lo que queda fuera del filtro de área y cargo no se cuenta ni se envía
     if aviso == "resumen_jefatura":
         texto = armar_mensaje_jefatura(personas, base["inicio"], base["fin"], hoy)
         chats = destinos or []
@@ -202,5 +218,6 @@ async def enviar_automaticos(asistencia_service, repo, hoy: str) -> Dict[str, An
         if not activos.get(aviso):
             continue
         chats = [d["destino"] for d in await repo.destinos(aviso)] if AVISOS[aviso]["usa_chats"] else None
-        out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats, manuales=await repo.destinos_personas())
+        out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats, manuales=await repo.destinos_personas(),
+                                          filtro=(await repo.filtros(aviso)).get(aviso))
     return out

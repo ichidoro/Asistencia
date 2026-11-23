@@ -33,6 +33,11 @@ class AvisoIn(BaseModel):
     activo: bool
 
 
+class FiltrosIn(BaseModel):
+    areas: list[str] = []
+    cargos: list[str] = []
+
+
 class PersonaDestinoIn(BaseModel):
     destino: str
     etiqueta: str = ""
@@ -88,7 +93,8 @@ async def contactos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
 async def personas(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
     """Personas de Bolsa y a qué contacto llegaría su resumen (encontrado por nombre o fijado a mano)."""
     repo = await _repo(db)
-    return {"personas": await whatsapp_resumen.listar_personas(AsistenciaService(AsistenciaRepository(db)), _hoy(), await repo.destinos_personas())}
+    filtro = (await repo.filtros("resumen_personal")).get("resumen_personal")
+    return {"personas": await whatsapp_resumen.listar_personas(AsistenciaService(AsistenciaRepository(db)), _hoy(), await repo.destinos_personas(), filtro)}
 
 
 @router.put("/personas/{emp_id}/destino")
@@ -108,14 +114,23 @@ async def quitar_persona(emp_id: int, db: Database = Depends(get_db), _: Securit
 
 @router.get("/config")
 async def config(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
-    """Cada aviso automático: si está encendido y a qué chats va."""
+    """Cada aviso automático: si está encendido, a qué chats va y con qué filtro de área y cargo."""
     repo = await _repo(db)
     activos = await repo.avisos_activos()
     destinos = await repo.destinos()
-    return {"avisos": [
-        {"aviso": k, **v, "activo": activos.get(k, False), "destinos": [d for d in destinos if d["aviso"] == k]}
+    filtros = await repo.filtros()
+    return {"opciones": await repo.opciones_filtro(), "avisos": [
+        {"aviso": k, **v, "activo": activos.get(k, False), "destinos": [d for d in destinos if d["aviso"] == k], "filtros": filtros.get(k, {"areas": [], "cargos": []})}
         for k, v in whatsapp_resumen.AVISOS.items()
     ]}
+
+
+@router.put("/avisos/{aviso}/filtros")
+async def fijar_filtros(aviso: str, datos: FiltrosIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    """A qué áreas y cargos se limita el aviso (vacío = todos)."""
+    _aviso_o_404(aviso)
+    await (await _repo(db)).fijar_filtros(aviso, datos.areas[:100], datos.cargos[:100])
+    return {"ok": True}
 
 
 @router.put("/avisos/{aviso}")
@@ -169,7 +184,8 @@ async def resumen_semanal(datos: ResumenIn, db: Database = Depends(get_db), _: S
         raise HTTPException(503, "WhatsApp está apagado (WHATSAPP_ENABLED / token).")
     repo = await _repo(db)
     destinos = [d["destino"] for d in await repo.destinos(datos.aviso)] if meta["usa_chats"] else None
-    return await whatsapp_resumen.enviar_resumen(AsistenciaService(AsistenciaRepository(db)), _hoy(), datos.simular, datos.aviso, destinos, await repo.destinos_personas())
+    return await whatsapp_resumen.enviar_resumen(AsistenciaService(AsistenciaRepository(db)), _hoy(), datos.simular, datos.aviso, destinos, await repo.destinos_personas(),
+                                                 (await repo.filtros(datos.aviso)).get(datos.aviso))
 
 
 @router.post("/resumen-semanal/cron")

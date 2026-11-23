@@ -122,3 +122,16 @@ def test_lo_fijado_a_mano_manda_sobre_la_busqueda_por_nombre():
     # una persona que no está en los contactos pero tiene número a mano sí queda con destino
     assert resolver_destino("Ana", "Rojas", "", {"destino": "56933334444", "etiqueta": ""}, cs)[1]["nombre"] == "56933334444"
     assert resolver_destino("Ana", "Rojas", "", None, cs) == ("ninguno", None)
+
+
+def test_filtro_por_area_y_cargo_acepta_varios_y_exige_cada_tipo():
+    from backend.services.whatsapp_resumen import pasa_filtro
+    assert pasa_filtro("Logística", "Chofer", None) is True and pasa_filtro("x", "y", {"areas": [], "cargos": []}) is True
+    f = {"areas": ["Logística Tradicional", "Logística Retail"], "cargos": ["Chofer", "Peoneta"]}
+    assert pasa_filtro("Logística Tradicional", "chofer", {"areas": ["logistica tradicional"], "cargos": []}) is True  # sin importar tildes ni mayúsculas
+    assert pasa_filtro("Logística Tradicional", "Chofer", f) is True
+    assert pasa_filtro("Logística Retail", "peoneta", f) is True               # cualquiera de las áreas y de los cargos
+    assert pasa_filtro("Producción", "Chofer", f) is False                      # área fuera
+    assert pasa_filtro("Logística Tradicional", "Supervisor", f) is False       # cargo fuera
+    assert pasa_filtro("Producción", "Operario", {"areas": [], "cargos": ["Operario"]}) is True  # solo cargo
+    assert pasa_filtro("  Logística   Retail ", "Chofer", {"areas": ["logística retail"], "cargos": []}) is True  # espacios y mayúsculas

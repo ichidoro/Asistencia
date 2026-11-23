@@ -2767,8 +2767,7 @@ window.cargarMapaCodigo = async function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
     const esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
-    let timer = null, grupos = null, contactos = null;
-    const elegibles = new Map(); // texto de la lista -> {id, nombre}
+    let timer = null, grupos = null, contactos = null, opciones = { areas: [], cargos: [] };
 
     async function api(metodo, ruta, cuerpo) {
         const r = await fetch('/api/whatsapp' + ruta, { method: metodo, headers: H(), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
@@ -2776,6 +2775,107 @@ window.cargarMapaCodigo = async function () {
         return { ok: r.ok, j: j };
     }
     const msg = function (t) { const e = document.getElementById('wa-msg'); if (e) e.innerHTML = t; };
+
+    // ── Estilos propios (una vez) ──
+    if (!document.getElementById('wa-estilos')) {
+        const st = document.createElement('style');
+        st.id = 'wa-estilos';
+        st.textContent = '.wa-pop{position:fixed;z-index:2100;background:var(--bs-body-bg,#fff);color:var(--bs-body-color,#212529);border:1px solid var(--bs-border-color,#dee2e6);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.18);max-height:300px;overflow:auto;padding:6px}'
+            + '.wa-pop .wa-cab{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;padding:6px 10px 2px}'
+            + '.wa-it{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer}'
+            + '.wa-it:hover,.wa-it.sel{background:rgba(31,58,147,.10)}'
+            + '.wa-ico{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:1rem}'
+            + '.wa-ico.contacto{background:#e0e7ff;color:#3730a3}.wa-ico.grupo{background:#d1fae5;color:#047857}'
+            + '.wa-nom{font-weight:600;font-size:.88rem;line-height:1.1}.wa-num{font-size:.74rem;color:#6b7280}'
+            + '.wa-vacio{padding:12px;font-size:.84rem;color:#6b7280}'
+            + '.wa-ms .dropdown-menu{min-width:280px;max-height:320px;overflow:auto;padding:8px;border-radius:12px}'
+            + '.wa-ms label{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;font-size:.86rem;cursor:pointer;margin:0}.wa-ms label:hover{background:rgba(31,58,147,.08)}';
+        document.head.appendChild(st);
+    }
+
+    // ── Selector de contacto o grupo (con iconos) ──
+    let pop = null, popInput = null;
+    const numeroDe = function (id) { const n = String(id).split('@')[0]; return String(id).indexOf('@s.whatsapp.net') > 0 ? '+' + n : ''; };
+    function todosLosChats() {
+        const r = [];
+        (contactos || []).forEach(function (c) { r.push({ id: c.id, nombre: c.nombre, tipo: 'contacto', num: numeroDe(c.id) }); });
+        (grupos || []).forEach(function (g) { r.push({ id: g.id, nombre: g.nombre, tipo: 'grupo', num: '' }); });
+        return r;
+    }
+    function cerrarPop() { if (pop) { pop.remove(); pop = null; popInput = null; } }
+    function abrirPop(inp) {
+        const q = inp.value.trim().toLowerCase();
+        const lista = todosLosChats().filter(function (x) { return !q || x.nombre.toLowerCase().indexOf(q) >= 0 || x.num.replace(/\D/g, '').indexOf(q.replace(/\D/g, '') || '§') >= 0; });
+        cerrarPop();
+        const rect = inp.getBoundingClientRect();
+        pop = document.createElement('div');
+        pop.className = 'wa-pop';
+        pop.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
+        pop.style.width = Math.max(rect.width, 330) + 'px';
+        const abajo = window.innerHeight - rect.bottom > 220;
+        if (abajo) pop.style.top = (rect.bottom + 4) + 'px'; else pop.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        const fila = function (x) {
+            return '<div class="wa-it" data-i="' + esc(x.id) + '"><span class="wa-ico ' + x.tipo + '"><i class="bi ' + (x.tipo === 'grupo' ? 'bi-people-fill' : 'bi-person-fill') + '"></i></span>'
+                + '<span><div class="wa-nom">' + esc(x.nombre) + '</div><div class="wa-num">' + (x.tipo === 'grupo' ? 'Grupo' : esc(x.num || 'Contacto')) + '</div></span></div>';
+        };
+        const cs = lista.filter(function (x) { return x.tipo === 'contacto'; }).slice(0, 60), gs = lista.filter(function (x) { return x.tipo === 'grupo'; }).slice(0, 40);
+        pop.innerHTML = (cs.length ? '<div class="wa-cab">Contactos</div>' + cs.map(fila).join('') : '')
+            + (gs.length ? '<div class="wa-cab">Grupos</div>' + gs.map(fila).join('') : '')
+            + (!cs.length && !gs.length ? '<div class="wa-vacio">Sin coincidencias. Puede escribir un celular (9 1234 5678).</div>' : '');
+        const porId = {}; cs.concat(gs).forEach(function (x) { porId[x.id] = x; });
+        pop.addEventListener('mousedown', function (ev) {
+            const it = ev.target.closest('.wa-it');
+            if (!it) return;
+            ev.preventDefault();
+            const x = porId[it.getAttribute('data-i')];
+            inp.value = x.nombre; inp._sel = x;
+            cerrarPop();
+            inp.dispatchEvent(new Event('change'));
+        });
+        document.body.appendChild(pop);
+        popInput = inp;
+    }
+    function selector(inp) {
+        inp.setAttribute('autocomplete', 'off');
+        inp.addEventListener('focus', function () { abrirPop(inp); });
+        inp.addEventListener('input', function () { inp._sel = null; abrirPop(inp); });
+        inp.addEventListener('blur', function () { setTimeout(function () { if (popInput === inp) cerrarPop(); }, 120); });
+        inp.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') cerrarPop(); });
+    }
+    window.addEventListener('scroll', function (ev) { if (pop && !pop.contains(ev.target)) cerrarPop(); }, true);
+    // Lo elegido de la lista (o, si solo escribió, el texto tal cual: un celular).
+    const elegido = function (inp) { const t = inp.value.trim(); return inp._sel && inp._sel.nombre === t ? inp._sel : null; };
+
+    // ── Filtro de varias opciones (áreas, cargos) ──
+    function multiselect(id, titulo, todas, marcadas) {
+        const n = marcadas.length;
+        return '<div class="dropdown wa-ms" data-ms="' + id + '"><button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">'
+            + esc(titulo) + (n ? ' <span class="badge bg-primary">' + n + '</span>' : ' <span class="text-muted">todas</span>') + '</button>'
+            + '<div class="dropdown-menu">'
+            + '<input type="search" class="form-control form-control-sm mb-2 wa-ms-q" placeholder="Buscar…">'
+            + (todas.length ? todas.map(function (o) { return '<label data-t="' + esc(o.toLowerCase()) + '"><input type="checkbox" class="form-check-input mt-0" value="' + esc(o) + '"' + (marcadas.indexOf(o) >= 0 ? ' checked' : '') + '> ' + esc(o) + '</label>'; }).join('') : '<div class="wa-vacio">No hay opciones.</div>')
+            + '</div></div>';
+    }
+    function enlazarMulti(box, aviso, filtros, alCambiar) {
+        const cargar = function () { return { areas: marcadas('areas'), cargos: marcadas('cargos') }; };
+        const marcadas = function (id) { return Array.prototype.map.call(box.querySelectorAll('[data-ms="' + id + '"] input[type=checkbox]:checked'), function (c) { return c.value; }); };
+        box.querySelectorAll('.wa-ms').forEach(function (ms) {
+            ms.querySelector('.wa-ms-q').oninput = function (ev) {
+                const q = ev.target.value.trim().toLowerCase();
+                ms.querySelectorAll('label').forEach(function (l) { l.style.display = !q || l.getAttribute('data-t').indexOf(q) >= 0 ? '' : 'none'; });
+            };
+            ms.querySelectorAll('input[type=checkbox]').forEach(function (c) {
+                c.onchange = async function () {
+                    const f = cargar();
+                    const r = await api('PUT', '/avisos/' + aviso + '/filtros', f);
+                    msg(r.ok ? 'Filtro guardado.' : esc(r.j.detail || 'No se pudo guardar el filtro.'));
+                    const b = ms.querySelector('.dropdown-toggle'), n = f[ms.getAttribute('data-ms')].length;
+                    b.innerHTML = b.firstChild.textContent + (n ? ' <span class="badge bg-primary">' + n + '</span>' : ' <span class="text-muted">todas</span>');
+                    if (alCambiar) alCambiar();
+                };
+            });
+        });
+    }
 
     // ── Estado, QR, cortar conexión y prueba ──
     function pintarEstado(d) {
@@ -2806,35 +2906,35 @@ window.cargarMapaCodigo = async function () {
         });
     }
 
-    // ── Avisos automáticos: encender y asignar chats ──
-    function pintarAvisos(cfg, conectado) {
+    // ── Avisos automáticos: encender, filtrar y asignar chats ──
+    function pintarAvisos(cfg) {
         const c = document.getElementById('wa-avisos');
         if (!c) return;
-        elegibles.clear();
-        const opciones = [];
-        (contactos || []).forEach(function (x) { const t = x.nombre + ' · contacto'; elegibles.set(t, x); opciones.push(t); });
-        (grupos || []).forEach(function (x) { const t = x.nombre + ' · grupo'; elegibles.set(t, x); opciones.push(t); });
-        c.innerHTML = '<datalist id="wa-lista">' + opciones.map(function (t) { return '<option value="' + esc(t) + '"></option>'; }).join('') + '</datalist>'
-            + '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(lunes 08:00, si el cron está instalado en el servidor)</span></h6>'
+        opciones = cfg.opciones || opciones;
+        c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(lunes 08:00, si el cron está instalado en el servidor)</span></h6>'
             + cfg.avisos.map(function (a) {
-                const usaChats = !!a.usa_chats;
+                const usaChats = !!a.usa_chats, f = a.filtros || { areas: [], cargos: [] };
                 let h = '<div class="border rounded p-3 mb-3" data-aviso="' + esc(a.aviso) + '">'
                     + '<div class="d-flex justify-content-between align-items-start gap-3"><div><b>' + esc(a.nombre) + '</b>'
                     + '<div class="text-muted" style="font-size:0.85rem;">' + esc(a.descripcion) + '</div></div>'
-                    + '<div class="form-check form-switch"><input class="form-check-input wa-sw" type="checkbox" role="switch"' + (a.activo ? ' checked' : '') + '><label class="form-check-label" style="font-size:0.85rem;">Automático</label></div></div>';
+                    + '<div class="form-check form-switch"><input class="form-check-input wa-sw" type="checkbox" role="switch"' + (a.activo ? ' checked' : '') + '><label class="form-check-label" style="font-size:0.85rem;">Automático</label></div></div>'
+                    + '<div class="d-flex flex-wrap gap-2 align-items-center mt-3"><span class="text-muted" style="font-size:0.85rem;"><i class="bi bi-funnel"></i> Solo de:</span>'
+                    + multiselect('areas', 'Áreas', opciones.areas || [], f.areas) + multiselect('cargos', 'Cargos', opciones.cargos || [], f.cargos)
+                    + '<span class="text-muted" style="font-size:0.78rem;">(sin marcar = todas; con varias, vale cualquiera de ellas)</span></div>';
                 if (usaChats) {
-                    h += '<div class="mt-2" style="font-size:0.9rem;"><b>Se envía a:</b> ';
+                    h += '<div class="mt-3" style="font-size:0.9rem;"><b>Se envía a:</b> ';
                     h += a.destinos.length ? a.destinos.map(function (d) {
-                        const nom = d.etiqueta || d.destino;
-                        return '<span class="badge bg-light text-dark border me-1">' + esc(nom) + (d.destino.indexOf('@g.us') > 0 ? ' (grupo)' : '') + ' <a href="#" class="wa-quitar text-danger text-decoration-none" data-id="' + d.id + '" title="Quitar">✕</a></span>';
+                        const esGrupo = d.destino.indexOf('@g.us') > 0;
+                        return '<span class="badge rounded-pill bg-light text-dark border me-1 py-2"><i class="bi ' + (esGrupo ? 'bi-people-fill text-success' : 'bi-person-fill text-primary') + '"></i> ' + esc(d.etiqueta || d.destino)
+                            + ' <a href="#" class="wa-quitar text-danger text-decoration-none ms-1" data-id="' + d.id + '" title="Quitar">✕</a></span>';
                     }).join('') : '<span class="text-muted">ningún chat asignado</span>';
                     h += '</div><div class="d-flex flex-wrap gap-2 mt-2">'
-                        + '<input class="form-control wa-buscar" list="wa-lista" placeholder="Buscar un contacto o grupo, o escribir un celular" style="max-width:340px;">'
+                        + '<input class="form-control wa-buscar" placeholder="Buscar un contacto o grupo, o escribir un celular" style="max-width:360px;">'
                         + '<input class="form-control wa-eti" placeholder="Nombre (opcional)" style="max-width:170px;">'
                         + '<button class="btn btn-outline-primary wa-add">Asignar</button></div>';
-                    if (conectado && contactos && !contactos.length && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">WhatsApp entrega los contactos al vincular y aún no llegó ninguno: puede escribir un celular, o cortar la conexión y vincular de nuevo.</div>';
+                    if (contactos && !contactos.length && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">WhatsApp entrega los contactos al vincular y aún no llegó ninguno: puede escribir un celular, o cortar la conexión y vincular de nuevo.</div>';
                 }
-                if (!usaChats) h += '<div class="mt-2"><button class="btn btn-sm btn-outline-primary wa-personas">Revisar y asignar contacto por persona</button><div class="wa-personas-box mt-2"></div></div>';
+                if (!usaChats) h += '<div class="mt-3"><button class="btn btn-sm btn-outline-primary wa-personas"><i class="bi bi-people"></i> Revisar y asignar contacto por persona</button><div class="wa-personas-box mt-2"></div></div>';
                 h += '<div class="mt-3"><button class="btn btn-sm btn-outline-secondary me-2 wa-sim">Simular (no envía)</button>'
                     + '<button class="btn btn-sm btn-primary wa-env">Enviar ahora</button></div></div>';
                 return h;
@@ -2842,6 +2942,8 @@ window.cargarMapaCodigo = async function () {
 
         c.querySelectorAll('[data-aviso]').forEach(function (box) {
             const aviso = box.getAttribute('data-aviso');
+            const cajaPersonas = box.querySelector('.wa-personas-box');
+            enlazarMulti(box, aviso, null, function () { if (cajaPersonas && cajaPersonas.innerHTML) cargarPersonas(cajaPersonas); });
             box.querySelector('.wa-sw').onchange = async function (ev) {
                 const r = await api('PUT', '/avisos/' + aviso, { activo: ev.target.checked });
                 if (!r.ok) { msg(esc(r.j.detail || 'No se pudo cambiar.')); ev.target.checked = !ev.target.checked; } else msg('Guardado.');
@@ -2849,11 +2951,13 @@ window.cargarMapaCodigo = async function () {
             box.querySelectorAll('.wa-quitar').forEach(function (a) {
                 a.onclick = async function (ev) { ev.preventDefault(); await api('DELETE', '/destinos/' + a.getAttribute('data-id')); cargarAvisos(); };
             });
+            const buscar = box.querySelector('.wa-buscar');
+            if (buscar) selector(buscar);
             const add = box.querySelector('.wa-add');
             if (add) add.onclick = async function () {
-                const texto = box.querySelector('.wa-buscar').value.trim(), eti = box.querySelector('.wa-eti').value.trim();
+                const texto = buscar.value.trim(), eti = box.querySelector('.wa-eti').value.trim();
                 if (!texto) { msg('Elija un contacto o grupo, o escriba un celular.'); return; }
-                const hit = elegibles.get(texto);
+                const hit = elegido(buscar);
                 const r = await api('POST', '/avisos/' + aviso + '/destinos', { destino: hit ? hit.id : texto, etiqueta: eti || (hit ? hit.nombre : '') });
                 if (!r.ok) { msg(esc(r.j.detail || 'No se pudo asignar.')); return; }
                 msg('Chat asignado.'); cargarAvisos();
@@ -2863,8 +2967,8 @@ window.cargarMapaCodigo = async function () {
                 const r = await api('POST', '/resumen-semanal', { simular: simular, aviso: aviso });
                 if (!r.ok) return msg(esc(r.j.detail || 'Error al calcular el resumen.'));
                 const j = r.j;
-                let t = '<b>' + j.personas + '</b> personas en Bolsa. ';
-                t += j.chats != null ? 'Chats asignados: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> encontradas en los contactos del teléfono.';
+                let t = '<b>' + j.personas + '</b> personas en Bolsa (dentro del filtro). ';
+                t += j.chats != null ? 'Chats asignados: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> con contacto asignado o encontrado.';
                 if ((j.sin_contacto || []).length) t += '<div class="text-muted">Sin contacto con su nombre (no se les envía): ' + esc(j.sin_contacto.join(', ')) + '</div>';
                 if ((j.ambiguos || []).length) t += '<div class="text-muted">Con más de un contacto posible (no se les envía): ' + esc(j.ambiguos.join('; ')) + '</div>';
                 if (simular && (j.coincidencias || []).length) t += '<details class="mt-2"><summary>Revisar a quién llegaría (' + j.coincidencias.length + ')</summary><table class="table table-sm mt-1" style="font-size:0.8rem;"><thead><tr><th>Persona</th><th>Contacto</th><th>Número</th></tr></thead><tbody>' + j.coincidencias.map(function (x) { return '<tr><td>' + esc(x.persona) + '</td><td>' + esc(x.contacto) + '</td><td>' + esc(x.numero) + '</td></tr>'; }).join('') + '</tbody></table></details>';
@@ -2873,7 +2977,7 @@ window.cargarMapaCodigo = async function () {
                 msg(t);
             };
             const bp = box.querySelector('.wa-personas');
-            if (bp) bp.onclick = function () { cargarPersonas(box.querySelector('.wa-personas-box')); };
+            if (bp) bp.onclick = function () { cargarPersonas(cajaPersonas); };
             box.querySelector('.wa-sim').onclick = function () { correr(true); };
             box.querySelector('.wa-env').onclick = function () { if (window.confirm('Se enviará este aviso por WhatsApp ahora mismo. ¿Continuar?')) correr(false); };
         });
@@ -2889,44 +2993,52 @@ window.cargarMapaCodigo = async function () {
         const r = await api('GET', '/personas');
         if (!r.ok) { caja.innerHTML = esc(r.j.detail || 'No se pudo cargar.'); return; }
         const orden = { ninguno: 0, ambiguo: 1, ok: 2, manual: 3 };
-        const lista = r.j.personas.slice().sort(function (a, b) { return orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre, 'es'); });
-        const n = function (e) { return lista.filter(function (p) { return p.estado === e; }).length; };
+        const lista = r.j.personas.slice().sort(function (a, b) { return (b.incluida - a.incluida) || orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre, 'es'); });
+        const n = function (e) { return lista.filter(function (p) { return p.incluida && p.estado === e; }).length; };
+        const dentro = lista.filter(function (p) { return p.incluida; }).length;
         caja.innerHTML = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">'
             + '<input class="form-control form-control-sm wp-buscar" placeholder="Buscar persona…" style="max-width:240px;">'
-            + '<select class="form-select form-select-sm wp-estado" style="max-width:220px;">'
-            + '<option value="">Todas (' + lista.length + ')</option><option value="ninguno">Sin contacto (' + n('ninguno') + ')</option><option value="ambiguo">Ambiguo (' + n('ambiguo') + ')</option>'
-            + '<option value="ok">Por nombre (' + n('ok') + ')</option><option value="manual">Manual (' + n('manual') + ')</option></select>'
-            + '<span class="text-muted" style="font-size:0.8rem;">Escriba el nombre del contacto o un celular y pulse Enter o Guardar.</span></div>'
-            + '<div class="wp-scroll" style="max-height:62vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;">'
-            + '<table class="table table-sm align-middle mb-0" style="font-size:0.85rem;min-width:760px;"><thead style="position:sticky;top:0;background:#f8fafc;z-index:1;"><tr><th>Persona</th><th>Estado</th><th>Contacto / número</th><th style="width:340px;">Asignar a mano</th></tr></thead><tbody>'
+            + '<select class="form-select form-select-sm wp-estado" style="max-width:230px;">'
+            + '<option value="">Dentro del filtro (' + dentro + ')</option><option value="ninguno">Sin contacto (' + n('ninguno') + ')</option><option value="ambiguo">Ambiguo (' + n('ambiguo') + ')</option>'
+            + '<option value="ok">Por nombre (' + n('ok') + ')</option><option value="manual">Manual (' + n('manual') + ')</option><option value="fuera">Fuera del filtro (' + (lista.length - dentro) + ')</option></select>'
+            + '<span class="text-muted" style="font-size:0.8rem;">Elija un contacto o escriba un celular y pulse Enter o Guardar.</span></div>'
+            + '<div class="wp-scroll" style="max-height:62vh;overflow:auto;border:1px solid var(--bs-border-color,#e5e7eb);border-radius:10px;">'
+            + '<table class="table table-sm align-middle mb-0" style="font-size:0.85rem;min-width:900px;"><thead style="position:sticky;top:0;background:var(--bs-tertiary-bg,#f8fafc);z-index:1;"><tr><th>Persona</th><th>Área</th><th>Cargo</th><th>Estado</th><th>Contacto / número</th><th style="width:330px;">Asignar a mano</th></tr></thead><tbody>'
             + lista.map(function (p) {
                 const cand = p.candidatos && p.candidatos.length ? '<div class="text-muted">¿' + esc(p.candidatos.join(' o ')) + '?</div>' : '';
-                return '<tr data-emp="' + p.emp_id + '" data-estado="' + p.estado + '" data-nombre="' + esc(p.nombre.toLowerCase()) + '"><td style="white-space:nowrap;">' + esc(p.nombre) + '</td><td><span class="badge ' + COL[p.estado] + '">' + ETIQ[p.estado] + '</span></td>'
-                    + '<td style="white-space:nowrap;">' + (p.contacto ? esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
-                    + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" list="wa-lista" placeholder="Contacto o celular" style="min-width:200px;">'
+                return '<tr data-emp="' + p.emp_id + '" data-estado="' + (p.incluida ? p.estado : 'fuera') + '" data-nombre="' + esc(p.nombre.toLowerCase()) + '" style="' + (p.incluida ? '' : 'opacity:.45;') + '">'
+                    + '<td style="white-space:nowrap;">' + esc(p.nombre) + '</td><td style="white-space:nowrap;">' + esc(p.area || '—') + '</td><td style="white-space:nowrap;">' + esc(p.cargo || '—') + '</td>'
+                    + '<td><span class="badge ' + COL[p.estado] + '">' + ETIQ[p.estado] + '</span></td>'
+                    + '<td style="white-space:nowrap;">' + (p.contacto ? '<i class="bi bi-person-fill text-primary"></i> ' + esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
+                    + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" placeholder="Buscar contacto o celular" style="min-width:190px;">'
                     + '<button class="btn btn-sm btn-outline-primary wp-ok" style="white-space:nowrap;">Guardar</button>'
                     + (p.estado === 'manual' ? '<button class="btn btn-sm btn-outline-danger wp-no" title="Volver a buscar por nombre">✕</button>' : '') + '</div></td></tr>';
             }).join('') + '</tbody></table></div>';
         const filas = caja.querySelectorAll('tr[data-emp]');
         const filtrar = function () {
             const q = caja.querySelector('.wp-buscar').value.trim().toLowerCase(), e = caja.querySelector('.wp-estado').value;
-            filas.forEach(function (tr) { tr.style.display = (!e || tr.getAttribute('data-estado') === e) && (!q || tr.getAttribute('data-nombre').indexOf(q) >= 0) ? '' : 'none'; });
+            filas.forEach(function (tr) {
+                const est = tr.getAttribute('data-estado');
+                const okEstado = e ? est === e : est !== 'fuera';
+                tr.style.display = okEstado && (!q || tr.getAttribute('data-nombre').indexOf(q) >= 0) ? '' : 'none';
+            });
         };
         caja.querySelector('.wp-buscar').value = textoPrev; caja.querySelector('.wp-estado').value = filtroPrev;
         caja.querySelector('.wp-buscar').oninput = filtrar; caja.querySelector('.wp-estado').onchange = filtrar; filtrar();
         caja.querySelector('.wp-scroll').scrollTop = scrollY;
         filas.forEach(function (tr) {
-            const emp = tr.getAttribute('data-emp');
+            const emp = tr.getAttribute('data-emp'), inp = tr.querySelector('.wp-in');
+            selector(inp);
             const guardar = async function () {
-                const texto = tr.querySelector('.wp-in').value.trim();
+                const texto = inp.value.trim();
                 if (!texto) { msg('Elija un contacto o escriba un celular.'); return; }
-                const hit = elegibles.get(texto);
+                const hit = elegido(inp);
                 const g = await api('PUT', '/personas/' + emp + '/destino', { destino: hit ? hit.id : texto, etiqueta: hit ? hit.nombre : '' });
                 if (!g.ok) { msg(esc(g.j.detail || 'No se pudo guardar.')); return; }
                 msg('Guardado.'); cargarPersonas(caja);
             };
             tr.querySelector('.wp-ok').onclick = guardar;
-            tr.querySelector('.wp-in').onkeydown = function (ev) { if (ev.key === 'Enter') guardar(); };
+            inp.onkeydown = function (ev) { if (ev.key === 'Enter') { cerrarPop(); guardar(); } };
             const no = tr.querySelector('.wp-no');
             if (no) no.onclick = async function () { await api('DELETE', '/personas/' + emp + '/destino'); cargarPersonas(caja); };
         });
@@ -2936,20 +3048,20 @@ window.cargarMapaCodigo = async function () {
         const [cfg, gr, co] = await Promise.all([api('GET', '/config'), grupos && grupos.length ? Promise.resolve(null) : api('GET', '/grupos'), contactos && contactos.length ? Promise.resolve(null) : api('GET', '/contactos')]);
         if (gr && gr.ok) grupos = gr.j.grupos || [];
         if (co && co.ok) contactos = co.j.contactos || [];
-        if (cfg.ok) pintarAvisos(cfg.j, true);
+        if (cfg.ok) pintarAvisos(cfg.j);
     }
 
     window.cargarWhatsapp = async function () {
         clearInterval(timer);
         const c = document.getElementById('whatsapp-container');
         c.innerHTML = '<div class="p-3" style="max-width:1200px;"><h5 class="mb-1">WhatsApp de avisos</h5>'
-            + '<p class="text-muted" style="font-size:0.9rem;">Número propio que envía los avisos. Se vincula una vez escaneando un código QR; luego se asigna qué aviso va a qué chat.</p>'
+            + '<p class="text-muted" style="font-size:0.9rem;">Número propio que envía los avisos. Se vincula una vez escaneando un código QR; luego se asigna qué aviso va a qué chat y a qué áreas y cargos.</p>'
             + '<div id="wa-estado">Consultando…</div><div id="wa-avisos"></div><div id="wa-msg" class="mt-3" style="font-size:0.9rem;"></div></div>';
         grupos = null; contactos = null;
         let ultimo = null;
         const consultar = async function () {
             const tab = document.getElementById('tab-whatsapp');
-            if (!tab || !tab.classList.contains('active')) { clearInterval(timer); return; }
+            if (!tab || !tab.classList.contains('active')) { clearInterval(timer); cerrarPop(); return; }
             try {
                 const r = await api('GET', '/estado');
                 if (!r.ok) throw new Error('estado');

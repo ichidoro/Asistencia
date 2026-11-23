@@ -24,8 +24,31 @@ class WhatsappRepository:
                 )
             """)
 
+        if not await self.db.table_exists("whatsapp_filtros"):
+            await self.db.execute("CREATE TABLE IF NOT EXISTS whatsapp_filtros (aviso TEXT NOT NULL, tipo TEXT NOT NULL, valor TEXT NOT NULL, PRIMARY KEY (aviso, tipo, valor))")
         if not await self.db.table_exists("whatsapp_persona_destino"):
             await self.db.execute("CREATE TABLE IF NOT EXISTS whatsapp_persona_destino (emp_id INTEGER PRIMARY KEY, destino TEXT NOT NULL, etiqueta TEXT)")
+
+    async def filtros(self, aviso: str = "") -> Dict[str, Dict[str, List[str]]]:
+        """Áreas y cargos a los que se limita cada aviso (lista vacía = todos). {aviso: {areas: [...], cargos: [...]}}"""
+        filas = await self.db.fetch_all("SELECT aviso, tipo, valor FROM whatsapp_filtros" + (" WHERE aviso = ?" if aviso else "") + " ORDER BY valor", (aviso,) if aviso else None)
+        out: Dict[str, Dict[str, List[str]]] = {}
+        for r in filas:
+            out.setdefault(r["aviso"], {"areas": [], "cargos": []})["areas" if r["tipo"] == "area" else "cargos"].append(r["valor"])
+        return out
+
+    async def fijar_filtros(self, aviso: str, areas: List[str], cargos: List[str]) -> None:
+        await self.db.execute("DELETE FROM whatsapp_filtros WHERE aviso = ?", (aviso,))
+        for tipo, valores in (("area", areas), ("cargo", cargos)):
+            for v in dict.fromkeys(x.strip() for x in valores if x and x.strip()):
+                await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, ?, ?)", (aviso, tipo, v))
+
+    async def opciones_filtro(self) -> Dict[str, List[str]]:
+        """Áreas y cargos que existen entre las personas activas, para ofrecerlos como filtro."""
+        filas = await self.db.fetch_all("SELECT DISTINCT a.nombre AS area, e.cargo AS cargo FROM empleados e LEFT JOIN areas a ON a.id = e.area_id WHERE e.activo = 1")
+        areas = sorted({str(r["area"]).strip() for r in filas if r["area"] and str(r["area"]).strip()}, key=str.lower)
+        cargos = sorted({str(r["cargo"]).strip() for r in filas if r["cargo"] and str(r["cargo"]).strip()}, key=str.lower)
+        return {"areas": areas, "cargos": cargos}
 
     async def destinos_personas(self) -> Dict[int, Dict[str, Any]]:
         """Contacto o número elegido a mano para cada persona (manda sobre la búsqueda por nombre)."""
