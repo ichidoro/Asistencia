@@ -1331,6 +1331,7 @@
                                     <div class="cfg-group-title" aria-hidden="true">Administración</div>
                                     <button class="nav-link cfg-item" id="seguridad-config-tab" data-bs-toggle="tab" data-bs-target="#tab-seguridad" type="button" role="tab" data-permiso="configuracion.seguridad"><i class="bi bi-shield-lock" aria-hidden="true"></i> Seguridad</button>
                                     <button class="nav-link cfg-item" id="sistema-config-tab" data-bs-toggle="tab" data-bs-target="#tab-sistema" type="button" role="tab" data-permiso="superuser" onclick="if(typeof loadAjustesSistema === 'function') loadAjustesSistema()"><i class="bi bi-gear" aria-hidden="true"></i> Sistema</button>
+                                    <button class="nav-link cfg-item" id="whatsapp-tab" data-bs-toggle="tab" data-bs-target="#tab-whatsapp" type="button" role="tab" data-permiso="configuracion.seguridad" onclick="if(typeof cargarWhatsapp === 'function') cargarWhatsapp()"><i class="bi bi-whatsapp" aria-hidden="true"></i> WhatsApp</button>
                                     <button class="nav-link cfg-item" id="mapa-codigo-tab" data-bs-toggle="tab" data-bs-target="#tab-mapa-codigo" type="button" role="tab" data-permiso="superuser" onclick="if(typeof cargarMapaCodigo === 'function') cargarMapaCodigo()"><i class="bi bi-share" aria-hidden="true"></i> Mapa del código</button>
                                 </div>
                                 <div class="cfg-nores" id="cfg-nores" hidden>Ningún ajuste coincide.</div>
@@ -1532,6 +1533,10 @@
                                 <!-- Mapa del código (dueño, 15-11-2026): el grafo de graphify, solo súper administrador -->
                                 <div class="tab-pane fade" id="tab-mapa-codigo" role="tabpanel">
                                     <div id="mapa-codigo-container"></div>
+                                </div>
+                                <!-- WhatsApp de avisos (23-11-2026): vincular el número, probarlo y simular/enviar el resumen semanal. Lo arma cargarWhatsapp() en configuracion_ui.js -->
+                                <div class="tab-pane fade" id="tab-whatsapp" role="tabpanel">
+                                    <div id="whatsapp-container"></div>
                                 </div>
                                 <div class="tab-pane fade" id="tab-sistema" role="tabpanel">
                                     <!-- Diseño B (01-11-2026): grupos a la izquierda y sus números a la derecha; se guarda una vez por grupo.
@@ -4220,7 +4225,7 @@
         "/static/js/horarios.js?v={{ startup_id }}_v27",
         "/static/js/asistencia.js?v={{ startup_id }}_v21",
         "/static/js/config_ficha.js?v={{ startup_id }}_v5",
-        "/static/js/configuracion_ui.js?v={{ startup_id }}_v32",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v33",
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v19",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v17",

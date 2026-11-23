@@ -2759,3 +2759,76 @@ window.cargarMapaCodigo = async function () {
         .then(t => { document.getElementById('mapa-codigo-informe').textContent = t; })
         .catch(() => { document.getElementById('mapa-codigo-informe').textContent = 'No se pudo cargar el informe.'; });
 };
+
+
+// ── WhatsApp de avisos (Configuración → Administración → WhatsApp) ──
+// Los textos van con comillas y concatenación: el minificador del servidor (rjsmin) come los espacios de las plantillas anidadas.
+(function () {
+    const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
+    const esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
+    let timer = null;
+
+    function pintar(d) {
+        const c = document.getElementById('whatsapp-container');
+        if (!c) return;
+        const ok = d.estado === 'conectado';
+        let h = '<div class="p-3" style="max-width:640px;">'
+            + '<h5 class="mb-1">WhatsApp de avisos</h5>'
+            + '<p class="text-muted" style="font-size:0.9rem;">Número propio que envía los avisos a las personas. Se vincula una vez escaneando un código QR.</p>'
+            + '<p><b>Estado:</b> <span class="badge ' + (ok ? 'bg-success' : 'bg-secondary') + '">' + esc(TXT[d.estado] || d.estado) + '</span></p>';
+        if (d.qr) h += '<div class="mb-3"><img src="' + esc(d.qr) + '" alt="Código QR" width="260" height="260"><div class="text-muted" style="font-size:0.85rem;">En el teléfono: WhatsApp → Dispositivos vinculados → Vincular un dispositivo.</div></div>';
+        if (ok) {
+            h += '<div class="mb-4"><label class="form-label fw-semibold">Mensaje de prueba</label><div class="d-flex gap-2">'
+                + '<input id="wa-tel" class="form-control" placeholder="Celular, ej. 9 1234 5678" inputmode="tel" style="max-width:240px;">'
+                + '<button class="btn btn-outline-primary" id="wa-prueba">Enviar prueba</button></div></div>'
+                + '<div class="mb-2"><label class="form-label fw-semibold">Resumen semanal de horas (Bolsa vs meta)</label>'
+                + '<div class="text-muted mb-2" style="font-size:0.85rem;">Llega a cada persona de Bolsa Flexible con celular cargado. Se envía los lunes a las 08:00 si el cron está instalado en el servidor.</div>'
+                + '<button class="btn btn-outline-secondary me-2" id="wa-simular">Simular (no envía)</button>'
+                + '<button class="btn btn-primary" id="wa-enviar">Enviar ahora a todos</button></div>';
+        }
+        h += '<div id="wa-msg" class="mt-3" style="font-size:0.9rem;"></div></div>';
+        c.innerHTML = h;
+        const msg = function (t) { document.getElementById('wa-msg').innerHTML = t; };
+        const b = function (id, fn) { const e = document.getElementById(id); if (e) e.onclick = fn; };
+        b('wa-prueba', async function () {
+            msg('Enviando…');
+            const r = await fetch('/api/whatsapp/prueba', { method: 'POST', headers: H(), body: JSON.stringify({ telefono: document.getElementById('wa-tel').value }) });
+            const j = await r.json().catch(function () { return {}; });
+            msg(r.ok ? 'Prueba enviada.' : esc(j.detail || 'No se pudo enviar.'));
+        });
+        const resumen = async function (simular) {
+            msg(simular ? 'Calculando…' : 'Enviando… puede tardar unos minutos.');
+            const r = await fetch('/api/whatsapp/resumen-semanal', { method: 'POST', headers: H(), body: JSON.stringify({ simular: simular }) });
+            const j = await r.json().catch(function () { return {}; });
+            if (!r.ok) return msg(esc(j.detail || 'Error al calcular el resumen.'));
+            let t = '<b>' + j.personas + '</b> personas en Bolsa, <b>' + j.con_telefono + '</b> con celular válido.';
+            if ((j.sin_telefono || []).length) t += '<div class="text-muted">Sin celular: ' + esc(j.sin_telefono.join(', ')) + '</div>';
+            if (simular) t += (j.vista_previa || []).slice(0, 2).map(function (v) { return '<pre class="mt-2 p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.nombre) + ' → ' + esc(v.telefono || 'sin celular') + '\n\n' + esc(v.mensaje) + '</pre>'; }).join('');
+            else t += '<div class="mt-1">Enviados: <b>' + j.enviados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
+            msg(t);
+        };
+        b('wa-simular', function () { resumen(true); });
+        b('wa-enviar', function () {
+            if (window.confirm('Se enviará el resumen por WhatsApp a todas las personas de Bolsa con celular. ¿Continuar?')) resumen(false);
+        });
+    }
+
+    window.cargarWhatsapp = async function () {
+        clearInterval(timer);
+        const consultar = async function () {
+            const tab = document.getElementById('tab-whatsapp');
+            if (!tab || !tab.classList.contains('active')) { clearInterval(timer); return; }
+            const c = document.getElementById('whatsapp-container');
+            try {
+                const r = await fetch('/api/whatsapp/estado', { headers: H() });
+                if (!r.ok) throw new Error(r.status);
+                const d = await r.json();
+                // Se repinta solo si cambió el estado o hay QR (se renueva); así no se pisa lo que la persona esté escribiendo.
+                if (c.dataset.estado !== d.estado || d.qr) { c.dataset.estado = d.estado; pintar(d); }
+            } catch (e) { c.innerHTML = '<div class="p-3 text-muted">No se pudo consultar el estado de WhatsApp.</div>'; }
+        };
+        await consultar();
+        timer = setInterval(consultar, 4000);
+    };
+})();

@@ -11,7 +11,7 @@ RAIZ = Path(__file__).resolve().parents[2]
 FRONT = RAIZ / "frontend"
 
 # Las únicas páginas HTML que sirve la aplicación (agregar aquí una página nueva de verdad)
-PAGINAS_PUBLICADAS = {"index.html", "login.html", "manual_choferes_180h.html", "whatsapp.html"}
+PAGINAS_PUBLICADAS = {"index.html", "login.html", "manual_choferes_180h.html"}
 
 
 def test_solo_se_publican_las_paginas_de_la_aplicacion():
