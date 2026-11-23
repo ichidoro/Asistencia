@@ -300,7 +300,7 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
   4 Productos en los 7 períodos (entre 70 y 79 personas por período) y 0 cambios en los bonos en pesos.
 - Prueba nueva `test_bono_productos_4.py` (7 casos); 653 pruebas en verde.
 - **Visto de paso, sin tocar:** 4 Productos tiene escrita en el código la regla «califica a partir del segundo mes de
-  antigüedad». **Hecho (22-11-2026, falta subir):** a pedido de la persona dueña pasó a la pantalla: el bono «4
+  antigüedad». **Hecho (22-11-2026, commit 7949140):** a pedido de la persona dueña pasó a la pantalla: el bono «4
   Productos» tiene «Antigüedad mínima (meses)», llenada con 1 (lo de antes). Ensayo: 0 cambios en 4 Productos.
 
 **M (Bolsa) hecho (22-11-2026, commit b6ff0f7):**

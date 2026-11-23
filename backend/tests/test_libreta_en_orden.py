@@ -25,8 +25,8 @@ from backend.services import libreta_orden  # noqa: E402
 from backend.services.velocidades_choferes import calzar_choferes, patentes_planificadas  # noqa: E402
 
 HOY = datetime(2026, 11, 4, 12, 0)
-NOMBRES = {10: ("JAIME ESTEBAN", "SOTO", "ROJAS"), 20: ("RODRIGO ESTEBAN", "VALENZUELA", "GALVEZ"), 30: ("JUAN", "PIÑA", "LONCOÑANCO"),
-           40: ("RICHARD ALBERTO", "DROGUETT", "ARAVENA")}
+NOMBRES = {10: ("ELIAN TOMASO", "ZUBIRAN", "QUEVEDIN"), 20: ("RENATO TOMASO", "VALDEMAR", "GALVARIN"), 30: ("JUVENAL", "PIÑERIN", "LONCOÑIN"),
+           40: ("RICARDO AMBROSIO", "DROGUEL", "ARAVELO")}
 TRAMOS_A = [1] * 8 + [0] * 88
 TRAMOS_B = [1] * 12 + [0] * 84
 
@@ -158,15 +158,15 @@ def test_patente_normalizada_y_sin_camion_no_guarda_patente():
 
 
 def test_patentes_planificadas_calza_nombres_sin_orden_y_no_adivina():
-    personas = [{"id": 10, "nombre_completo": "SOTO ROJAS JAIME ESTEBAN", "activo": 1},
-                {"id": 11, "nombre_completo": "SOTO PEREZ CARLOS", "activo": 1},
-                {"id": 12, "nombre_completo": "MUÑOZ DIAZ CARLOS", "activo": 1}]
-    dias = [{"fecha": "2026-11-03", "patente": "AA1111", "choferes": ["Jaime Soto Rojas"], "velMax": None},
-            {"fecha": "2026-11-03", "patente": "BB2222", "choferes": ["Jaime Esteban Soto"], "velMax": 80},
-            {"fecha": "2026-11-03", "patente": "CC3333", "choferes": ["Carlos"], "velMax": 70},
-            {"fecha": "2026-11-02", "patente": "DD4444", "choferes": ["Jaime Soto Rojas"], "velMax": 60}]
+    personas = [{"id": 10, "nombre_completo": "ZUBIRAN QUEVEDIN ELIAN TOMASO", "activo": 1},
+                {"id": 11, "nombre_completo": "ZUBIRAN PEREIRIN CLEMENTE", "activo": 1},
+                {"id": 12, "nombre_completo": "MUÑIDO DIAZEL CLEMENTE", "activo": 1}]
+    dias = [{"fecha": "2026-11-03", "patente": "AA1111", "choferes": ["Elian Zubiran Quevedin"], "velMax": None},
+            {"fecha": "2026-11-03", "patente": "BB2222", "choferes": ["Elian Tomaso Zubiran"], "velMax": 80},
+            {"fecha": "2026-11-03", "patente": "CC3333", "choferes": ["Clemente"], "velMax": 70},
+            {"fecha": "2026-11-02", "patente": "DD4444", "choferes": ["Elian Zubiran Quevedin"], "velMax": 60}]
     assert patentes_planificadas(dias, personas, 10, "2026-11-03") == ["AA1111", "BB2222"]   # relevo: los dos camiones, sin exigir velocidad
-    assert patentes_planificadas(dias, personas, 11, "2026-11-03") == []                     # «Carlos» es ambiguo: no se asigna
+    assert patentes_planificadas(dias, personas, 11, "2026-11-03") == []                     # «Clemente» es ambiguo: no se asigna
     por_emp, _ = calzar_choferes(dias, personas)                                             # el reporte de velocidades sigue igual
     assert por_emp["10"]["2026-11-03"]["patente"] == "BB2222"
 
@@ -229,8 +229,8 @@ def test_la_copia_se_hace_aunque_el_acompanante_tenga_un_dia_pendiente_y_se_avis
     copia = servicio.repository.libretas[(20, "2026-11-03")]
     assert copia["slots_96"] == TRAMOS_A and copia["patente"] == "KXZT12" and copia["patente_origen"] == "CHOFER"
     aviso = r["data"]["acompanantes_con_pendientes"][0]
-    assert aviso["mensaje"] == ("Se copió el día a VALENZUELA GALVEZ RODRIGO ESTEBAN. Le queda pendiente el lunes 02-11-2026 "
-                                "(con PIÑA LONCOÑANCO JUAN).")
+    assert aviso["mensaje"] == ("Se copió el día a VALDEMAR GALVARIN RENATO TOMASO. Le queda pendiente el lunes 02-11-2026 "
+                                "(con PIÑERIN LONCOÑIN JUVENAL).")
 
 
 def test_el_chofer_edita_su_borrador_y_la_copia_igual_se_actualiza_pero_la_ajustada_no(entorno):
@@ -369,7 +369,7 @@ def test_al_abrir_la_ventana_recibe_el_bloqueo_los_enlazados_y_el_permiso(entorn
     repo.enlaces[(40, "2026-11-03")] = 10
     r2 = asyncio.run(asist.get_libreta_180h(empleado_id=10, fecha="2026-11-03", service=servicio, current_user=ADMIN))
     assert r2["bloqueo"] is None and r2["patente"] == "KXZT12" and r2["puede_editar_validado"] is True
-    assert r2["enlazados"] == [{"empleado_id": 40, "nombre": "DROGUETT ARAVENA RICHARD ALBERTO", "rol": "acompañante",
+    assert r2["enlazados"] == [{"empleado_id": 40, "nombre": "DROGUEL ARAVELO RICARDO AMBROSIO", "rol": "acompañante",
                                 "tiene_libreta": True, "validado": False, "distinto": True}]
     r3 = asyncio.run(asist.get_libreta_180h(empleado_id=40, fecha="2026-11-03", service=servicio, current_user=ADMIN))
     assert r3["chofer_id"] == 10 and r3["enlazados"][0]["rol"] == "chofer" and r3["bloqueo"] is None

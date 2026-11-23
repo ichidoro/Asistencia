@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-23T02:52:58+00:00",
- "publicado": "2026-11-23T02:52:59+00:00",
- "commit": "3ad6205",
+ "armado": "2026-11-23T02:56:02+00:00",
+ "publicado": "2026-11-23T02:56:02+00:00",
+ "commit": "7949140",
  "archivos_leidos": 288,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -168,7 +168,7 @@
   "backend/tests/test_guardian_valores_fijos.py": "3ecebe5918f5a50baa9e55afb25aea67",
   "backend/tests/test_historial_cierres_periodo.py": "f5bfe48f6cd9e8f34aa53ce9043fb1df",
   "backend/tests/test_informe_cierre_pdf.py": "eb82cbd458f9a75e48da3c057000f31d",
-  "backend/tests/test_libreta_en_orden.py": "82339d676cd5ea04168ed996875cdd46",
+  "backend/tests/test_libreta_en_orden.py": "83ffc67a6475a5debd8c556d1283d21c",
   "backend/tests/test_libreta_por_horario.py": "4a463f97a5967445ecec253e646d637e",
   "backend/tests/test_libreta_revision.py": "5e5c4645f71544428c1bb80ac7f52f36",
   "backend/tests/test_libro_minutos.py": "907ff8adc621fa358a43b6fadaf5d25e",
