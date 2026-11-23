@@ -9,6 +9,9 @@ const TOKEN = process.env.WA_GATEWAY_TOKEN || '';
 const AUTH_DIR = process.env.WA_AUTH_DIR || '/data/auth';
 let sock = null, qr = null, estado = 'desconectado';
 
+// /data/auth es un volumen montado: no se puede borrar la carpeta (EBUSY), solo su contenido.
+function limpiarAuth() { const fs = require('fs'); for (const f of fs.readdirSync(AUTH_DIR)) fs.rmSync(AUTH_DIR + '/' + f, { recursive: true, force: true }); }
+
 async function conectar() {
   estado = 'conectando';
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -22,7 +25,7 @@ async function conectar() {
       sock = null; qr = null; estado = 'desconectado';
       console.log('[wa] cerrado, código', code);
       // Sesión cerrada desde el teléfono: se borra para pedir un QR nuevo; cualquier otro cierre reintenta.
-      if (code === DisconnectReason.loggedOut) require('fs').rmSync(AUTH_DIR, { recursive: true, force: true });
+      if (code === DisconnectReason.loggedOut) limpiarAuth();
       setTimeout(() => conectar().catch(e => console.error('[wa]', e)), 5000);
     }
   });
@@ -49,7 +52,7 @@ http.createServer(async (req, res) => {
       const habia = !!sock;
       try { await sock?.logout(); } catch (e) { console.log('[wa] logout falló, se limpia igual:', e.message || e); }
       // Con socket, el cierre por logout ya limpia y reconecta (ver connection.update); sin socket se hace acá.
-      if (!habia) { require('fs').rmSync(AUTH_DIR, { recursive: true, force: true }); qr = null; estado = 'desconectado'; conectar().catch(e => console.error('[wa]', e)); }
+      if (!habia) { limpiarAuth(); qr = null; estado = 'desconectado'; conectar().catch(e => console.error('[wa]', e)); }
       return responder(res, 200, { ok: true });
     }
     if (req.method === 'POST' && req.url === '/enviar') {
