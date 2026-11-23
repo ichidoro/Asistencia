@@ -13,14 +13,20 @@ let sock = null, qr = null, estado = 'desconectado';
 const contactos = new Map(); // «569…@s.whatsapp.net» -> nombre
 const ARCHIVO_CONTACTOS = () => AUTH_DIR + '/contactos.json';
 let guardando = null;
+// Un chat individual abierto trae el nombre con que el teléfono lo muestra (el de la agenda si existe).
+function anotarChats(lista) {
+  anotarContactos((lista || []).filter(c => typeof c.id === 'string' && !c.id.endsWith('@g.us') && !c.id.endsWith('@broadcast') && (c.name || c.displayName))
+    .map(c => ({ id: c.id, name: c.name || c.displayName, lid: c.lidJid, phoneNumber: c.pnJid })), true);
+}
 function cargarContactos() { try { for (const [j, n] of JSON.parse(require('fs').readFileSync(ARCHIVO_CONTACTOS(), 'utf8'))) contactos.set(j, n); } catch { /* aún no hay */ } }
-function anotarContactos(lista) {
+// soloNuevos: nombres de menor confianza (chats, nombre que la persona se puso) que no pisan el de la libreta.
+function anotarContactos(lista, soloNuevos) {
   let cambio = false;
   for (const c of lista || []) {
     // Preferimos el número; si WhatsApp solo entrega el identificador interno (@lid) también sirve para enviar.
     const jid = [c.phoneNumber, c.id].find(x => typeof x === 'string' && x.endsWith('@s.whatsapp.net')) || [c.id, c.lid].find(x => typeof x === 'string' && x.endsWith('@lid'));
     const nombre = c.name || c.notify || c.verifiedName;
-    if (jid && nombre && contactos.get(jid) !== nombre) { contactos.set(jid, nombre); cambio = true; }
+    if (jid && nombre && !(soloNuevos && contactos.has(jid)) && contactos.get(jid) !== nombre) { contactos.set(jid, nombre); cambio = true; }
   }
   if (cambio && !guardando) guardando = setTimeout(() => { guardando = null; try { require('fs').writeFileSync(ARCHIVO_CONTACTOS(), JSON.stringify([...contactos])); } catch (e) { console.error('[wa] no se guardaron los contactos', e.message); } }, 3000);
 }
@@ -36,7 +42,11 @@ async function conectar() {
   cargarContactos();
   sock.ev.on('contacts.upsert', anotarContactos);
   sock.ev.on('contacts.update', anotarContactos);
-  sock.ev.on('messaging-history.set', (h) => anotarContactos(h.contacts));
+  sock.ev.on('messaging-history.set', (h) => { anotarContactos(h.contacts); anotarChats(h.chats); });
+  sock.ev.on('chats.upsert', anotarChats);
+  sock.ev.on('chats.update', anotarChats);
+  // Quien escribe trae el nombre que se puso en su WhatsApp: sirve cuando el contacto no está en la libreta.
+  sock.ev.on('messages.upsert', ({ messages }) => anotarContactos((messages || []).filter(m => !m.key.fromMe && m.pushName && !String(m.key.remoteJid).endsWith('@g.us')).map(m => ({ id: m.key.remoteJid, name: m.pushName })), true));
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr: nuevo }) => {
     if (nuevo) qr = nuevo;
     if (connection === 'open') {
