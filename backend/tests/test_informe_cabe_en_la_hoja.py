@@ -11,7 +11,7 @@ BONOS = ['Compromiso', 'Transporte', 'Operador Linea', 'Retail', 'Cloro', 'Super
 def _ancha(n=47):
     ps = []
     for i in range(n):
-        ps.append({'emp_id': i, 'rut': '12.345.678-9', 'nombre': f'APELLIDOLARGO DEPRUEBA NOMBRE SEGUNDONOMBRE {i}', 'activo': i % 9,
+        ps.append({'emp_id': i, 'rut': '12.345.678-9', 'nombre': f'APELLIDOLARGO DEPRUEBA NOMBRE SEGUNDONOMBRE {i}', 'activo': i % 9, 'baja': '2026-11-14' if i % 20 == 3 else None,
                    'tipo': 'CICLO', 'horario': 'Produccion', 'horas': 42.0, 'n_atr': 14, 'n_sad': 7, 'trab': 19,
                    'aus': {'VAC': 1, 'CUMP': 1, 'LICC': 1}, 'per': 1, 'comp': 1, 'ina': 1, 'ano': 0,
                    'atr': 26000, 'sad': 12000, 'col': 3000, 'h_per': 5000, 'otros': 900, 'total': 46900, 'comp_inas': 3000,

@@ -5885,7 +5885,7 @@ window.cargarResumenCierre = async function (st, idCaja) {
         caja.innerHTML = tipos.map(t => {
             const cargar = (t.cargar || []).map(c => '<div class="cz-r-g ' + e(c.c) + '"><span>' + e(c.t) + '</span><b>' + e(c.v) + '</b><small>' + e(c.n) + (c.q ? ' · ' + e(c.q) : '') + '</small></div>').join('');
             const dd = (t.de_donde || []).map(g => '<div><p>' + e(g.t) + '</p>' + g.filas.map(r => '<span class="cz-r-ln">' + e(r.t) + '<i class="cz-r-pc">' + e(r.q || '') + '</i><b>' + e(r.v) + '</b></span>').join('') + '</div>').join('');
-            return '<section class="cz-r-col"><header><h5>' + e(t.titulo) + '</h5><span>' + t.personas + ' personas</span></header>'
+            return '<section class="cz-r-col"><header><h5>' + e(t.titulo) + '</h5><span>' + e(t.texto_personas || (t.personas + ' personas')) + '</span></header>'
                 + '<h6>Balance de horas</h6><ul class="cz-r-bal">' + filas(t.balance || []) + '</ul>'
                 + '<h6>Lo que se carga</h6><div class="cz-r-gg">' + cargar + '</div>'
                 + (dd ? '<div class="cz-r-dd">' + dd + '</div>' : '')
@@ -6308,11 +6308,24 @@ window.mxPlegarHorario = function (btn) {
         tb._ghAnim.forEach(a => { a.onfinish = () => a.cancel(); });
     }
 };
+// Fecha (AAAA-MM-DD) de la baja de la persona si se va en este período; la calcula el servidor (baja_del_periodo)
+window.mxBajaPeriodo = function (emp) {
+    const info = (emp && (emp.info || emp)) || {};
+    return info.baja_periodo || null;
+};
 window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     const e = window.escHtml || (x => String(x));
     // Bloque fijo (siempre abierto y sin botón de plegar): los Choferes y «Otros cargos» de la Bolsa flexible
     const fijo = !!g.fijo;
+    // Bajas del período (propuesta B, dueño 23-11-2026): van al final del bloque, bajo «Bajas del período», y se cuentan
+    // aparte de la dotación; se pagan y descuentan como el resto
+    const esBaja = r => !!window.mxBajaPeriodo(r.emp);
+    const filasB = g.filas.filter(r => !esBaja(r)).concat(g.filas.filter(esBaja));
+    const nb = g.filas.length - g.filas.filter(r => !esBaja(r)).length;
     const n = g.filas.length, plegado = !fijo && !window.mxHorariosDesplegados().has(g.nombre);
+    const conteo = nb ? ((n - nb) + ' en dotación · ' + nb + (nb === 1 ? ' baja' : ' bajas')) : (n + (n === 1 ? ' persona' : ' personas'));
+    const sepBajas = '<tr class="gh-bajas"><td colspan="1"><div class="gh-bajas-tit"><b>Bajas del período · ' + nb + (nb === 1 ? ' persona' : ' personas')
+        + '</b><span>se pagan y descuentan como el resto; no cuentan en la dotación</span></div></td></tr>';
     // Los bloques parten plegados: su título avisa cuántos días por revisar hay dentro y lleva a ellos
     const nRev = g.filas.reduce((a, r) => a + window.mxDiasEnRevision(r.emp, null).length, 0);
     const nVal = window.mxPorValidarBloque(g.filas);
@@ -6321,10 +6334,10 @@ window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
         + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit"><div class="gh-hojas">'
         + (nRev ? window.mxAvisoBloqueHtml(nRev) : '') + window.mxAvisoValidarHtml(nVal) + '</div><div class="gh-linea">'
         + (fijo ? '' : '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>')
-        + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span></div></div></td></tr>'
+        + '<b>' + e(g.nombre) + '</b><span>' + e(conteo) + '</span></div></div></td></tr>'
         // El encabezado repetido va bajo el encabezado fijo de arriba (capa 55 < 90) y con su mismo aspecto (clase gh-cab)
         + (i > 0 ? cabecera.split('<tr class="').join('<tr class="gh-cab ').replace(/z-index:\s*1\d\d/g, 'z-index:55') : '')
-        + g.filas.map(htmlDe).join('') + '</tbody>';
+        + filasB.map((r, k) => (nb && k === n - nb ? sepBajas : '') + htmlDe(r)).join('') + '</tbody>';
 };
 
 // ── Por validar en el título del bloque (dueño, 10-11-2026): cuántos +2, jornadas especiales y llamados de emergencia del bloque
@@ -6896,7 +6909,10 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
     const isSaldoZero = Math.abs(r.saldo) < 0.0083;
     const sClass = isSaldoZero ? 'matrix-saldo-zero' : (r.saldo > 0 ? 'text-success' : 'text-danger');
     const sPrefix = isSaldoZero ? '' : (r.saldo > 0 ? '+' : '-');
-    const nameClass = emp.activo ? '' : 'text-danger opacity-75';
+    // Baja del período: rótulo con la fecha, fila en gris y días después de la salida rayados (dueño, 23-11-2026)
+    const bajaF = window.mxBajaPeriodo(emp);
+    const nameClass = bajaF ? 'gc-baja-nom' : '';
+    const bajaChip = bajaF ? '<span class="gc-baja-chip" title="Se va el ' + window.formatFechaDDMMYYYY(bajaF) + '. Se paga y descuenta como el resto; no cuenta en la dotación.">Baja ' + bajaF.slice(8, 10) + '-' + bajaF.slice(5, 7) + '</span>' : '';
 
     const empEval = bonosEval[emp.id] || {};
     let bonoCells = '';
@@ -6962,7 +6978,8 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         const ariaCelda = enRevision
             ? 'Día por revisar: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d) + '. Una regla de marcaciones dejó este día en revisión.'
             : 'Acciones de asistencia: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d);
-        return `<td class="col-day text-center p-0 align-middle cell-clickable${claseRev}" tabindex="0" role="button" aria-label="${ariaCelda}" data-fecha="${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
+        const clasePostBaja = (bajaF && d > bajaF) ? ' gc-post-baja' : '';
+        return `<td class="col-day text-center p-0 align-middle cell-clickable${claseRev}${clasePostBaja}" tabindex="0" role="button" aria-label="${ariaCelda}" data-fecha="${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
                     data-grid-tooltip data-tip="${tipKey}">
@@ -6980,7 +6997,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
     // Días que una regla dejó por revisar en el tramo visible: la lista va en una fila propia, bajo la de la persona
     const bandaRev = window.mxBandaRevisionHtml ? window.mxBandaRevisionHtml(emp, dates) : '';
 
-    return `<tr id="row-empleado-${emp.id}"${bandaRev ? ' class="rv-con-banda"' : ''}>
+    return `<tr id="row-empleado-${emp.id}" class="${bandaRev ? 'rv-con-banda' : ''}${bajaF ? ' gc-fila-baja' : ''}">
         <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="position:sticky; left:0; z-index:50; white-space:nowrap;cursor:pointer;font-size:0.75rem; width:260px; min-width:260px; max-width:260px;"
             ondblclick="openCuadreModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
             title="${hasHE ? 'Doble clic → Cuadre del tramo (hay horas extra por decidir)' : 'Doble clic → Cuadre del tramo'}">
@@ -6988,7 +7005,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                 ${cargoIconoHtml(emp.cargo)}
                 <div class="emp-id-txt">
                     <div class="emp-name-link" title="${String(emp.nombre_completo || '').replace(/"/g, '&quot;')}">${window.nombreTitulo(emp.nombre_completo)||'—'}${heIndicator}</div>
-                    <div class="emp-area-label">${emp.cargo ? emp.cargo + (stateMarcacionesApp.area ? '' : ' · ' + emp.area) : emp.area}${emp.turno?' · '+emp.turno:''}</div>
+                    <div class="emp-area-label">${bajaChip}${emp.cargo ? emp.cargo + (stateMarcacionesApp.area ? '' : ' · ' + emp.area) : emp.area}${emp.turno?' · '+emp.turno:''}</div>
                     ${r.esBolsa ? (() => { const sm = r.saldoMeta || 0, ab = Math.abs(sm), hh = Math.floor(ab/60), mm = Math.round(ab%60); const t = (sm < 0 ? '\u2212' : sm > 0 ? '+' : '') + String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); const pb = r.emp._prorrateoBolsa; const metaH = Math.round((r.metaMin || 0) / 60); const tit = (pb && Number.isFinite(pb.factor) && pb.factor < 1) ? ('Balance de la bolsa; meta ajustada a ' + metaH + ' h: vigencia de ' + pb.dias_disponibles + ' de ' + pb.dias_tramo + ' d\u00edas del tramo') : 'Balance de la bolsa de 180 h'; const warn = (pb && pb.aviso_21_dias) ? '\u26a0 ' : ''; return '<span class="gc-bolsa-chip ' + (sm < 0 ? 'neg' : sm > 0 ? 'pos' : '') + '" title="' + tit + '">' + warn + metaH + 'h ' + t + '</span>'; })() : ''}
                 </div>
             </div>
@@ -7854,7 +7871,7 @@ function renderVistaAnalitica(respData, container) {
     if (_tablaGh && _tablaGh.querySelector('.gh-titulo')) {
         const ref = _tablaGh.querySelector('tr[id^="row-empleado-"]');
         const nCol = ref ? [...ref.children].reduce((a, td) => a + (td.colSpan || 1), 0) : 1;
-        _tablaGh.querySelectorAll('.gh-titulo > td').forEach(td => { td.colSpan = nCol; });
+        _tablaGh.querySelectorAll('.gh-titulo > td, .gh-bajas > td').forEach(td => { td.colSpan = nCol; });
     }
     // Listas de días por revisar bajo cada fila: columnas, ubicación y marcas de cada día
     if (window.mxBandasAjustar) { window.mxBandasAjustar(container); window.mxBandasCargarMarcas(container); }

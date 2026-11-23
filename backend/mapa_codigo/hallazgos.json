@@ -131,7 +131,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1521,
+  "total": 1525,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -156,7 +156,7 @@
    {
     "funcion": "get_matrix_data_with_projections",
     "archivo": "backend/services/asistencia_service.py",
-    "lineas": 451
+    "lineas": 454
    },
    {
     "funcion": "_calcular_filas",
@@ -164,14 +164,14 @@
     "lineas": 327
    },
    {
+    "funcion": "render_pdf",
+    "archivo": "backend/services/informe_cierre_pdf.py",
+    "lineas": 317
+   },
+   {
     "funcion": "get_bulk_context",
     "archivo": "backend/services/asistencia_service.py",
     "lineas": 312
-   },
-   {
-    "funcion": "render_pdf",
-    "archivo": "backend/services/informe_cierre_pdf.py",
-    "lineas": 297
    },
    {
     "funcion": "lifespan",
@@ -188,7 +188,7 @@
  "archivos_grandes": [
   {
    "archivo": "frontend/js/marcaciones_ui.js",
-   "lineas": 10014
+   "lineas": 10031
   },
   {
    "archivo": "frontend/js/marcaciones_manuales.js",
@@ -196,7 +196,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3430
+   "lineas": 3433
   },
   {
    "archivo": "frontend/js/sync_wizard.js",

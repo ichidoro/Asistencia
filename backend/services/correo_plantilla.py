@@ -152,7 +152,7 @@ def correo(etiqueta: str, tono: str, titulo: str, intro: str, cuerpo: str, previ
 
 def bloque_resumen(r: Dict[str, Any]) -> str:
     """Un tipo de horario del resumen de cierre (informe_cierre_pdf.resumen_tipo) dentro del correo."""
-    c = f'<div style="font:700 16px {FONT};color:{NAVY};padding-bottom:10px">{e(r["titulo"])} · {r["personas"]} personas</div>'
+    c = f'<div style="font:700 16px {FONT};color:{NAVY};padding-bottom:10px">{e(r["titulo"])} · {e(r.get("texto_personas") or str(r["personas"]) + " personas")}</div>'
     c += destacados(r['cargar'])
     c += subtitulo('Balance de horas') + filas(r['balance'])
     for g in r.get('de_donde') or []:

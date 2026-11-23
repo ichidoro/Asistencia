@@ -24,7 +24,7 @@ from backend.services.libreta_corte import (
     fecha_libreta_del_horario, normalizar_fecha_corte, regimen_del_dia, REGIMEN_LIBRETA,
 )
 from backend.repositories.empleado import EmpleadoRepository
-from backend.services.bolsa_prorrateo import calcular_prorrateo_bolsa, salida_decidida
+from backend.services.bolsa_prorrateo import baja_del_periodo, calcular_prorrateo_bolsa, salida_decidida
 from backend.services.quantum_matrix_engine import (
     QuantumPhaseTopology,
     TensorMarkDeduplicator,
@@ -2756,6 +2756,9 @@ class AsistenciaService:
             nm = emp.get('nombre', '') or ''
             apellidos = f"{ap} {am}".strip()
             emp['nombre_completo'] = f"{ap} {am} {nm}".strip().replace('  ', ' ')
+            # Baja del período (dueño, 23-11-2026): la grilla, el informe y el preinforme la cuentan aparte de la dotación
+            emp['baja_periodo'] = baja_del_periodo(emp.get('fecha_salida'), emp.get('activo'),
+                                                   emp.get('decision_vencimiento'), fecha_inicio, fecha_fin)
             # Enriquecer con datos de turno para el acumulado semanal del frontend
             t_info = turno_ids_emp.get(eid, {})
             if t_info:

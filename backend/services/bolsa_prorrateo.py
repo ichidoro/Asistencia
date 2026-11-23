@@ -58,6 +58,19 @@ def salida_decidida(fecha_salida: Any, activo: Any, decision_vencimiento: Any) -
     return None
 
 
+def baja_del_periodo(fecha_salida: Any, activo: Any, decision_vencimiento: Any,
+                     fecha_inicio: Any, fecha_fin: Any) -> Optional[str]:
+    """La fecha (AAAA-MM-DD) en que la persona se va, si es una baja de este período: salida decidida (misma regla de
+    salida_decidida) con fecha entre el inicio y el fin del período. Quien se va después del período fue dotación de
+    ese período; un término de contrato sin decidir no es baja (dueño, 23-11-2026: contar las bajas aparte de la
+    dotación en la grilla, el informe de cierre y el preinforme)."""
+    fs = salida_decidida(fecha_salida, activo, decision_vencimiento)
+    if not fs:
+        return None
+    fs = str(fs)[:10]
+    return fs if str(fecha_inicio)[:10] <= fs <= str(fecha_fin)[:10] else None
+
+
 def calcular_prorrateo_bolsa(
     fecha_ingreso: Any,
     fecha_salida: Any,

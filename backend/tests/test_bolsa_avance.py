@@ -51,5 +51,6 @@ def test_los_textos_sobreviven_al_minificador():
     import pytest
     rjsmin = pytest.importorskip("rjsmin")
     m = rjsmin.jsmin((RAIZ / "frontend/js/marcaciones_ui.js").read_text(encoding="utf-8"))
-    for frase in ("Lo que se va a cargar en remuneraciones", "Balance de horas", "Lo que se carga", " personas</span></header>"):
+    for frase in ("Lo que se va a cargar en remuneraciones", "Balance de horas", "Lo que se carga", "' personas'", "'</span></header>'",
+                  "en dotación · ", "Bajas del período · "):
         assert frase in m, f"el minificador rompe el texto: {frase!r}"

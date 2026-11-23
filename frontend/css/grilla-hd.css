@@ -180,6 +180,17 @@ body:not(.estados-chip) .sem-cel td.col-day .st-multi::after {
 .gh-plegar i { display: inline-block; transition: transform .2s ease; }
 .gh-grupo.gh-plegado .gh-plegar i { transform: rotate(-90deg); }
 .gh-grupo.gh-plegado > tr:not(.gh-titulo) { display: none; }
+/* Bajas del período (propuesta B, dueño 23-11-2026; marcaciones_ui.js → mxBloqueHorario y mxBajaPeriodo): van al final del
+   bloque bajo su título, la fila en gris, el rótulo «Baja dd-mm» y los días después de la salida rayados */
+.matrix-table-premium tr.gh-bajas > td { background: #fff !important; padding: 10px 12px 4px !important; text-align: left; border-bottom: 1px solid #94a3b8 !important; }
+.gh-bajas-tit { position: sticky; left: 8px; width: max-content; display: flex; align-items: baseline; gap: 10px; }
+.gh-bajas-tit b { font: 600 12.5px/1.2 'Barlow', system-ui, sans-serif; color: #475569; }
+.gh-bajas-tit span { font: 400 12px/1.2 'Barlow', system-ui, sans-serif; color: #64748b; }
+.matrix-table-premium tr.gc-fila-baja > td { background-color: #f1f2f4 !important; }
+.matrix-table-premium tr.gc-fila-baja .emp-name-link { color: #64748b; }
+.gc-baja-chip { display: inline-block; margin-right: 5px; padding: 0 5px; border-radius: 4px; background: #475569; color: #fff;
+  font: 700 10px/1.5 'Barlow', system-ui, sans-serif; letter-spacing: .02em; vertical-align: 1px; }
+.matrix-table-premium td.gc-post-baja { background-image: repeating-linear-gradient(135deg, rgba(148,163,184,.22) 0 4px, transparent 4px 7px) !important; }
 /* El encabezado repetido de cada bloque, igual al de arriba (esos estilos valen solo dentro de <thead>) */
 #marcaciones-view-container .matrix-table-premium tr.gh-cab > th {
   background: #fff !important; color: var(--ov-ink-3, #69738f); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;

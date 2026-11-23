@@ -38,6 +38,7 @@ ESTADOS_JUSTIFICADOS = {'VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'LC
 # Colores de la app (frontend/css/ventanas.css)
 C_NAVY, C_NAVY_SOFT, C_NAVY_RES, C_NAVY_RES_TD = '#1b2f8f', '#e9edfb', '#dfe5f8', '#f3f5fc'
 C_INK, C_INK_2, C_LINE, C_LINE_2, C_ZEBRA = '#1a2233', '#4a5468', '#d9deea', '#eef1f7', '#fafbfd'
+C_BAJA = '#f1f2f4'                              # fila de una baja del período
 C_PINK, C_PINK_SOFT, C_AMBER, C_AMBER_SOFT = '#c0267a', '#fce7ef', '#9a4a08', '#fdf0e1'
 C_GREEN, C_GREEN_SOFT, C_CERO = '#16673b', '#e5f3ea', '#b9c0cf'
 
@@ -223,7 +224,7 @@ def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]
         es_bolsa = tipo in TIPOS_BOLSA
         dd = matrix.get(str(r['emp_id'])) or matrix.get(r['emp_id']) or {}
         p = {'emp_id': r['emp_id'], 'rut': rut_visible(r.get('rut')), 'nombre': r['nombre'],
-             'activo': r.get('activo') != 'NO', 'tipo': 'BOLSA' if es_bolsa else 'CICLO',
+             'activo': r.get('activo') != 'NO', 'baja': e.get('baja_periodo'), 'tipo': 'BOLSA' if es_bolsa else 'CICLO',
              'horario': e.get('turno') or 'Sin horario asignado',
              'horas': float(e['meta_horas_semanales']) if e.get('turno') and e.get('meta_horas_semanales') is not None else None,
              'n_atr': int(r.get('cnt_atr') or 0), 'n_sad': int(r.get('cnt_sad') or 0),
@@ -386,7 +387,8 @@ def resumen_tipo(inf: Dict[str, Any], justif: List[Dict[str, Any]]) -> Dict[str,
                 + [{'t': nombre_clase(AUS + cod, nombres), 'v': f'− {k}', 'q': qd(k), 'c': ''} for cod, k in aus.items()]
                 + [{'t': nombre_clase(c, nombres), 'v': f'− {T(c)}', 'q': qd(T(c)), 'c': ''} for c in CLASES_DIA if T(c)]
                 + [{'t': 'Trabajadas', 'v': str(T('trab')), 'q': qd(T('trab')), 'c': 'tot'}])
-    out = {'tipo': inf['tipo'], 'titulo': inf['titulo_horas'], 'personas': n, 'jornadas': jornadas}
+    out = {'tipo': inf['tipo'], 'titulo': inf['titulo_horas'], 'personas': n, 'bajas': bajas_de(ps),
+           'texto_personas': texto_dotacion(n, bajas_de(ps)), 'jornadas': jornadas}
     if inf['tipo'] == 'BOLSA':
         meta = T('meta')
         sobre = sum(max(p['acum'] - p['meta'], 0) for p in ps)
@@ -558,6 +560,8 @@ def leyenda(inf: Dict[str, Any], justif: List[Dict[str, Any]], cols: List[Dict[s
               + (' <b>De +2 y EME</b>: parte de las horas extra trabajadas que viene de un +2 o de un llamado de emergencia '
                  '(no se resta, ya está dentro de ellas).' if 'De +2 y EME' in titulos else ''))
     out = [l1, l2 + ' El detalle día a día está en el Excel del cierre, que se descarga desde la aplicación.']
+    if bajas_de(inf['personas']):
+        out = list(out) + ['<b>Bajas del período</b>: personas que se van en este período (renuncia, despido, mutuo acuerdo o no renovar), con la fecha de su salida. Van al final de su horario, se pagan y descuentan como el resto y no cuentan en la dotación.']
     if 'Jornadas extra' in titulos:
         out = list(out) + ['<b>Jornadas extra</b>: jornadas especiales validadas como jornada extra; se pagan con un monto fijo por jornada y sus horas no van en las horas extra. Los días están en «Jornadas extra (monto fijo)».']
     if hay_bonos:
@@ -565,11 +569,30 @@ def leyenda(inf: Dict[str, Any], justif: List[Dict[str, Any]], cols: List[Dict[s
     return out
 
 
+def bajas_de(ps: List[Dict[str, Any]]) -> int:
+    """Cuántas personas de la lista son bajas del período."""
+    return sum(1 for p in ps if p.get('baja'))
+
+
+def texto_dotacion(n: int, nb: int) -> str:
+    """«12 en dotación · 2 bajas» (o «14 personas» si no hay bajas): las bajas del período se pagan y descuentan como
+    el resto, pero no cuentan en la dotación (dueño, 23-11-2026)."""
+    if not nb:
+        return f'{n} {"persona" if n == 1 else "personas"}'
+    return f'{n - nb} en dotación · {nb} {"baja" if nb == 1 else "bajas"}'
+
+
+def rotulo_baja(p: Dict[str, Any]) -> str:
+    return f'Baja {_dm(p["baja"])}' if p.get('baja') else ''
+
+
 def resumen(inf: Dict[str, Any]) -> List[tuple]:
     """Cifras del resumen de arriba: (texto antes, cifra, texto después, alerta)."""
     ps = inf['personas']
     T = lambda k: sum(p[k] for p in ps)
-    out = [('', str(len(ps)), ' personas', False)]
+    nb = bajas_de(ps)
+    out = ([('', str(len(ps) - nb), ' en dotación', False), ('', str(nb), ' baja del período' if nb == 1 else ' bajas del período', False)]
+           if nb else [('', str(len(ps)), ' personas', False)])
     if inf['tipo'] == 'BOLSA':
         out += [('Horas extra a pagar ', hms(T('pagar')), '', False), ('Horas no usadas ', hms(T('no_usadas')), ' · no se descuentan', False)]
     else:
@@ -640,7 +663,7 @@ def para_coordinar(inf: Dict[str, Any], fecha_fin: str, hoy: str) -> List[str]:
     from xml.sax.saxutils import escape
     corte = min(hoy, fecha_fin)
     fin = _dm(fecha_fin)
-    activos = [p for p in inf['personas'] if p.get('activo', True)]
+    activos = [p for p in inf['personas'] if p.get('activo', True) and not p.get('baja')]
     quien = lambda p: f'<b>{escape(p["nombre"])}</b> ({escape(p["horario"])})'
     out = []
     if inf['tipo'] == 'BOLSA':
@@ -744,6 +767,9 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
     emision = datetime.now().strftime('%d-%m-%Y %H:%M')
     ps = inf['personas']
     cols = columnas(inf, justif, bonos)
+    nb_inf = bajas_de(ps)
+    texto_total = f'Total · {len(ps)} personas' + (f' ({len(ps) - nb_inf} en dotación + {nb_inf} {"baja" if nb_inf == 1 else "bajas"})'
+                                                     if nb_inf else '')
 
     # ── texto de cada celda (con la tabla muy ancha, los montos van sin «$» y el grupo dice «Bonos ($)»)
     sin_signo = {'si': False}
@@ -770,6 +796,9 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
     grupos_hor = OrderedDict()
     for p in ps:
         grupos_hor.setdefault(p['horario'], []).append(p)
+    # Propuesta B (dueño, 23-11-2026): las bajas del período van al final de su horario, bajo «Bajas del período»
+    for k_hor in grupos_hor:
+        grupos_hor[k_hor] = [p for p in grupos_hor[k_hor] if not p.get('baja')] + [p for p in grupos_hor[k_hor] if p.get('baja')]
 
     # ── anchos: el mayor texto de cada columna. Si la tabla no cabe en la hoja se va ajustando, de menos a más
     # (23-11-2026: con los montos de bonos y las jornadas extra, Producción se salía de la hoja): primero los títulos
@@ -781,10 +810,11 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
         ancho_t = lambda t: 1 + (max(stringWidth(w, _f('BarlowSC-SemiBold'), cab) for w in t.upper().split())
                                  if titulos_partidos else stringWidth(t.upper(), _f('BarlowSC-SemiBold'), cab))
         w_rut = max([ancho_t('RUT')] + [stringWidth(p['rut'], _f('Barlow'), cuerpo) for p in ps])
-        badge = stringWidth('Inactivo', _f('Barlow-SemiBold'), cuerpo - 1.4) + 8
-        w_total = stringWidth(f'Total · {len(ps)} personas', _f('Barlow-Bold'), cuerpo)
+        badge = max([stringWidth(rotulo_baja(p), _f('Barlow-SemiBold'), cuerpo - 1.4) for p in ps if p.get('baja')] or [0]) + 8
+        # La fila de total ocupa RUT y Nombre juntas: al nombre solo le toca lo que el RUT no alcanza a cubrir
+        w_total = stringWidth(texto_total, _f('Barlow-Bold'), cuerpo) - w_rut - 2 * pad
         w_nom = max([ancho_t('NOMBRE'), w_total]
-                    + [stringWidth(p['nombre'], _f('Barlow-Medium'), cuerpo) + (0 if p['activo'] else badge) for p in ps])
+                    + [stringWidth(p['nombre'], _f('Barlow-Medium'), cuerpo) + (badge if p.get('baja') else 0) for p in ps])
         if tope_nombre:
             largo_palabra = max([w_total] + [stringWidth(w, _f('Barlow-Medium'), cuerpo) for p in ps for w in p['nombre'].split()])
             w_nom = max(largo_palabra, w_nom * tope_nombre)
@@ -816,6 +846,7 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
 
     st_nom = ParagraphStyle('nom', fontName=_f('Barlow-Medium'), fontSize=cuerpo, leading=cuerpo + 1.5, textColor=H(C_INK))
     st_hor = ParagraphStyle('hor', fontName=_f('BarlowSC-Bold'), fontSize=cuerpo + 1.2, leading=cuerpo + 3, textColor=H(C_NAVY))
+    st_bajas = ParagraphStyle('bajas', fontName=_f('BarlowSC-Bold'), fontSize=cuerpo - 0.3, leading=cuerpo + 2, textColor=H(C_INK_2))
 
     # ── filas
     spans, prev, primeros = [], None, set()
@@ -861,15 +892,25 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
     for hor, gp in grupos_hor.items():
         hh = gp[0]['horas']
         data.append([Paragraph(f'{hor}<font name="{_f("Barlow")}" size="{cuerpo}" color="{C_INK_2}">&nbsp;&nbsp;'
-                               f'{horas_txt(hh) + " · " if hh else ""}{len(gp)} {"persona" if len(gp) == 1 else "personas"}</font>', st_hor)]
+                               f'{horas_txt(hh) + " · " if hh else ""}{texto_dotacion(len(gp), bajas_de(gp))}</font>', st_hor)]
                     + [''] * (len(cols) + 1))
         estilo += [('SPAN', (0, fila), (-1, fila)), ('LINEBELOW', (0, fila), (-1, fila), 0.8, H(C_NAVY)),
                    ('TOPPADDING', (0, fila), (-1, fila), 7), ('BOTTOMPADDING', (0, fila), (-1, fila), 2)]
         fila += 1
+        titulo_bajas = False
         for k, p in enumerate(gp):
-            nom = p['nombre'] if p['activo'] else (
-                f'{p["nombre"]} <font name="{_f("Barlow-SemiBold")}" size="{cuerpo - 1.4}" color="{C_AMBER}" backColor="{C_AMBER_SOFT}">'
-                f'&nbsp;Inactivo&nbsp;</font>')
+            if p.get('baja') and not titulo_bajas:
+                titulo_bajas = True
+                nb_g = bajas_de(gp)
+                data.append([Paragraph(f'Bajas del período · {nb_g} {"persona" if nb_g == 1 else "personas"}'
+                                       f'<font name="{_f("Barlow")}" size="{cuerpo}" color="{C_INK_2}">&nbsp;&nbsp;se pagan y descuentan '
+                                       'como el resto; no cuentan en la dotación</font>', st_bajas)] + [''] * (len(cols) + 1))
+                estilo += [('SPAN', (0, fila), (-1, fila)), ('LINEBELOW', (0, fila), (-1, fila), 0.6, H(C_INK_2)),
+                           ('TOPPADDING', (0, fila), (-1, fila), 7), ('BOTTOMPADDING', (0, fila), (-1, fila), 2)]
+                fila += 1
+            nom = p['nombre'] if not p.get('baja') else (
+                f'{p["nombre"]} <font name="{_f("Barlow-SemiBold")}" size="{cuerpo - 1.4}" color="#FFFFFF" backColor="{C_INK_2}">'
+                f'&nbsp;{rotulo_baja(p)}&nbsp;</font>')
             celdas = [p['rut'], Paragraph(nom, st_nom)]
             for i, c in enumerate(cols):
                 x = i + 2
@@ -893,10 +934,12 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
                     estilo.append(('BACKGROUND', (x, fila), (x, fila), H(C_NAVY_RES_TD)))
             if k % 2 == 1:
                 estilo.append(('BACKGROUND', (0, fila), (1, fila), H(C_ZEBRA)))
+            if p.get('baja'):
+                estilo.append(('BACKGROUND', (0, fila), (-1, fila), H(C_BAJA)))
             estilo.append(('LINEBELOW', (0, fila), (-1, fila), 0.4, H(C_LINE_2)))
             data.append(celdas)
             fila += 1
-    data.append([f'Total · {len(ps)} personas', ''] + [txt_total(c) for c in cols])
+    data.append([texto_total, ''] + [txt_total(c) for c in cols])
     estilo += [('SPAN', (0, fila), (1, fila)), ('FONT', (0, fila), (-1, fila), _f('Barlow-Bold'), cuerpo),
                ('LINEABOVE', (0, fila), (-1, fila), 1.1, H(C_INK)), ('TOPPADDING', (0, fila), (-1, fila), 4)]
     for x in sorted(primeros):
