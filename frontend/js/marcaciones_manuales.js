@@ -3676,7 +3676,7 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
         const avisos = [].concat(
             (d.acompanantes_con_pendientes || []).map(a => a.mensaje),
             (d.sacados || []).map(s => s.mensaje),
-            (d.no_copiados || []).filter(n => n.motivo === 'VALIDADO' || n.motivo === 'PERIODO_CERRADO').map(n => n.mensaje)
+            (d.no_copiados || []).filter(n => n.motivo === 'VALIDADO' || n.motivo === 'PERIODO_CERRADO' || n.motivo === 'BORRADOR_PENDIENTE' || n.motivo === 'PENDIENTE_ANTERIOR').map(n => n.mensaje)
         ).filter(Boolean);
         if (avisos.length) {
             Swal.fire({ icon: 'info', title: 'Para tener en cuenta', html: '<ul class="text-start mb-0">' + avisos.map(a => '<li>' + m180Esc(a) + '</li>').join('') + '</ul>', confirmButtonColor: '#059669' });

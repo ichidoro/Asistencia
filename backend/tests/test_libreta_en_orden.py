@@ -199,7 +199,7 @@ def test_sin_pendientes_el_dia_nuevo_queda_en_borrador(entorno):
     assert r["data"]["forzado_borrador"] is True and servicio.repository.libretas[(10, "2026-11-03")]["cerrado"] == 0
 
 
-def test_inasistencia_va_en_orden_y_reasignar_no(entorno):
+def test_inasistencia_y_reasignar_un_dia_nuevo_van_en_orden(entorno):
     servicio, pendientes, _ = entorno
     pendientes[20] = ["2026-11-02"]
     req = asist.Libreta180hInasistenciaRequest(empleado_id=20, fecha="2026-11-03")
@@ -207,30 +207,45 @@ def test_inasistencia_va_en_orden_y_reasignar_no(entorno):
     servicio.repository.enlaces[(20, "2026-11-03")] = 10
     servicio.repository.libretas[(10, "2026-11-03")] = _fila(10)
     req2 = asist.Libreta180hReasignarRequest(empleado_id=20, fecha="2026-11-03")
-    asyncio.run(asist.reasignar_turno_acompanante_180h(req2, service=servicio, current_user=_Usuario()))   # es la copia del chofer
+    # Reasignar abre un día nuevo en el acompañante: con un día anterior pendiente tampoco se hace (decisión 23-11-2026)
+    assert _error(lambda: asyncio.run(asist.reasignar_turno_acompanante_180h(req2, service=servicio, current_user=_Usuario()))).status_code == 409
+    assert (20, "2026-11-03") not in servicio.repository.libretas
+    pendientes[20] = []
+    asyncio.run(asist.reasignar_turno_acompanante_180h(req2, service=servicio, current_user=_Usuario()))   # sin pendientes es la copia del chofer
     assert (20, "2026-11-03") in servicio.repository.libretas
 
 
-def test_un_borrador_posterior_no_frena_completar_un_dia_anterior(entorno):
+def test_un_borrador_posterior_tambien_frena_abrir_otro_dia(entorno):
+    """Un solo borrador por persona (decisión 23-11-2026): ni un borrador anterior ni uno posterior permiten abrir otro día nuevo."""
     servicio, _, _ = entorno
     servicio.repository.libretas[(10, "2026-11-04")] = _fila(10, "2026-11-04")
+    e = _error(lambda: _guardar(servicio, fecha="2026-11-03"))
+    assert e.status_code == 409 and "borrador del 04-11-2026" in e.detail
+    servicio.repository.libretas[(10, "2026-11-04")] = _fila(10, "2026-11-04", cerrado=1)   # validado: ya no es borrador
     _guardar(servicio, fecha="2026-11-03")
-    servicio.repository.libretas[(10, "2026-11-01")] = _fila(10, "2026-11-01")
-    e = _error(lambda: _guardar(servicio, fecha="2026-11-02"))
-    assert e.status_code == 409 and "borrador del 01-11-2026" in e.detail
 
 
 # ── Chofer → acompañantes ───────────────────────────────────────────────────────────────────────────────────────────────────
-def test_la_copia_se_hace_aunque_el_acompanante_tenga_un_dia_pendiente_y_se_avisa(entorno):
+def test_la_copia_no_se_hace_si_el_acompanante_tiene_un_dia_anterior_pendiente_y_se_avisa(entorno):
+    """Decisión 23-11-2026: un día no se deja en borrador si antes hubo un pendiente; la copia sigue la misma regla que guardar a mano."""
     servicio, pendientes, _ = entorno
     pendientes[20] = ["2026-11-02"]
     servicio.repository.enlaces[(20, "2026-11-02")] = 30
     r = _guardar(servicio, acompanantes=[20], patente="KXZT12", vehiculo_id="55", patente_origen="PLAN")
+    assert (20, "2026-11-03") not in servicio.repository.libretas
+    assert r["data"]["replicados"] == [] and r["data"]["acompanantes_con_pendientes"] == []
+    aviso = r["data"]["no_copiados"][0]
+    assert aviso["motivo"] == "PENDIENTE_ANTERIOR"
+    assert aviso["mensaje"] == ("A VALDEMAR GALVARIN RENATO TOMASO no se le copió: antes tiene pendiente el lunes 02-11-2026 "
+                                "(la libreta se llena en orden). Complétalo y luego usa «Reasignar turno» en este día.")
+
+
+def test_la_copia_se_hace_si_el_acompanante_no_tiene_pendientes(entorno):
+    servicio, _, _ = entorno
+    r = _guardar(servicio, acompanantes=[20], patente="KXZT12", vehiculo_id="55", patente_origen="PLAN")
     copia = servicio.repository.libretas[(20, "2026-11-03")]
     assert copia["slots_96"] == TRAMOS_A and copia["patente"] == "KXZT12" and copia["patente_origen"] == "CHOFER"
-    aviso = r["data"]["acompanantes_con_pendientes"][0]
-    assert aviso["mensaje"] == ("Se copió el día a VALDEMAR GALVARIN RENATO TOMASO. Le queda pendiente el lunes 02-11-2026 "
-                                "(con PIÑERIN LONCOÑIN JUVENAL).")
+    assert r["data"]["replicados"] == [20] and r["data"]["no_copiados"] == []
 
 
 def test_el_chofer_edita_su_borrador_y_la_copia_igual_se_actualiza_pero_la_ajustada_no(entorno):

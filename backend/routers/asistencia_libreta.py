@@ -231,14 +231,12 @@ async def save_libreta_180h(
         # Período cerrado, día futuro o persona sin libreta ese día; y si el día es nuevo, los días anteriores del tramo deben tener libreta
         await _exigir_libreta_ingresable(service, payload.empleado_id, payload.fecha, con_orden=not existente)
 
-        # Un día nuevo no se abre mientras un día ANTERIOR de la misma persona siga en borrador: primero se valida (o se borra) ese. Un
-        # borrador posterior (p. ej. la copia del chofer) no frena completar un día anterior pendiente.
+        # Un día nuevo no se abre mientras la persona tenga OTRO día en borrador (anterior o posterior): primero se valida (o se borra) ese.
+        # Editar un día que ya existe no se frena (es el propio borrador).
         if not existente:
-            pendientes = [b for b in await repo.get_libreta_borradores_180h(payload.empleado_id, payload.fecha)
-                          if not libreta_es_inasistencia(b) and str(b['fecha'])[:10] < str(payload.fecha)[:10]]
-            if pendientes:
-                f = str(pendientes[0]['fecha'])
-                raise HTTPException(status_code=409, detail=f"Primero valida el borrador del {f[8:10]}-{f[5:7]}-{f[:4]}: no se puede guardar otro día de esta persona hasta entonces.")
+            otro = await _otro_borrador(repo, payload.empleado_id, payload.fecha)
+            if otro:
+                raise HTTPException(status_code=409, detail=f"Primero valida el borrador del {otro[8:10]}-{otro[5:7]}-{otro[:4]}: no se puede guardar otro día de esta persona hasta entonces.")
 
         # La primera vez que se guarda un día siempre queda en borrador: solo se valida (se cierra) sobre un borrador ya guardado. Un día ya
         # validado sigue validado al editarlo.
@@ -303,6 +301,7 @@ async def save_libreta_180h(
 
         replicar = {int(x) for x in (payload.replicar_a or [])}
         no_copiados, sacados, replicados, acomp_pendientes, acomp_omitidos = [], [], [], [], []
+        fecha_de: Dict[int, str] = {}  # destino -> fecha del día pendiente o del otro borrador que impidió la copia
 
         async def copiar(destino: int, base: Dict[str, Any], sin_patente: bool = False) -> Optional[str]:
             """Copia `base` al día de `destino`; devuelve el motivo si no se pudo (validado sin permiso o período cerrado)."""
@@ -312,6 +311,18 @@ async def save_libreta_180h(
                 return 'VALIDADO'
             if await repo.check_rango_cerrado(payload.fecha, payload.fecha, destino):
                 return 'PERIODO_CERRADO'
+            # La copia abre un día nuevo en el destino, y un día nuevo cumple las mismas reglas que al guardarlo a mano: la libreta se llena en
+            # orden (ningún día anterior del tramo pendiente) y un solo borrador a la vez.
+            if not ex_d:
+                previos_d = await libreta_orden.pendientes_anteriores(service, destino, payload.fecha)
+                if previos_d:
+                    fecha_de[destino] = previos_d[0]
+                    return 'PENDIENTE_ANTERIOR'
+                if not (base.get('cerrado') or destino_validado):
+                    otro_d = await _otro_borrador(repo, destino, payload.fecha)
+                    if otro_d:
+                        fecha_de[destino] = otro_d
+                        return 'BORRADOR_PENDIENTE'
             copia = {**base, 'empleado_id': destino, 'cerrado': 1 if (base.get('cerrado') or destino_validado) else 0}
             if sin_patente:
                 for k in ('patente', 'vehiculo_id', 'patente_origen'):
@@ -386,7 +397,14 @@ async def save_libreta_180h(
         }
         for n in no_copiados:
             n["nombre"] = nombres.get(n["empleado_id"], "")
-            n["mensaje"] = f"A {n['nombre']} {textos_motivo.get(n['motivo'], 'no se le copió')}."
+            if n["motivo"] == 'PENDIENTE_ANTERIOR':
+                n["mensaje"] = (f"A {n['nombre']} no se le copió: antes tiene pendiente el {libreta_orden.fecha_legible(fecha_de.get(n['empleado_id'], ''))} "
+                                f"(la libreta se llena en orden). Complétalo y luego usa «Reasignar turno» en este día.")
+            elif n["motivo"] == 'BORRADOR_PENDIENTE':
+                n["mensaje"] = (f"A {n['nombre']} no se le copió: tiene sin validar el borrador del {libreta_orden.fecha_legible(fecha_de.get(n['empleado_id'], ''))}. "
+                                f"Valídalo o bórralo y luego usa «Reasignar turno» en este día.")
+            else:
+                n["mensaje"] = f"A {n['nombre']} {textos_motivo.get(n['motivo'], 'no se le copió')}."
         for s in sacados:
             s["nombre"] = nombres.get(s["empleado_id"], "")
             s["mensaje"] = (f"{s['nombre']} salió de la lista: se borró la copia de este día y vuelve a quedar pendiente." if s["borrado"] else
@@ -464,6 +482,14 @@ async def save_libreta_180h(
 
 
 
+async def _otro_borrador(repo, empleado_id: int, fecha: str) -> Optional[str]:
+    """Fecha (AAAA-MM-DD) de OTRO día de la persona que sigue en borrador, anterior o posterior, o None. Una persona tiene un solo borrador a la vez:
+    antes de abrir otro día (por guardado, por copia del chofer o del peoneta, o por «reasignar turno») hay que validar o borrar ese.
+    Las inasistencias marcadas no cuentan como borrador."""
+    otros = [b for b in await repo.get_libreta_borradores_180h(empleado_id, fecha) if not libreta_es_inasistencia(b)]
+    return str(otros[0]['fecha'])[:10] if otros else None
+
+
 class Libreta180hReasignarRequest(BaseModel):
     empleado_id: int
     fecha: str
@@ -491,8 +517,13 @@ async def reasignar_turno_acompanante_180h(
         propio_validado = bool(propio) and int(propio.get('cerrado') or 0) == 1
         if propio_validado and not current_user.check_permission(PERMISO_EDITAR_LIBRETA_VALIDADA):
             raise HTTPException(status_code=409, detail="El día del acompañante está validado: solo un usuario con el permiso «Editar libreta validada» puede reasignarle el turno.")
-        # Es la misma copia del chofer: no se frena por el orden (sí por período cerrado, día futuro o persona sin libreta)
-        await _exigir_libreta_ingresable(service, payload.empleado_id, payload.fecha, con_orden=False)
+        # Si el día del acompañante ya existe se está corrigiendo; si es nuevo, vale el orden del tramo (como al guardar a mano)
+        await _exigir_libreta_ingresable(service, payload.empleado_id, payload.fecha, con_orden=not propio)
+        # La copia abre un borrador: un solo borrador por persona
+        if not propio and not int(lib_chofer.get('cerrado') or 0):
+            otro = await _otro_borrador(repo, payload.empleado_id, payload.fecha)
+            if otro:
+                raise HTTPException(status_code=409, detail=f"Primero valida el borrador del {otro[8:10]}-{otro[5:7]}-{otro[:4]}: no se puede abrir otro día de esta persona hasta entonces.")
 
         copia = {**lib_chofer, 'empleado_id': payload.empleado_id, 'cerrado': 1 if (int(lib_chofer.get('cerrado') or 0) or propio_validado) else 0}
         if lib_chofer.get('patente'):
