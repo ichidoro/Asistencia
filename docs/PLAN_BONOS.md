@@ -246,7 +246,7 @@ inasistencia sin justificar en el bono (puntos 1 y la mitad de 5); **B3b** cargo
 cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que se pisan y vista previa (4 y 6);
 **B3d** Productos 4 como un bono (7).
 
-**B3a hecho (22-11-2026, falta subir):**
+**B3a hecho (22-11-2026, commit 13f144c):**
 - Tabla nueva `bono_efectos` (bono × justificación → cuenta como asistido / descuenta en proporción / hace perder el
   bono) y en cada bono «Inasistencia sin justificar» (hace perder el bono / descuenta en proporción). Al crearlas se
   llenaron con lo de hoy. El cálculo solo lee lo configurado; si algo falta, el bono no se paga y el motivo dice
@@ -262,6 +262,20 @@ cargos, quitar la asistencia mínima (puntos 2 y 3); **B3c** aviso de reglas que
 - Prueba nueva `test_efecto_justificaciones_en_bonos.py` (13 casos); 638 pruebas en verde.
 - **Sigue abierto M (Bolsa):** en Bolsa Flexible los días justificados no se cuentan, así que el efecto configurado
   solo alcanza a Ciclo Inteligente. Corregirlo cambia lo que cobran personas de Bolsa: va aparte, con su ensayo.
+
+**B3b hecho (22-11-2026, falta subir):**
+- Los cargos de cada regla se eligen con casillas de la lista de cargos («Cargos que lo reciben», vacío = todos;
+  «Cargos que no lo reciben») y la regla guarda su identificador. El cálculo compara el cargo de la persona, no su
+  nombre escrito. Al crearse, las reglas de hoy se pasaron a la lista buscando sus nombres en la lista y en los alias
+  de BioAlba (si una regla pidiera un cargo que no está, no lo recibe nadie, en vez de pasar a «todos»).
+- Configuración → Cargos: «Renombrar» (el nombre anterior queda como alias para BioAlba) y «Unir con otro cargo»
+  (pasan personas, alias y reglas de bono; el cargo unido queda como alias y se borra). Antes de guardar se ve cuántas
+  personas y qué reglas cambian. Queda en la auditoría (RENOMBRAR_CARGO, UNIR_CARGOS).
+- Se quitó «% Asist.» de la pantalla (no existe en las reglas de Aguacol); la columna queda en la base sin uso.
+- **Ensayo en el servidor** con el respaldo del 22-11-2026 (base temporal borrada): 0 cambios en todos los períodos;
+  los cargos de las 7 reglas de hoy se encontraron todos en la lista.
+- Prueba nueva `test_cargos_de_la_lista_en_bonos.py` (5 casos); 643 pruebas en verde. Renombrar y unir probados contra
+  la copia de práctica (PostgreSQL), también con una persona.
 
 2. **Se quita la «Asistencia mínima» (E).** No existe en las reglas de Aguacol (decisión de la persona dueña,
    22-11-2026): lo que decide el bono es la relación entre la asistencia del día y las justificaciones (punto 1). Se

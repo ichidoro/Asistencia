@@ -110,27 +110,21 @@ class BonoService:
         Nada de esto está escrito en el código: sale de bono["efectos"] y bono["efecto_inasistencia"].
         """
 
-        def _match_cargo(emp_cargo: str, req_val: str) -> bool:
-            if not req_val or str(req_val).strip().upper() in ("NONE", "NULL", ""):
-                return True
-            cargo_emp  = (emp_cargo or "").strip().upper()
-            cargos_req = [c.strip().upper() for c in str(req_val).split(",")]
-            return cargo_emp in cargos_req
-
         # ── 0. Exclusión de empleados sin asistencia (Art 22) ──────────────
         if empleado.get("excluido_asistencia"):
             return {"aplica": False, "califica": False, "monto": 0,
                     "motivo": "Excluido de asistencia (Art 22)"}
 
         # ── 1. Filtro estructural: cargo / contrato ────────────────────────
+        # Los cargos de la regla son los elegidos de la lista (etapa B3b): se compara el cargo de la persona, no su nombre
         regla_activa = None
+        cargo_id = empleado.get("cargo_id")
         for regla in bono.get("reglas", []):
-            if not _match_cargo(empleado.get("cargo"), regla.get("cargo_requerido")):
+            requeridos = regla.get("cargos_req_ids")
+            if requeridos and cargo_id not in requeridos:
                 continue
-            if regla.get("cargos_excluidos"):
-                excluidos = [c.strip().upper() for c in str(regla["cargos_excluidos"]).split(",")]
-                if (empleado.get("cargo") or "").strip().upper() in excluidos:
-                    continue
+            if cargo_id in (regla.get("cargos_excl_ids") or []):
+                continue
             if regla.get("tipo_contrato") and (
                 (empleado.get("tipo_contrato") or "").strip().upper()
                 != regla["tipo_contrato"].strip().upper()

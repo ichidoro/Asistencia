@@ -9,126 +9,44 @@ let globalCargosList = []; // [NEW] Cache cargos for dropdowns
 let pagadoresList = []; // [NEW] Cache pagadores
 let periodosRRHHList = []; // [NEW] Cache periodos rrhh
 
-// appendCargoToInput: agrega un cargo al input (multi-valor, coma separado)
-// Funciona tanto si el <ul> está en su posición original como si fue movido al body.
-// Usa data-target-input en el <ul> para localizar el input por ID.
-window.appendCargoToInput = function (element, cargo) {
-    // Primero: buscar via data-target-input (funciona aunque el menu esté en body)
-    const ul = element.closest('ul[data-target-input]');
-    if (ul) {
-        const input = document.getElementById(ul.dataset.targetInput);
-        if (input) {
-            let current = input.value.trim();
-            if (current.length > 0 && !current.endsWith(',')) current += ', ';
-            input.value = current + cargo;
-            _refreshDropdownChecks(ul); // actualizar checkmarks inmediatamente
-            return;
-        }
-    }
-    // Fallback: traversal DOM original (cuando el menu no fue movido)
-    const input = element.closest('.input-group')?.querySelector('input');
-    if (!input) return;
-    let current = input.value.trim();
-    if (current.length > 0 && !current.endsWith(',')) current += ', ';
-    input.value = current + cargo;
-};
+// ── Cargos de una regla de bono (etapa B3b del plan de bonos, 22-11-2026) ──
+// Se eligen con casillas de la lista de cargos y la regla guarda su identificador: un cambio de nombre no la rompe.
+let catalogoCargosBono = [];   // [{id, nombre}] de /api/configuracion/cargos/
 
-// selectCargoRequerido: limpia el campo "Cargo Req." (usado por el ítem 'Limpiar selección').
-// También usa data-target-input para funcionar cuando el menu está en body.
-window.selectCargoRequerido = function(element, cargo) {
-    const ul = element.closest('ul[data-target-input]');
-    if (ul) {
-        const input = document.getElementById(ul.dataset.targetInput);
-        if (input) { input.value = cargo; return; }
-    }
-    // Fallback
-    const inputGroup = element.closest('.cargo-req-wrapper');
-    if (!inputGroup) return;
-    const input = inputGroup.querySelector('.rule-cargo');
-    if (input) input.value = cargo;
-};
-
-// _refreshDropdownChecks: actualiza checkmarks verdes según el valor actual del input.
-// Funciona aunque la <ul> esté en document.body (usa data-target-input).
-function _refreshDropdownChecks(ulElement) {
-    if (!ulElement) return;
-    const targetId = ulElement.dataset?.targetInput;
-    const targetInput = targetId ? document.getElementById(targetId) : null;
-    const currentVal = targetInput ? targetInput.value : '';
-    const selected = currentVal.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-
-    ulElement.querySelectorAll('.cargo-item[data-cargo]').forEach(a => {
-        const cargo = (a.dataset.cargo || '').trim().toUpperCase();
-        const li = a.closest('li');
-        const isSelected = selected.includes(cargo);
-        let chk = a.querySelector('.cargo-check');
-        if (isSelected) {
-            if (!chk) {
-                chk = document.createElement('i');
-                chk.className = 'bi bi-check2 cargo-check text-success fw-bold ms-auto';
-                a.appendChild(chk);
-            }
-            if (li) li.style.background = '#f0fdf4';
-        } else {
-            chk?.remove();
-            if (li) li.style.background = '';
-        }
-    });
+async function _cargarCatalogoCargosBono() {
+    try {
+        const r = await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
+        if (r.ok) catalogoCargosBono = (await r.json()).map(function (c) { return { id: c.id, nombre: c.nombre }; })
+            .sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+    } catch (e) { console.error(e); }
 }
 
-// _populateCargoDropdown: puebla un <ul> con la lista de cargos.
-// Tanto cargo-req-ul como cargo-dropdown-ul usan appendCargoToInput
-// (acumula coma-separado). Solo el ítem 'Limpiar' llama a selectCargoRequerido('').
-function _populateCargoDropdown(ulElement, singleSelect = false) {
-    if (!ulElement) return;
-    const existingItems = ulElement.querySelectorAll('li:not(:first-child)');
-    existingItems.forEach(li => li.remove());
-
-    const list = globalCargosList;
-    if (list.length === 0) {
-        const li = document.createElement('li');
-        li.innerHTML = '<span class="dropdown-item text-muted small">No hay cargos disponibles</span>';
-        ulElement.appendChild(li);
-        return;
-    }
-
-    // Leer valor actual del input para marcar ya seleccionados
-    const targetId = ulElement.dataset?.targetInput;
-    const targetInput = targetId ? document.getElementById(targetId) : null;
-    const currentVal = targetInput ? targetInput.value : '';
-    const selected = currentVal.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-
-    list.forEach(cargo => {
-        const li = document.createElement('li');
-        const safeC = cargo.replace(/'/g, "\\'");
-        const isSelected = selected.includes(cargo.trim().toUpperCase());
-        li.innerHTML = `<a class="dropdown-item small py-2 cargo-item d-flex align-items-center justify-content-between"
-            href="#" data-cargo="${cargo}"
-            onclick="appendCargoToInput(this, '${safeC}'); return false;">
-            <span>${cargo}</span>
-            ${isSelected ? '<i class="bi bi-check2 cargo-check text-success fw-bold"></i>' : ''}
-        </a>`;
-        if (isSelected) li.style.background = '#f0fdf4';
-        ulElement.appendChild(li);
-    });
+function _resumenCargos(det) {
+    const n = det.querySelectorAll('input[type=checkbox]:checked').length;
+    det.querySelector('summary span').textContent = n ? (n === 1 ? '1 cargo' : n + ' cargos') : det.dataset.vacio;
 }
 
-window.filterCargosDropdown = function(inputElement) {
-    if (!inputElement) return;
-    const ul = inputElement.closest('ul');
-    if (!ul) return;
-    const isSingle = ul.closest('.cargo-req-wrapper') !== null;
-    const existingItems = ul.querySelectorAll('.cargo-item');
-    if (existingItems.length === 0 && globalCargosList.length > 0) {
-        _populateCargoDropdown(ul, isSingle);
-    }
-    const filter = (inputElement.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    ul.querySelectorAll('.cargo-item').forEach(item => {
-        const text = (item.textContent || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        item.parentElement.style.display = text.includes(filter) ? '' : 'none';
-    });
-};
+// Lista desplegable con casillas: clase = 'rule-cargos-req' o 'rule-cargos-excl'; ids = los elegidos
+function _htmlPickerCargos(clase, ids, textoVacio) {
+    const esc = window.FichaCfg ? window.FichaCfg.esc : function (x) { return String(x == null ? '' : x); };
+    const elegidos = new Set((ids || []).map(Number));
+    const n = elegidos.size;
+    return '<details class="' + clase + ' border rounded bg-white" data-vacio="' + esc(textoVacio) + '">'
+        + '<summary class="small px-2 py-1"><span>' + esc(n ? (n === 1 ? '1 cargo' : n + ' cargos') : textoVacio) + '</span></summary>'
+        + '<div class="p-2 border-top" style="max-height: 220px; overflow-y: auto;">'
+        + '<input type="search" class="form-control form-control-sm mb-2" placeholder="Buscar cargo..." autocomplete="off" '
+        + 'oninput="const q=this.value.toLowerCase();this.parentElement.querySelectorAll(\'.form-check\').forEach(function(x){x.style.display=x.textContent.toLowerCase().indexOf(q)>=0?\'\':\'none\';})">'
+        + (catalogoCargosBono.length ? catalogoCargosBono.map(function (c) {
+            return '<label class="form-check small d-block mb-1"><input class="form-check-input" type="checkbox" value="' + c.id + '"'
+                + (elegidos.has(c.id) ? ' checked' : '') + ' onchange="_resumenCargos(this.closest(\'details\'))"> ' + esc(c.nombre) + '</label>';
+        }).join('') : '<span class="text-muted small">No hay cargos en la lista.</span>')
+        + '</div></details>';
+}
 
+function _leerPickerCargos(det) {
+    const ids = Array.from(det.querySelectorAll('input[type=checkbox]:checked')).map(function (x) { return parseInt(x.value, 10); });
+    return ids.length ? ids : null;
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ESTADOS DE ASISTENCIA — Configuración Visual
@@ -602,8 +520,8 @@ function renderBonos() {
         vacio: 'No hay bonos. Cree el primero con «Nuevo bono».',
         ficha: function (b, panel) {
             const reglas = (b.reglas || []).map(function (r) {
-                const cond = [r.tipo_contrato || 'Todo contrato', r.asistencia_minima < 100 ? 'asistencia sobre ' + r.asistencia_minima + ' %' : 'asistencia completa',
-                              r.cargo_requerido ? 'cargo ' + r.cargo_requerido : ''].filter(Boolean).join(' · ');
+                const cond = [r.tipo_contrato || 'Todo contrato', r.cargo_requerido ? 'lo reciben: ' + r.cargo_requerido : 'todos los cargos',
+                              r.cargos_excluidos ? 'no lo reciben: ' + r.cargos_excluidos : ''].filter(Boolean).join(' · ');
                 return '<div class="fcB-campo"><div class="fcB-et"><span class="num">' + F.esc(pesos(r.monto)) + '</span></div><div class="fcB-ctl"><span>' + F.esc(cond) + '</span></div></div>';
             }).join('');
             // Efecto de las justificaciones y de la inasistencia sin justificar (etapa B3a)
@@ -630,10 +548,8 @@ function renderBonos() {
 // BONOS: MODAL Y FORMULARIO
 // ==========================================
 async function openModalBono(bono = null) {
-    if (globalCargosList.length === 0) {
-        await loadMetadata();
-    }
-    
+    await _cargarCatalogoCargosBono();
+
     const modal = document.getElementById('modal-bono');
     const title = document.getElementById('modal-bono-title');
     const form = document.getElementById('form-bono');
@@ -757,61 +673,14 @@ function addBonoReglaRow(regla = null) {
                 </div>
             </div>
         </div>
-        <div class="row g-2 align-items-end">
-            <div class="col-md-2">
-                <label for="rule-asistencia-${rowIdx}" class="small text-muted">% Asist.</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" id="rule-asistencia-${rowIdx}" class="rule-asistencia form-control" value="${regla ? regla.asistencia_minima : 0}" min="0" max="100" step="1">
-                </div>
-            </div>
-            <div class="col-md-4">
-                <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req. <span class="text-muted" style="font-size: 0.75rem">(multi)</span></label>
-                <div class="input-group input-group-sm cargo-req-wrapper">
-                    <input type="text" id="rule-cargo-${rowIdx}" class="rule-cargo form-control form-control-sm"
-                        placeholder="Todos (o varios)"
-                        value="${regla && regla.cargo_requerido ? regla.cargo_requerido : ''}"
-                        autocomplete="off"
-                        title="Puede ingresar uno o varios cargos separados por coma. Use el botón ▾ para seleccionar de la lista."
-                        onclick="this.closest('.cargo-req-wrapper').querySelector('[data-bs-toggle=dropdown]').click()">
-                    <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false"
-                        onclick="_populateCargoDropdown(this.closest('.input-group').querySelector('.cargo-req-ul'), true)">
-                        <i class="bi bi-chevron-down"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-req-ul"
-                        data-target-input="rule-cargo-${rowIdx}"
-                        style="max-height: 300px; overflow-y: auto; width: 240px;">
-                        <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" id="search-cargo-req-${rowIdx}" name="search-cargo-req-${rowIdx}" class="form-control form-control-sm" placeholder="Buscar cargo..."
-                                onkeyup="filterCargosDropdown(this)"
-                                onkeydown="event.stopPropagation()"
-                                onclick="event.stopPropagation()"
-                                autocomplete="off">
-                        </li>
-                        <li><a class="dropdown-item small py-2 cargo-item text-muted fst-italic" href="#" onclick="selectCargoRequerido(this, ''); return false;"><i class="bi bi-x-lg me-1" aria-hidden="true"></i>Limpiar selección</a></li>
-                    </ul>
-                </div>
-            </div>
+        <div class="row g-2 align-items-start">
             <div class="col-md-5">
-                <label for="rule-excluidos-${rowIdx}" class="small text-muted text-danger">Excluir Cargos</label>
-                <div class="input-group input-group-sm">
-                    <input type="text" id="rule-excluidos-${rowIdx}" class="rule-excluidos form-control"
-                        placeholder="Ej: Gerente, Director"
-                        value="${regla && regla.cargos_excluidos ? regla.cargos_excluidos : ''}">
-                    <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-plus-circle"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-dropdown-ul"
-                        data-target-input="rule-excluidos-${rowIdx}"
-                        style="max-height: 300px; overflow-y: auto; width: 250px;">
-                        <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" id="search-cargo-excl-${rowIdx}" name="search-cargo-excl-${rowIdx}" class="form-control form-control-sm" placeholder="Buscar cargo..."
-                                onkeyup="filterCargosDropdown(this)"
-                                onkeydown="event.stopPropagation()"
-                                onclick="event.stopPropagation()"
-                                autocomplete="off">
-                        </li>
-                    </ul>
-                </div>
+                <span class="small text-muted d-block mb-1">3. Cargos que lo reciben</span>
+                ${_htmlPickerCargos('rule-cargos-req', regla ? regla.cargos_req_ids : null, 'Todos los cargos')}
+            </div>
+            <div class="col-md-6">
+                <span class="small text-muted text-danger d-block mb-1">4. Cargos que no lo reciben</span>
+                ${_htmlPickerCargos('rule-cargos-excl', regla ? regla.cargos_excl_ids : null, 'Ninguno')}
             </div>
             <div class="col-md-1 text-end">
                 <button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.closest('.regla-row').remove()" title="Eliminar regla">
@@ -822,53 +691,6 @@ function addBonoReglaRow(regla = null) {
     `;
     container.appendChild(div);
 
-    // Poblar AMBOS dropdowns después de estar en el DOM
-    // cargo-req-ul: singleSelect=true (un solo cargo)
-    // cargo-dropdown-ul: singleSelect=false (multi, coma separado)
-    _populateCargoDropdown(div.querySelector('.cargo-req-ul'), true);
-    _populateCargoDropdown(div.querySelector('.cargo-dropdown-ul'), false);
-
-    // Bootstrap Dropdown con strategy:'fixed': Popper.js calcula top/left relativos al viewport.
-    // El CSS ya tiene #modal-bono .modal-content { overflow: visible !important } y
-    // #modal-bono .dropdown-menu { z-index: 2300 !important } — suficiente para que el menu
-    // escape el clip de #reglas-container y aparezca sobre el modal.
-    // NO movemos el menu al body: eso rompía closest('.input-group') en los onclick.
-    div.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(btn => {
-        const existing = bootstrap.Dropdown.getInstance(btn);
-        if (existing) existing.dispose();
-
-        new bootstrap.Dropdown(btn, {
-            popperConfig(defaultConfig) {
-                return { ...defaultConfig, strategy: 'fixed' };
-            }
-        });
-
-        // Mover el menu al body al abrirlo: escapa overflow-y:auto de #reglas-container
-        // sin depender de Popper coordinate fix (que falla dentro de modales fixed).
-        // El input se localiza via data-target-input en la <ul>, no via closest().
-        const menu = btn.closest('.input-group')?.querySelector('.dropdown-menu')
-                  || btn.nextElementSibling;
-        if (menu) {
-            const originalParent = menu.parentElement;
-            const originalNextSibling = menu.nextSibling;
-
-            btn.addEventListener('show.bs.dropdown', () => {
-                menu.style.zIndex = '9999';
-                document.body.appendChild(menu);
-                // Refrescar checkmarks: el usuario ve qué cargos ya están seleccionados
-                _refreshDropdownChecks(menu);
-            }, { passive: true });
-
-            btn.addEventListener('hide.bs.dropdown', () => {
-                menu.style.zIndex = '';
-                if (originalNextSibling && originalNextSibling.parentElement === originalParent) {
-                    originalParent.insertBefore(menu, originalNextSibling);
-                } else {
-                    originalParent.appendChild(menu);
-                }
-            }, { passive: true });
-        }
-    });
 }
 
 async function saveBono() {
@@ -884,9 +706,9 @@ async function saveBono() {
         reglas.push({
             monto: parseFloat(row.querySelector('.rule-monto').value) || 0,
             tipo_contrato: row.querySelector('.rule-contrato').value || null,
-            asistencia_minima: parseFloat(row.querySelector('.rule-asistencia').value) || 0.0,
-            cargo_requerido: row.querySelector('.rule-cargo').value || null,
-            cargos_excluidos: row.querySelector('.rule-excluidos').value || null,
+            // Cargos elegidos de la lista (etapa B3b); la «asistencia mínima» ya no existe en las reglas de Aguacol
+            cargos_req_ids: _leerPickerCargos(row.querySelector('.rule-cargos-req')),
+            cargos_excl_ids: _leerPickerCargos(row.querySelector('.rule-cargos-excl')),
             es_proporcional: row.dataset.prop === '1'
         });
     });
@@ -2005,9 +1827,62 @@ window.cargarCatalogoCargos = async function() {
         ficha: function (c, panel) {
             panel.innerHTML = F.cabeza(c.nombre, canEdit ? 'Los cambios de esta ficha se guardan al tocarlos.' : 'Solo lectura.')
                 + F.campo('Excluido de asistencia', '<label class="fcB-sw"><input type="checkbox" id="cargo-excluir-' + c.id + '" ' + (c.excluido_asistencia ? 'checked ' : '') + (canEdit ? '' : 'disabled ') + 'onchange="toggleCargoExclusion(' + c.id + ', this.checked)"><span aria-hidden="true"></span>Artículo 22 (sin atrasos ni horas extra)</label>')
-                + F.campo('Nombres distintos que trae BioAlba', erroresBioAlba(c.alias, canEdit ? 'confirmDeleteCargoAlias' : ''), 'Al desvincular uno, las personas con ese cargo en BioAlba dejan de asignarse a este.');
+                + F.campo('Nombres distintos que trae BioAlba', erroresBioAlba(c.alias, canEdit ? 'confirmDeleteCargoAlias' : ''), 'Al desvincular uno, las personas con ese cargo en BioAlba dejan de asignarse a este.')
+                + (canEdit ? F.pie('<button type="button" class="fcB-btn" onclick="unirCargo(' + c.id + ')"><i class="bi bi-intersect" aria-hidden="true"></i>Unir con otro cargo</button>',
+                    '<button type="button" class="fcB-btn pri" onclick="renombrarCargo(' + c.id + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Renombrar</button>') : '');
         }
     });
+};
+
+// ── Renombrar y unir cargos (etapa B3b del plan de bonos) ──
+async function _usoCargo(cargoId) {
+    const r = await fetch(`/api/configuracion/cargos/${cargoId}/uso/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
+    return r.ok ? await r.json() : { personas: 0, activas: 0, reglas: [] };
+}
+
+function _textoUso(u) {
+    return [(u.personas === 1 ? '1 persona' : u.personas + ' personas') + ' (' + u.activas + (u.activas === 1 ? ' activa)' : ' activas)'),
+            u.reglas.length ? 'Reglas de bono: ' + u.reglas.join(', ') + '.' : 'Ninguna regla de bono lo nombra.'];
+}
+
+window.renombrarCargo = async function (cargoId) {
+    const cargo = (await (await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } })).json())
+        .find(function (c) { return c.id === cargoId; });
+    if (!cargo) return;
+    const u = await _usoCargo(cargoId);
+    const v = await uiPedir({ titulo: 'Renombrar cargo', texto: 'El nombre actual («' + cargo.nombre + '») queda como nombre de BioAlba, así la sincronización lo sigue reconociendo. ' + _textoUso(u).join(' '),
+        campos: [{ nombre: 'nombre', etiqueta: 'Nombre nuevo', valor: cargo.nombre, requerido: true }], confirmText: 'Renombrar' });
+    if (!v || v.nombre === cargo.nombre) return;
+    const r = await fetch(`/api/configuracion/cargos/${cargoId}/renombrar/`, { method: 'PUT',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: v.nombre }) });
+    const d = await r.json().catch(function () { return {}; });
+    if (!r.ok) { showToast(d.detail || 'No se pudo renombrar el cargo.', 'danger'); return; }
+    showToast('Listo. El cargo se llama «' + d.nombre + '».', 'success');
+    cargarCatalogoCargos();
+};
+
+window.unirCargo = async function (cargoId) {
+    const cargos = await (await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } })).json();
+    const origen = cargos.find(function (c) { return c.id === cargoId; });
+    if (!origen) return;
+    const opciones = {};
+    cargos.filter(function (c) { return c.id !== cargoId; }).sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); })
+        .forEach(function (c) { opciones[c.id] = c.nombre; });
+    const u = await _usoCargo(cargoId);
+    const elegido = await Swal.fire({ title: 'Unir «' + origen.nombre + '» con otro cargo', input: 'select', inputOptions: opciones,
+        inputPlaceholder: 'Elija el cargo que queda', showCancelButton: true, confirmButtonText: 'Seguir', cancelButtonText: 'Cancelar', reverseButtons: true,
+        inputValidator: function (x) { return x ? null : 'Elija el cargo que queda.'; } });
+    if (!elegido.isConfirmed) return;
+    const destino = opciones[elegido.value];
+    const ok = await uiConfirm('¿Unir «' + origen.nombre + '» en «' + destino + '»?', { items: _textoUso(u).concat(['Todo pasa a «' + destino + '» y «' + origen.nombre + '» queda como nombre de BioAlba.', '«' + origen.nombre + '» se borra de la lista. No se puede deshacer desde la pantalla.']),
+        confirmText: 'Unir cargos', danger: true });
+    if (!ok) return;
+    const r = await fetch(`/api/configuracion/cargos/${cargoId}/unir/`, { method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ destino_id: parseInt(elegido.value, 10) }) });
+    const d = await r.json().catch(function () { return {}; });
+    if (!r.ok) { showToast(d.detail || 'No se pudieron unir los cargos.', 'danger'); return; }
+    showToast('Listo. «' + d.origen + '» quedó unido en «' + d.destino + '».', 'success');
+    cargarCatalogoCargos();
 };
 
 window.toggleCargoExclusion = async function(cargoId, value) {

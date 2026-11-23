@@ -11,6 +11,10 @@ class BonoReglaBase(BaseModel):
     tipo_contrato: Optional[str] = Field(None, description="Indefinido, Temporal, etc.")
     cargo_requerido: Optional[str] = Field(None, description="Cargo específico para este bono")
     cargos_excluidos: Optional[str] = Field(None, description="Lista separada por comas de cargos excluidos")
+    # Etapa B3b del plan de bonos: los cargos se eligen de la lista y la regla guarda su identificador, así un cambio
+    # de nombre no la rompe. None = todos los cargos (requeridos) / ninguno (excluidos).
+    cargos_req_ids: Optional[List[int]] = Field(None, description="Cargos que reciben el bono (vacío: todos)")
+    cargos_excl_ids: Optional[List[int]] = Field(None, description="Cargos que no lo reciben")
     labor_requerida: Optional[str] = Field(None, description="Labor específica para este bono")
     es_proporcional: bool = Field(False, description="Si es True, se descuenta por día faltado")
     version: int = Field(1, ge=1)

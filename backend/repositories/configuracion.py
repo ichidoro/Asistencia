@@ -131,6 +131,9 @@ class ConfiguracionRepository:
                 )
             """)
         
+        # 5a. Cargos de las reglas por su identificador (etapa B3b del plan de bonos)
+        await self._init_cargos_de_reglas()
+
         # 5b. Efecto de cada justificación en cada bono (etapa B3a del plan de bonos, 22-11-2026). Antes lo decidía el
         # «Goce de sueldo» para todos los bonos por igual; ahora se configura por bono en Configuración → Justificaciones.
         await self._init_efectos_bonos()
@@ -517,6 +520,48 @@ class ConfiguracionRepository:
                 await self.db.execute_batch(ops)
             logger.info(f"✨ Tabla 'bono_efectos' creada y llenada con lo de hoy ({len(ops)} combinaciones)")
 
+    @staticmethod
+    def _ids(texto) -> Optional[List[int]]:
+        """'6,7' → [6, 7]; vacío → None."""
+        ids = [int(x) for x in str(texto or '').split(',') if x.strip()]
+        return ids or None
+
+    async def _init_cargos_de_reglas(self):
+        """Agrega a bono_reglas los cargos por su identificador (cargos_req_ids, cargos_excl_ids). La primera vez los llena
+        con los nombres escritos de hoy, buscándolos en la lista de cargos y en sus alias. Un nombre que no está en la lista
+        se avisa en el registro; si una regla pedía cargos y ninguno está en la lista, queda con el cargo 0 (no lo recibe
+        nadie, igual que hoy, en vez de pasar a «todos»)."""
+        get_cols = getattr(self.db, 'get_column_names', None)
+        if not get_cols:
+            return
+        cols = await get_cols("bono_reglas")
+        if "cargos_req_ids" in cols:
+            return
+        await self.db.execute("ALTER TABLE bono_reglas ADD COLUMN cargos_req_ids TEXT")
+        await self.db.execute("ALTER TABLE bono_reglas ADD COLUMN cargos_excl_ids TEXT")
+        por_nombre = {}
+        for c in await self.db.fetch_all("SELECT id, nombre FROM cargos"):
+            por_nombre[str(c['nombre']).strip().upper()] = c['id']
+        for a in await self.db.fetch_all("SELECT alias, cargo_id FROM cargos_alias"):
+            por_nombre.setdefault(str(a['alias']).strip().upper(), a['cargo_id'])
+
+        def a_ids(texto, regla_id, que):
+            nombres = [n.strip().upper() for n in str(texto or '').split(',') if n.strip() and n.strip().upper() not in ('NONE', 'NULL')]
+            ids = []
+            for n in nombres:
+                if n in por_nombre:
+                    ids.append(por_nombre[n])
+                else:
+                    logger.error(f"❗ Regla de bono {regla_id}: el cargo {que} «{n}» no está en la lista de cargos. Revise la regla en Configuración → Bonos.")
+            if nombres and not ids:
+                return "0" if que == "requerido" else None
+            return ",".join(str(i) for i in dict.fromkeys(ids)) or None
+
+        for r in await self.db.fetch_all("SELECT id, cargo_requerido, cargos_excluidos FROM bono_reglas"):
+            await self.db.execute("UPDATE bono_reglas SET cargos_req_ids = ?, cargos_excl_ids = ? WHERE id = ?",
+                                  (a_ids(r['cargo_requerido'], r['id'], "requerido"), a_ids(r['cargos_excluidos'], r['id'], "excluido"), r['id']))
+        logger.info("✨ Migración: cargos de las reglas de bono guardados por su identificador")
+
     async def set_efectos_de_bono(self, bono_id: int, efectos: Dict[int, str]) -> None:
         """Reemplaza el efecto de cada justificación en un bono."""
         ConfiguracionRepository._bonos_cache = None
@@ -579,17 +624,31 @@ class ConfiguracionRepository:
 
     async def create_regla_bono(self, bono_id: int, regla: BonoReglaCreate) -> int:
         ConfiguracionRepository._bonos_cache = None
+        # Los cargos se guardan por su identificador; el nombre escrito se rehace desde la lista (solo para leerlo)
+        nombres = {c['id']: c['nombre'] for c in await self.db.fetch_all("SELECT id, nombre FROM cargos")}
+        txt = lambda ids: ", ".join(nombres[i] for i in ids if i in nombres) if ids else None
+        ids_txt = lambda ids: ",".join(str(i) for i in dict.fromkeys(ids)) if ids else None
+        req_ids, excl_ids = regla.cargos_req_ids, regla.cargos_excl_ids
+        if req_ids is None and excl_ids is None and (regla.cargo_requerido or regla.cargos_excluidos):
+            # Llegó con los nombres escritos (forma antigua): se buscan en la lista, igual que en el llenado inicial
+            por_nombre = {str(n).strip().upper(): i for i, n in nombres.items()}
+            for a in await self.db.fetch_all("SELECT alias, cargo_id FROM cargos_alias"):
+                por_nombre.setdefault(str(a['alias']).strip().upper(), a['cargo_id'])
+            a_ids = lambda t: [por_nombre[n.strip().upper()] for n in str(t or '').split(',') if n.strip().upper() in por_nombre]
+            req_ids = a_ids(regla.cargo_requerido) or ([0] if str(regla.cargo_requerido or '').strip() else None)
+            excl_ids = a_ids(regla.cargos_excluidos) or None
+        req_txt, excl_txt = txt(req_ids), txt(excl_ids)
         query = """
             INSERT INTO bono_reglas (
                 bono_id, monto, asistencia_minima, tipo_contrato,
                 cargo_requerido, cargos_excluidos, es_proporcional,
-                version, fecha_inicio
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                version, fecha_inicio, cargos_req_ids, cargos_excl_ids
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             bono_id, regla.monto, regla.asistencia_minima, regla.tipo_contrato,
-            regla.cargo_requerido, regla.cargos_excluidos, 1 if regla.es_proporcional else 0,
-            regla.version, str(regla.fecha_inicio)
+            req_txt, excl_txt, 1 if regla.es_proporcional else 0,
+            regla.version, str(regla.fecha_inicio), ids_txt(req_ids), ids_txt(excl_ids)
         )
         try:
             res = await self.db.execute(query, params)
@@ -684,6 +743,8 @@ class ConfiguracionRepository:
                 for r in reglas:
                     r_dict = dict(r)
                     r_dict['es_proporcional'] = bool(r['es_proporcional'])
+                    r_dict['cargos_req_ids'] = self._ids(r_dict.get('cargos_req_ids'))
+                    r_dict['cargos_excl_ids'] = self._ids(r_dict.get('cargos_excl_ids'))
                     reglas_fmt.append(r_dict)
                     
                 bono_dict['reglas'] = reglas_fmt

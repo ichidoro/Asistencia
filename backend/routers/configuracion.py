@@ -953,6 +953,72 @@ async def create_cargo_manual(
     await _auditar(db, current_user, "CREATE_CARGO_MANUAL", f"Creado cargo manualmente: '{nombre_normalizado}' (ID: {cargo_id}).")
     return {"id": cargo_id, "nombre": nombre_normalizado, "message": "Cargo creado exitosamente"}
 
+class CargoRenombrarRequest(BaseModel):
+    nombre: str
+
+
+class CargoUnirRequest(BaseModel):
+    destino_id: int
+
+
+async def _validar_nombre_cargo(repo, nombre: str, cargo_id: int) -> str:
+    nombre = (nombre or '').strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="El nombre del cargo no puede estar vacío.")
+    otro = await repo.get_cargo_por_nombre_sin_mayusculas(nombre)
+    if otro and otro['nombre'] != (await repo.get_cargo_by_id(cargo_id))['nombre']:
+        raise HTTPException(status_code=400, detail=f"Ya existe el cargo «{otro['nombre']}».")
+    alias = await repo.find_cargo_id_by_name_or_alias(nombre)
+    if alias and alias != cargo_id:
+        raise HTTPException(status_code=400, detail=f"«{nombre}» ya es el nombre de otro cargo en BioAlba. Únalos en vez de renombrar.")
+    return nombre
+
+
+@router.get("/cargos/{cargo_id}/uso/", response_model=Dict[str, Any])
+async def uso_del_cargo(cargo_id: int, db: Database = Depends(get_db),
+                        current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))):
+    """Cuántas personas tienen el cargo y qué reglas de bono lo nombran (se muestra antes de renombrar o unir)."""
+    from backend.repositories.cargo import CargoRepository
+    repo = CargoRepository(db)
+    if not await repo.get_cargo_by_id(cargo_id):
+        raise HTTPException(status_code=404, detail="Cargo no encontrado")
+    return await repo.uso_del_cargo(cargo_id)
+
+
+@router.put("/cargos/{cargo_id}/renombrar/", response_model=Dict[str, Any])
+async def renombrar_cargo(cargo_id: int, req: CargoRenombrarRequest, db: Database = Depends(get_db),
+                          current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))):
+    """Cambia el nombre de un cargo (etapa B3b del plan de bonos). El anterior queda como alias para BioAlba."""
+    from backend.repositories.cargo import CargoRepository
+    repo = CargoRepository(db)
+    if not await repo.get_cargo_by_id(cargo_id):
+        raise HTTPException(status_code=404, detail="Cargo no encontrado")
+    nombre = await _validar_nombre_cargo(repo, req.nombre, cargo_id)
+    anterior = await repo.renombrar(cargo_id, nombre)
+    ConfiguracionRepository._bonos_cache = None
+    await _auditar(db, current_user, "RENOMBRAR_CARGO", f"Cargo '{anterior}' (ID: {cargo_id}) renombrado a '{nombre}'; '{anterior}' queda como alias.")
+    return {"id": cargo_id, "nombre": nombre, "anterior": anterior}
+
+
+@router.post("/cargos/{cargo_id}/unir/", response_model=Dict[str, Any])
+async def unir_cargo(cargo_id: int, req: CargoUnirRequest, db: Database = Depends(get_db),
+                     current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))):
+    """Une el cargo con otro (etapa B3b): sus personas, alias y reglas de bono pasan al destino y el cargo se borra."""
+    from backend.repositories.cargo import CargoRepository
+    repo = CargoRepository(db)
+    origen, destino = await repo.get_cargo_by_id(cargo_id), await repo.get_cargo_by_id(req.destino_id)
+    if not origen or not destino:
+        raise HTTPException(status_code=404, detail="Cargo no encontrado")
+    if cargo_id == req.destino_id:
+        raise HTTPException(status_code=400, detail="Elija otro cargo para unir.")
+    uso = await repo.unir(cargo_id, req.destino_id)
+    ConfiguracionRepository._bonos_cache = None
+    await _auditar(db, current_user, "UNIR_CARGOS",
+                   f"Cargo '{origen['nombre']}' (ID: {cargo_id}) unido en '{destino['nombre']}' (ID: {req.destino_id}): "
+                   f"{uso['personas']} personas y {len(uso['reglas'])} reglas de bono; '{origen['nombre']}' queda como alias.")
+    return {"origen": origen['nombre'], "destino": destino['nombre'], **uso}
+
+
 @router.delete("/cargos/alias/{alias_id}", status_code=204)
 async def delete_cargo_alias(
     alias_id: int,
