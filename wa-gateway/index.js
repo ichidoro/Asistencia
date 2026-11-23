@@ -28,7 +28,8 @@ async function conectar() {
   });
 }
 
-const jidDe = (t) => { const d = String(t || '').replace(/\D/g, ''); return d.length >= 8 ? `${d}@s.whatsapp.net` : ''; };
+// Un número (solo dígitos) va a su chat; un grupo llega ya como «…@g.us».
+const jidDe = (t) => { const s = String(t || '').trim(); if (/^[0-9-]+@g\.us$/.test(s)) return s; const d = s.replace(/\D/g, ''); return d.length >= 8 ? `${d}@s.whatsapp.net` : ''; };
 const leer = (req) => new Promise((ok, no) => { let b = ''; req.on('data', c => { b += c; if (b.length > 20000) { no(new Error('grande')); req.destroy(); } }); req.on('end', () => ok(b)); });
 const responder = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
@@ -37,6 +38,20 @@ http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/estado') return responder(res, 200, { estado, hayQr: !!qr });
     if (req.method === 'GET' && req.url === '/qr') return responder(res, 200, { estado, qr: qr ? await QRCode.toDataURL(qr, { margin: 1, width: 320 }) : null });
+    // Los grupos en los que está el número (para asignarles avisos).
+    if (req.method === 'GET' && req.url === '/chats') {
+      if (estado !== 'conectado' || !sock) return responder(res, 503, { error: 'WhatsApp no está conectado' });
+      const g = await sock.groupFetchAllParticipating();
+      return responder(res, 200, { grupos: Object.values(g).map(x => ({ id: x.id, nombre: x.subject })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')) });
+    }
+    // Corta la conexión: cierra la sesión en WhatsApp (el cierre borra las credenciales y deja listo un QR nuevo).
+    if (req.method === 'POST' && req.url === '/desconectar') {
+      const habia = !!sock;
+      try { await sock?.logout(); } catch (e) { console.log('[wa] logout falló, se limpia igual:', e.message || e); }
+      // Con socket, el cierre por logout ya limpia y reconecta (ver connection.update); sin socket se hace acá.
+      if (!habia) { require('fs').rmSync(AUTH_DIR, { recursive: true, force: true }); qr = null; estado = 'desconectado'; conectar().catch(e => console.error('[wa]', e)); }
+      return responder(res, 200, { ok: true });
+    }
     if (req.method === 'POST' && req.url === '/enviar') {
       const { to, text } = JSON.parse(await leer(req));
       const jid = jidDe(to);

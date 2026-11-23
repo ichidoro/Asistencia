@@ -2767,66 +2767,137 @@ window.cargarMapaCodigo = async function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
     const esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
-    let timer = null;
+    let timer = null, grupos = null;
 
-    function pintar(d) {
-        const c = document.getElementById('whatsapp-container');
+    async function api(metodo, ruta, cuerpo) {
+        const r = await fetch('/api/whatsapp' + ruta, { method: metodo, headers: H(), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+        const j = await r.json().catch(function () { return {}; });
+        return { ok: r.ok, j: j };
+    }
+    const msg = function (t) { const e = document.getElementById('wa-msg'); if (e) e.innerHTML = t; };
+
+    // ── Estado, QR, cortar conexión y prueba ──
+    function pintarEstado(d) {
+        const c = document.getElementById('wa-estado');
         if (!c) return;
         const ok = d.estado === 'conectado';
-        let h = '<div class="p-3" style="max-width:640px;">'
-            + '<h5 class="mb-1">WhatsApp de avisos</h5>'
-            + '<p class="text-muted" style="font-size:0.9rem;">Número propio que envía los avisos a las personas. Se vincula una vez escaneando un código QR.</p>'
-            + '<p><b>Estado:</b> <span class="badge ' + (ok ? 'bg-success' : 'bg-secondary') + '">' + esc(TXT[d.estado] || d.estado) + '</span></p>';
+        let h = '<p><b>Estado:</b> <span class="badge ' + (ok ? 'bg-success' : 'bg-secondary') + '">' + esc(TXT[d.estado] || d.estado) + '</span></p>';
         if (d.qr) h += '<div class="mb-3"><img src="' + esc(d.qr) + '" alt="Código QR" width="260" height="260"><div class="text-muted" style="font-size:0.85rem;">En el teléfono: WhatsApp → Dispositivos vinculados → Vincular un dispositivo.</div></div>';
         if (ok) {
-            h += '<div class="mb-4"><label class="form-label fw-semibold">Mensaje de prueba</label><div class="d-flex gap-2">'
-                + '<input id="wa-tel" class="form-control" placeholder="Celular, ej. 9 1234 5678" inputmode="tel" style="max-width:240px;">'
-                + '<button class="btn btn-outline-primary" id="wa-prueba">Enviar prueba</button></div></div>'
-                + '<div class="mb-2"><label class="form-label fw-semibold">Resumen semanal de horas (Bolsa vs meta)</label>'
-                + '<div class="text-muted mb-2" style="font-size:0.85rem;">Llega a cada persona de Bolsa Flexible con celular cargado. Se envía los lunes a las 08:00 si el cron está instalado en el servidor.</div>'
-                + '<button class="btn btn-outline-secondary me-2" id="wa-simular">Simular (no envía)</button>'
-                + '<button class="btn btn-primary" id="wa-enviar">Enviar ahora a todos</button></div>';
+            h += '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">'
+                + '<input id="wa-tel" class="form-control" placeholder="Celular de prueba, ej. 9 1234 5678" inputmode="tel" style="max-width:260px;">'
+                + '<button class="btn btn-outline-primary" id="wa-prueba">Enviar prueba</button>'
+                + '<button class="btn btn-outline-danger ms-auto" id="wa-cortar">Cortar conexión</button></div>';
         }
-        h += '<div id="wa-msg" class="mt-3" style="font-size:0.9rem;"></div></div>';
         c.innerHTML = h;
-        const msg = function (t) { document.getElementById('wa-msg').innerHTML = t; };
         const b = function (id, fn) { const e = document.getElementById(id); if (e) e.onclick = fn; };
         b('wa-prueba', async function () {
             msg('Enviando…');
-            const r = await fetch('/api/whatsapp/prueba', { method: 'POST', headers: H(), body: JSON.stringify({ telefono: document.getElementById('wa-tel').value }) });
-            const j = await r.json().catch(function () { return {}; });
-            msg(r.ok ? 'Prueba enviada.' : esc(j.detail || 'No se pudo enviar.'));
+            const r = await api('POST', '/prueba', { telefono: document.getElementById('wa-tel').value });
+            msg(r.ok ? 'Prueba enviada.' : esc(r.j.detail || 'No se pudo enviar.'));
         });
-        const resumen = async function (simular) {
-            msg(simular ? 'Calculando…' : 'Enviando… puede tardar unos minutos.');
-            const r = await fetch('/api/whatsapp/resumen-semanal', { method: 'POST', headers: H(), body: JSON.stringify({ simular: simular }) });
-            const j = await r.json().catch(function () { return {}; });
-            if (!r.ok) return msg(esc(j.detail || 'Error al calcular el resumen.'));
-            let t = '<b>' + j.personas + '</b> personas en Bolsa, <b>' + j.con_telefono + '</b> con celular válido.';
-            if ((j.sin_telefono || []).length) t += '<div class="text-muted">Sin celular: ' + esc(j.sin_telefono.join(', ')) + '</div>';
-            if (simular) t += (j.vista_previa || []).slice(0, 2).map(function (v) { return '<pre class="mt-2 p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.nombre) + ' → ' + esc(v.telefono || 'sin celular') + '\n\n' + esc(v.mensaje) + '</pre>'; }).join('');
-            else t += '<div class="mt-1">Enviados: <b>' + j.enviados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
-            msg(t);
-        };
-        b('wa-simular', function () { resumen(true); });
-        b('wa-enviar', function () {
-            if (window.confirm('Se enviará el resumen por WhatsApp a todas las personas de Bolsa con celular. ¿Continuar?')) resumen(false);
+        b('wa-cortar', async function () {
+            if (!window.confirm('Se cerrará la sesión de WhatsApp de este número y dejarán de enviarse los avisos hasta vincularlo de nuevo con un QR. ¿Cortar la conexión?')) return;
+            msg('Cortando…');
+            const r = await api('POST', '/desconectar');
+            grupos = null;
+            msg(r.ok ? 'Conexión cortada. En unos segundos aparece un QR nuevo.' : esc(r.j.detail || 'No se pudo cortar.'));
         });
+    }
+
+    // ── Avisos automáticos: encender y asignar chats ──
+    function pintarAvisos(cfg, conectado) {
+        const c = document.getElementById('wa-avisos');
+        if (!c) return;
+        c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(lunes 08:00, si el cron está instalado en el servidor)</span></h6>'
+            + cfg.avisos.map(function (a) {
+                const usaChats = !!a.usa_chats;
+                let h = '<div class="border rounded p-3 mb-3" data-aviso="' + esc(a.aviso) + '">'
+                    + '<div class="d-flex justify-content-between align-items-start gap-3"><div><b>' + esc(a.nombre) + '</b>'
+                    + '<div class="text-muted" style="font-size:0.85rem;">' + esc(a.descripcion) + '</div></div>'
+                    + '<div class="form-check form-switch"><input class="form-check-input wa-sw" type="checkbox" role="switch"' + (a.activo ? ' checked' : '') + '><label class="form-check-label" style="font-size:0.85rem;">Automático</label></div></div>';
+                if (usaChats) {
+                    h += '<div class="mt-2" style="font-size:0.9rem;"><b>Se envía a:</b> ';
+                    h += a.destinos.length ? a.destinos.map(function (d) {
+                        const nom = d.etiqueta || d.destino;
+                        return '<span class="badge bg-light text-dark border me-1">' + esc(nom) + (d.destino.indexOf('@g.us') > 0 ? ' (grupo)' : '') + ' <a href="#" class="wa-quitar text-danger text-decoration-none" data-id="' + d.id + '" title="Quitar">✕</a></span>';
+                    }).join('') : '<span class="text-muted">ningún chat asignado</span>';
+                    h += '</div><div class="d-flex flex-wrap gap-2 mt-2">'
+                        + '<select class="form-select wa-grupo" style="max-width:260px;"><option value="">Agregar un grupo…</option>'
+                        + (grupos || []).map(function (g) { return '<option value="' + esc(g.id) + '">' + esc(g.nombre) + '</option>'; }).join('') + '</select>'
+                        + '<input class="form-control wa-num" placeholder="o un celular: 9 1234 5678" inputmode="tel" style="max-width:200px;">'
+                        + '<input class="form-control wa-eti" placeholder="Nombre (opcional)" style="max-width:170px;">'
+                        + '<button class="btn btn-outline-primary wa-add">Asignar</button></div>';
+                    if (conectado && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">El número no está en ningún grupo: agréguelo a uno en WhatsApp o asigne un celular.</div>';
+                }
+                h += '<div class="mt-3"><button class="btn btn-sm btn-outline-secondary me-2 wa-sim">Simular (no envía)</button>'
+                    + '<button class="btn btn-sm btn-primary wa-env">Enviar ahora</button></div></div>';
+                return h;
+            }).join('');
+
+        c.querySelectorAll('[data-aviso]').forEach(function (box) {
+            const aviso = box.getAttribute('data-aviso');
+            box.querySelector('.wa-sw').onchange = async function (ev) {
+                const r = await api('PUT', '/avisos/' + aviso, { activo: ev.target.checked });
+                if (!r.ok) { msg(esc(r.j.detail || 'No se pudo cambiar.')); ev.target.checked = !ev.target.checked; } else msg('Guardado.');
+            };
+            box.querySelectorAll('.wa-quitar').forEach(function (a) {
+                a.onclick = async function (ev) { ev.preventDefault(); await api('DELETE', '/destinos/' + a.getAttribute('data-id')); cargarAvisos(); };
+            });
+            const add = box.querySelector('.wa-add');
+            if (add) add.onclick = async function () {
+                const sel = box.querySelector('.wa-grupo'), num = box.querySelector('.wa-num').value.trim(), eti = box.querySelector('.wa-eti').value.trim();
+                const destino = sel.value || num;
+                if (!destino) { msg('Elija un grupo o escriba un celular.'); return; }
+                const nombreGrupo = sel.value ? sel.options[sel.selectedIndex].text : '';
+                const r = await api('POST', '/avisos/' + aviso + '/destinos', { destino: destino, etiqueta: eti || nombreGrupo });
+                if (!r.ok) { msg(esc(r.j.detail || 'No se pudo asignar.')); return; }
+                msg('Chat asignado.'); cargarAvisos();
+            };
+            const correr = async function (simular) {
+                msg(simular ? 'Calculando…' : 'Enviando… puede tardar unos minutos.');
+                const r = await api('POST', '/resumen-semanal', { simular: simular, aviso: aviso });
+                if (!r.ok) return msg(esc(r.j.detail || 'Error al calcular el resumen.'));
+                const j = r.j;
+                let t = '<b>' + j.personas + '</b> personas en Bolsa. ';
+                t += j.chats != null ? 'Chats asignados: <b>' + j.chats + '</b>.' : '<b>' + j.con_telefono + '</b> con celular válido.';
+                if ((j.sin_telefono || []).length) t += '<div class="text-muted">Sin celular: ' + esc(j.sin_telefono.join(', ')) + '</div>';
+                if (simular) t += (j.vista_previa || []).slice(0, 2).map(function (v) { return '<pre class="mt-2 p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.nombre) + ' → ' + esc(v.telefono || 'sin celular') + '\n\n' + esc(v.mensaje) + '</pre>'; }).join('');
+                else t += '<div class="mt-1">Enviados: <b>' + j.enviados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
+                msg(t);
+            };
+            box.querySelector('.wa-sim').onclick = function () { correr(true); };
+            box.querySelector('.wa-env').onclick = function () { if (window.confirm('Se enviará este aviso por WhatsApp ahora mismo. ¿Continuar?')) correr(false); };
+        });
+    }
+
+    async function cargarAvisos() {
+        const [cfg, gr] = await Promise.all([api('GET', '/config'), grupos ? Promise.resolve(null) : api('GET', '/grupos')]);
+        if (gr && gr.ok) grupos = gr.j.grupos || [];
+        if (cfg.ok) pintarAvisos(cfg.j, true);
     }
 
     window.cargarWhatsapp = async function () {
         clearInterval(timer);
+        const c = document.getElementById('whatsapp-container');
+        c.innerHTML = '<div class="p-3" style="max-width:700px;"><h5 class="mb-1">WhatsApp de avisos</h5>'
+            + '<p class="text-muted" style="font-size:0.9rem;">Número propio que envía los avisos. Se vincula una vez escaneando un código QR; luego se asigna qué aviso va a qué chat.</p>'
+            + '<div id="wa-estado">Consultando…</div><div id="wa-avisos"></div><div id="wa-msg" class="mt-3" style="font-size:0.9rem;"></div></div>';
+        grupos = null;
+        let ultimo = null;
         const consultar = async function () {
             const tab = document.getElementById('tab-whatsapp');
             if (!tab || !tab.classList.contains('active')) { clearInterval(timer); return; }
-            const c = document.getElementById('whatsapp-container');
             try {
-                const r = await fetch('/api/whatsapp/estado', { headers: H() });
-                if (!r.ok) throw new Error(r.status);
-                const d = await r.json();
-                // Se repinta solo si cambió el estado o hay QR (se renueva); así no se pisa lo que la persona esté escribiendo.
-                if (c.dataset.estado !== d.estado || d.qr) { c.dataset.estado = d.estado; pintar(d); }
-            } catch (e) { c.innerHTML = '<div class="p-3 text-muted">No se pudo consultar el estado de WhatsApp.</div>'; }
+                const r = await api('GET', '/estado');
+                if (!r.ok) throw new Error('estado');
+                const d = r.j;
+                // Se repinta el estado solo si cambió o hay QR (se renueva); así no se pisa lo que la persona esté escribiendo.
+                if (ultimo !== d.estado || d.qr) {
+                    const cambio = ultimo !== d.estado; ultimo = d.estado; pintarEstado(d);
+                    if (cambio) { grupos = null; if (d.estado === 'conectado') cargarAvisos(); else document.getElementById('wa-avisos').innerHTML = ''; }
+                }
+            } catch (e) { document.getElementById('wa-estado').innerHTML = '<span class="text-muted">No se pudo consultar el estado de WhatsApp.</span>'; }
         };
         await consultar();
         timer = setInterval(consultar, 4000);

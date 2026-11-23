@@ -21,6 +21,14 @@ def normalizar_telefono(tel: object) -> Optional[str]:
     return None
 
 
+def destino_valido(destino: object) -> Optional[str]:
+    """Un grupo («123-456@g.us», tal como lo entrega la puerta) o un celular chileno. None si no sirve."""
+    s = str(destino or "").strip()
+    if re.fullmatch(r"[0-9-]+@g\.us", s):
+        return s
+    return normalizar_telefono(s)
+
+
 def activo() -> bool:
     return bool(settings.WHATSAPP_ENABLED and settings.WHATSAPP_GATEWAY_TOKEN)
 
@@ -33,10 +41,10 @@ async def _llamar(metodo: str, ruta: str, cuerpo: Optional[dict] = None) -> tupl
 
 
 async def enviar(telefono: object, texto: str) -> bool:
-    """True solo si la puerta aceptó el mensaje."""
+    """True solo si la puerta aceptó el mensaje. `telefono` es un celular o un grupo."""
     if not activo():
         return False
-    num = normalizar_telefono(telefono)
+    num = destino_valido(telefono)
     if not num or not texto:
         logger.warning("WhatsApp: teléfono o texto inválido, no se envía.")
         return False
@@ -47,6 +55,30 @@ async def enviar(telefono: object, texto: str) -> bool:
         return codigo == 200
     except Exception as e:
         logger.warning(f"WhatsApp: no se pudo enviar ({e})")
+        return False
+
+
+async def grupos() -> list:
+    """Grupos de WhatsApp en los que está el número ([] si no está conectado)."""
+    if not activo():
+        return []
+    try:
+        codigo, r = await _llamar("GET", "/chats")
+        return r.get("grupos", []) if codigo == 200 else []
+    except Exception as e:
+        logger.warning(f"WhatsApp: no se pudieron leer los grupos ({e})")
+        return []
+
+
+async def desconectar() -> bool:
+    """Cierra la sesión en WhatsApp y deja la puerta pidiendo un QR nuevo."""
+    if not activo():
+        return False
+    try:
+        codigo, _ = await _llamar("POST", "/desconectar")
+        return codigo == 200
+    except Exception as e:
+        logger.warning(f"WhatsApp: no se pudo desconectar ({e})")
         return False
 
 
