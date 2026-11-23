@@ -109,3 +109,16 @@ def test_buscar_contacto_desempata_o_marca_ambiguo():
     # sin nada más para decidir hay dos posibles: no se elige
     estado, lista = buscar_contacto("JUAN", "SOTO", "", [{"id": "1@s.whatsapp.net", "nombre": "Juan Soto"}, {"id": "9@s.whatsapp.net", "nombre": "Soto Juan"}])
     assert estado == "ambiguo" and len(lista) == 2
+
+
+def test_lo_fijado_a_mano_manda_sobre_la_busqueda_por_nombre():
+    from backend.services.whatsapp_resumen import resolver_destino
+    cs = [{"id": "1@s.whatsapp.net", "nombre": "Daniel Soto"}]
+    # sin nada manual se busca por nombre
+    assert resolver_destino("Daniel", "Soto", "", None, cs)[0] == "ok"
+    # con asignación manual manda ella, aunque haya un contacto que calce
+    est, c = resolver_destino("Daniel", "Soto", "", {"destino": "56911112222", "etiqueta": "Daniel Aguacol"}, cs)
+    assert est == "manual" and c == {"id": "56911112222", "nombre": "Daniel Aguacol"}
+    # una persona que no está en los contactos pero tiene número a mano sí queda con destino
+    assert resolver_destino("Ana", "Rojas", "", {"destino": "56933334444", "etiqueta": ""}, cs)[1]["nombre"] == "56933334444"
+    assert resolver_destino("Ana", "Rojas", "", None, cs) == ("ninguno", None)

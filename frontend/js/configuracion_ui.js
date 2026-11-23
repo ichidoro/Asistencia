@@ -2834,6 +2834,7 @@ window.cargarMapaCodigo = async function () {
                         + '<button class="btn btn-outline-primary wa-add">Asignar</button></div>';
                     if (conectado && contactos && !contactos.length && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">WhatsApp entrega los contactos al vincular y aún no llegó ninguno: puede escribir un celular, o cortar la conexión y vincular de nuevo.</div>';
                 }
+                if (!usaChats) h += '<div class="mt-2"><button class="btn btn-sm btn-outline-primary wa-personas">Revisar y asignar contacto por persona</button><div class="wa-personas-box mt-2"></div></div>';
                 h += '<div class="mt-3"><button class="btn btn-sm btn-outline-secondary me-2 wa-sim">Simular (no envía)</button>'
                     + '<button class="btn btn-sm btn-primary wa-env">Enviar ahora</button></div></div>';
                 return h;
@@ -2871,8 +2872,43 @@ window.cargarMapaCodigo = async function () {
                 else t += '<div class="mt-1">Enviados: <b>' + j.enviados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
                 msg(t);
             };
+            const bp = box.querySelector('.wa-personas');
+            if (bp) bp.onclick = function () { cargarPersonas(box.querySelector('.wa-personas-box')); };
             box.querySelector('.wa-sim').onclick = function () { correr(true); };
             box.querySelector('.wa-env').onclick = function () { if (window.confirm('Se enviará este aviso por WhatsApp ahora mismo. ¿Continuar?')) correr(false); };
+        });
+    }
+
+    // ── Contacto por persona: ver a quién llega cada resumen y fijarlo a mano ──
+    const ETIQ = { manual: 'Manual', ok: 'Por nombre', ambiguo: 'Ambiguo', ninguno: 'Sin contacto' };
+    const COL = { manual: 'bg-primary', ok: 'bg-success', ambiguo: 'bg-warning text-dark', ninguno: 'bg-danger' };
+    async function cargarPersonas(caja) {
+        caja.innerHTML = 'Cargando…';
+        const r = await api('GET', '/personas');
+        if (!r.ok) { caja.innerHTML = esc(r.j.detail || 'No se pudo cargar.'); return; }
+        const orden = { ninguno: 0, ambiguo: 1, ok: 2, manual: 3 };
+        const lista = r.j.personas.slice().sort(function (a, b) { return orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre, 'es'); });
+        caja.innerHTML = '<div style="max-height:380px;overflow:auto;"><table class="table table-sm align-middle" style="font-size:0.82rem;"><thead><tr><th>Persona</th><th>Estado</th><th>Contacto / número</th><th>Asignar a mano</th></tr></thead><tbody>'
+            + lista.map(function (p) {
+                const cand = p.candidatos && p.candidatos.length ? '<div class="text-muted">¿' + esc(p.candidatos.join(' o ')) + '?</div>' : '';
+                return '<tr data-emp="' + p.emp_id + '"><td>' + esc(p.nombre) + '</td><td><span class="badge ' + COL[p.estado] + '">' + ETIQ[p.estado] + '</span></td>'
+                    + '<td>' + (p.contacto ? esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
+                    + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" list="wa-lista" placeholder="Contacto o celular" style="min-width:170px;">'
+                    + '<button class="btn btn-sm btn-outline-primary wp-ok">Guardar</button>'
+                    + (p.estado === 'manual' ? '<button class="btn btn-sm btn-outline-danger wp-no" title="Volver a buscar por nombre">✕</button>' : '') + '</div></td></tr>';
+            }).join('') + '</tbody></table></div>';
+        caja.querySelectorAll('tr[data-emp]').forEach(function (tr) {
+            const emp = tr.getAttribute('data-emp');
+            tr.querySelector('.wp-ok').onclick = async function () {
+                const texto = tr.querySelector('.wp-in').value.trim();
+                if (!texto) { msg('Elija un contacto o escriba un celular.'); return; }
+                const hit = elegibles.get(texto);
+                const g = await api('PUT', '/personas/' + emp + '/destino', { destino: hit ? hit.id : texto, etiqueta: hit ? hit.nombre : '' });
+                if (!g.ok) { msg(esc(g.j.detail || 'No se pudo guardar.')); return; }
+                msg('Guardado.'); cargarPersonas(caja);
+            };
+            const no = tr.querySelector('.wp-no');
+            if (no) no.onclick = async function () { await api('DELETE', '/personas/' + emp + '/destino'); cargarPersonas(caja); };
         });
     }
 

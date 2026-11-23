@@ -33,6 +33,11 @@ class AvisoIn(BaseModel):
     activo: bool
 
 
+class PersonaDestinoIn(BaseModel):
+    destino: str
+    etiqueta: str = ""
+
+
 class DestinoIn(BaseModel):
     destino: str
     etiqueta: str = ""
@@ -77,6 +82,28 @@ async def grupos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
 async def contactos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
     """Contactos agregados en el teléfono vinculado, para asignarles avisos."""
     return {"contactos": await whatsapp_service.contactos()}
+
+
+@router.get("/personas")
+async def personas(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    """Personas de Bolsa y a qué contacto llegaría su resumen (encontrado por nombre o fijado a mano)."""
+    repo = await _repo(db)
+    return {"personas": await whatsapp_resumen.listar_personas(AsistenciaService(AsistenciaRepository(db)), _hoy(), await repo.destinos_personas())}
+
+
+@router.put("/personas/{emp_id}/destino")
+async def fijar_persona(emp_id: int, datos: PersonaDestinoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    destino = whatsapp_service.destino_valido(datos.destino)
+    if not destino:
+        raise HTTPException(400, "Destino inválido: elija un contacto o escriba un celular chileno (9 1234 5678).")
+    await (await _repo(db)).fijar_persona(emp_id, destino, datos.etiqueta.strip()[:80])
+    return {"ok": True}
+
+
+@router.delete("/personas/{emp_id}/destino")
+async def quitar_persona(emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    await (await _repo(db)).quitar_persona(emp_id)
+    return {"ok": True}
 
 
 @router.get("/config")
@@ -140,8 +167,9 @@ async def resumen_semanal(datos: ResumenIn, db: Database = Depends(get_db), _: S
     meta = _aviso_o_404(datos.aviso)
     if not datos.simular and not whatsapp_service.activo():
         raise HTTPException(503, "WhatsApp está apagado (WHATSAPP_ENABLED / token).")
-    destinos = [d["destino"] for d in await (await _repo(db)).destinos(datos.aviso)] if meta["usa_chats"] else None
-    return await whatsapp_resumen.enviar_resumen(AsistenciaService(AsistenciaRepository(db)), _hoy(), datos.simular, datos.aviso, destinos)
+    repo = await _repo(db)
+    destinos = [d["destino"] for d in await repo.destinos(datos.aviso)] if meta["usa_chats"] else None
+    return await whatsapp_resumen.enviar_resumen(AsistenciaService(AsistenciaRepository(db)), _hoy(), datos.simular, datos.aviso, destinos, await repo.destinos_personas())
 
 
 @router.post("/resumen-semanal/cron")

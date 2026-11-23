@@ -24,6 +24,22 @@ class WhatsappRepository:
                 )
             """)
 
+        if not await self.db.table_exists("whatsapp_persona_destino"):
+            await self.db.execute("CREATE TABLE IF NOT EXISTS whatsapp_persona_destino (emp_id INTEGER PRIMARY KEY, destino TEXT NOT NULL, etiqueta TEXT)")
+
+    async def destinos_personas(self) -> Dict[int, Dict[str, Any]]:
+        """Contacto o número elegido a mano para cada persona (manda sobre la búsqueda por nombre)."""
+        return {int(r["emp_id"]): r for r in await self.db.fetch_all("SELECT emp_id, destino, etiqueta FROM whatsapp_persona_destino")}
+
+    async def fijar_persona(self, emp_id: int, destino: str, etiqueta: str) -> None:
+        await self.db.execute(
+            "INSERT INTO whatsapp_persona_destino (emp_id, destino, etiqueta) VALUES (?, ?, ?) ON CONFLICT (emp_id) DO UPDATE SET destino = excluded.destino, etiqueta = excluded.etiqueta",
+            (emp_id, destino, etiqueta),
+        )
+
+    async def quitar_persona(self, emp_id: int) -> None:
+        await self.db.execute("DELETE FROM whatsapp_persona_destino WHERE emp_id = ?", (emp_id,))
+
     async def avisos_activos(self) -> Dict[str, bool]:
         return {r["aviso"]: bool(r["activo"]) for r in await self.db.fetch_all("SELECT aviso, activo FROM whatsapp_avisos")}
 

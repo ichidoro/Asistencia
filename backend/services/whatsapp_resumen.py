@@ -65,6 +65,13 @@ def buscar_contacto(nombre: str, paterno: str, materno: str, contactos: List[Dic
     return ("ok", ganadores[0]) if len(ganadores) == 1 else ("ambiguo", ganadores)
 
 
+def resolver_destino(nombre: str, paterno: str, materno: str, manual: Dict[str, Any] | None, contactos: List[Dict[str, Any]]) -> tuple:
+    """Lo elegido a mano manda; si no hay, se busca por nombre. Devuelve (estado, contacto) con estado manual | ok | ambiguo | ninguno."""
+    if manual and manual.get("destino"):
+        return "manual", {"id": manual["destino"], "nombre": manual.get("etiqueta") or manual["destino"]}
+    return buscar_contacto(nombre, paterno, materno, contactos)
+
+
 def _numero_de(jid: str) -> str:
     n = str(jid).split("@")[0]
     return ("+" + n) if jid.endswith("@s.whatsapp.net") else n
@@ -113,7 +120,7 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
     return "\n".join(lineas)
 
 
-async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]] | None = None) -> Dict[str, Any]:
+async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None) -> Dict[str, Any]:
     """Una fila por persona activa en Bolsa Flexible y el tramo vigente. El destino sale de los contactos del teléfono (por nombre):
     los números de la ficha no se usan porque pueden estar mal. `estado`: ok | ambiguo | ninguno."""
     from backend.services.cuadre_service import CuadreService
@@ -127,20 +134,28 @@ async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]
         if not f.get("esBolsa") or f.get("activo") != "SÍ":
             continue
         c = fichas.get(int(f["emp_id"])) or {}
-        estado, hallado = buscar_contacto(c.get("nombre") or "", c.get("apellido_paterno") or "", c.get("apellido_materno") or "", contactos or [])
+        estado, hallado = resolver_destino(c.get("nombre") or "", c.get("apellido_paterno") or "", c.get("apellido_materno") or "", (manuales or {}).get(int(f["emp_id"])), contactos or [])
+        con = estado in ("ok", "manual")
         personas.append({
             "emp_id": f["emp_id"], "nombre": f["nombre"], "acum": f["acumBolsa"], "meta": f["metaMin"], "estado": estado,
-            "telefono": hallado["id"] if estado == "ok" else None, "contacto": hallado["nombre"] if estado == "ok" else None,
+            "telefono": hallado["id"] if con else None, "contacto": hallado["nombre"] if con else None,
             "candidatos": [x["nombre"] for x in hallado] if estado == "ambiguo" else [],
             "mensaje": armar_mensaje(c.get("nombre") or "", f["acumBolsa"], f["metaMin"], inicio, fin, hoy),
         })
     return {"inicio": inicio, "fin": fin, "personas": personas}
 
 
+async def listar_personas(asistencia_service, hoy: str, manuales: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Cada persona de Bolsa con el contacto que se le encontró (o su estado), para revisarlo y fijarlo a mano en la pantalla."""
+    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales)
+    return [{"emp_id": i["emp_id"], "nombre": i["nombre"], "estado": i["estado"], "contacto": i["contacto"],
+             "numero": _numero_de(i["telefono"]) if i["telefono"] else None, "candidatos": i["candidatos"]} for i in base["personas"]]
+
+
 async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, aviso: str = "resumen_personal",
-                         destinos: List[str] | None = None) -> Dict[str, Any]:
+                         destinos: List[str] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None) -> Dict[str, Any]:
     """simular=True no envía nada: devuelve a quién y qué se enviaría. `destinos` solo para el aviso a chats."""
-    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos())
+    base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales)
     personas = base["personas"]
     if aviso == "resumen_jefatura":
         texto = armar_mensaje_jefatura(personas, base["inicio"], base["fin"], hoy)
@@ -161,7 +176,7 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
 
     con_tel = [i for i in personas if i["telefono"]]
     res = {"simulado": simular, "aviso": aviso, "personas": len(personas), "con_contacto": len(con_tel),
-           "sin_contacto": [i["nombre"] for i in personas if i["estado"] == "ninguno"],
+           "sin_contacto": [i["nombre"] for i in personas if i["estado"] == "ninguno"], "manuales": sum(1 for i in personas if i["estado"] == "manual"),
            "ambiguos": [f"{i['nombre']} (¿{' o '.join(i['candidatos'])}?)" for i in personas if i["estado"] == "ambiguo"]}
     if simular:
         res["coincidencias"] = [{"persona": i["nombre"], "contacto": i["contacto"], "numero": _numero_de(i["telefono"])} for i in con_tel]
@@ -187,5 +202,5 @@ async def enviar_automaticos(asistencia_service, repo, hoy: str) -> Dict[str, An
         if not activos.get(aviso):
             continue
         chats = [d["destino"] for d in await repo.destinos(aviso)] if AVISOS[aviso]["usa_chats"] else None
-        out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats)
+        out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats, manuales=await repo.destinos_personas())
     return out
