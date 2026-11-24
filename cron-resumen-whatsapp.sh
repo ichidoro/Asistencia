@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Resumen semanal de horas (Bolsa vs meta) por WhatsApp. Llama a POST /api/whatsapp/resumen-semanal/cron.
+# Resumen diario de horas (lunes a viernes) (Bolsa vs meta) por WhatsApp. Llama a POST /api/whatsapp/resumen-semanal/cron.
 # cron sugerido (lunes a viernes 08:00):  0 8 * * 1-5 bash /ruta/asistencia/cron-resumen-whatsapp.sh >> /ruta/asistencia/logs/cron_whatsapp.log 2>&1
 set -euo pipefail
 cd "$(dirname "$0")"

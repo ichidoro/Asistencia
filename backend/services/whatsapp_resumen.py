@@ -1,4 +1,4 @@
-"""Resumen semanal por WhatsApp: cuánto lleva cada persona de la Bolsa Flexible frente a su meta (180 h) en el tramo vigente.
+"""Resumen diario de horas por WhatsApp (lunes a viernes): cuánto lleva cada persona de la Bolsa Flexible frente a su meta (180 h) en el tramo vigente.
 
 Usa los mismos números que la grilla y el cierre (ReportService.datos_periodo: acumBolsa, metaMin), no recalcula reglas.
 Hay dos avisos: uno para cada persona (a su propio celular) y uno consolidado para los chats que se asignen (jefatura).
@@ -19,12 +19,12 @@ MAX_LINEAS_JEFATURA = 50    # el mensaje de WhatsApp se corta en 4000 caracteres
 # Catálogo de avisos automáticos (lunes a viernes 08:00). `usa_chats`: van a los chats asignados; si no, a cada persona.
 AVISOS = {
     "resumen_personal": {
-        "nombre": "Resumen semanal a cada persona",
+        "nombre": "Resumen diario de horas a cada persona",
         "descripcion": "A cada persona de Bolsa Flexible, en su propio WhatsApp: cuánto lleva de su meta de 180 h y cuánto le falta. Solo le llega a quien tenga un contacto asignado a mano (los números de la ficha no se usan).",
         "usa_chats": False,
     },
     "resumen_jefatura": {
-        "nombre": "Resumen semanal a jefatura",
+        "nombre": "Resumen diario de horas a jefatura",
         "descripcion": "A las personas que se asignen (de cualquier área): todas las personas del filtro, de más a menos horas, con quiénes ya cumplieron la meta del período y a quiénes les falta.",
         "usa_chats": True,
     },
@@ -90,7 +90,7 @@ def armar_mensaje(nombre: str, acum_min: float, meta_min: float, inicio: str, fi
     partes = (nombre or "").split()
     saludo = f"Estimado/a {partes[0].capitalize()}," if partes else "Estimado/a,"
     lineas = [
-        "*RESUMEN SEMANAL DE HORAS*",
+        "*RESUMEN DIARIO DE HORAS*",
         f"Bolsa Flexible · Período {_dm(inicio)} al {_dm(fin)}",
         "",
         saludo,
@@ -132,7 +132,7 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
     prom = round(sum(min(i["acum"] / i["meta"], 1) for i in con_meta) / len(con_meta) * 100) if con_meta else 0
     plazo = "hoy es el último día" if dias == 0 else f"quedan {_dias(dias)}"
     lineas = [
-        "*RESUMEN SEMANAL · BOLSA DE HORAS*",
+        "*RESUMEN DIARIO · BOLSA DE HORAS*",
         f"Período {_dm(inicio)} al {_dm(fin)} · {plazo}",
         "",
         f"▪ Con meta cumplida: *{len(cumplen)} de {len(con_meta)}*" + (f" ({round(len(cumplen) / len(con_meta) * 100)} %)" if con_meta else ""),
@@ -261,7 +261,7 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
         else:
             fallidos += 1
         await asyncio.sleep(PAUSA_ENTRE_ENVIOS_SEG)
-    logger.info(f"WhatsApp resumen semanal: {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin contacto")
+    logger.info(f"WhatsApp resumen diario: {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin contacto")
     res.update(enviados=enviados, fallidos=fallidos)
     return res
 
