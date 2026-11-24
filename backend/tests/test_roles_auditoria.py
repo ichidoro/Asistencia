@@ -53,3 +53,13 @@ def test_la_pantalla_pide_confirmacion_antes_de_dejar_un_rol_global():
     # y el servidor escribe el detalle del cambio en la auditoría
     router = (RAIZ / "backend/routers/seguridad.py").read_text(encoding="utf-8")
     assert "detalle_cambio_rol" in router and "permisos_antes" in router
+
+
+def test_el_token_se_renueva_cuando_le_queda_menos_de_la_mitad():
+    from backend.core.security import token_para_renovar
+    from backend.repositories.seguridad import TOKEN_MINUTOS
+    ahora = 1_000_000.0
+    vida = TOKEN_MINUTOS * 60
+    assert token_para_renovar(ahora + vida * 0.9, ahora) is False      # recién emitido
+    assert token_para_renovar(ahora + vida * 0.4, ahora) is True       # pasó más de la mitad
+    assert token_para_renovar(None, ahora) is False                    # sin vencimiento no hay nada que renovar

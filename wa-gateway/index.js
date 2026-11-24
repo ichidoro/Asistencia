@@ -32,12 +32,46 @@ function anotarContactos(lista, soloNuevos) {
 }
 
 // /data/auth es un volumen montado: no se puede borrar la carpeta (EBUSY), solo su contenido.
-function limpiarAuth() { const fs = require('fs'); for (const f of fs.readdirSync(AUTH_DIR)) fs.rmSync(AUTH_DIR + '/' + f, { recursive: true, force: true }); }
+// contactos.json se conserva: es solo la libreta (nombre y número), no la sesión. Si hay que volver a escanear el QR, la lista sigue ahí
+// y los avisos ya asignados (que viven en la base de la app, con su número) siguen apuntando a los mismos contactos.
+function limpiarAuth() { const fs = require('fs'); for (const f of fs.readdirSync(AUTH_DIR)) if (f !== 'contactos.json') fs.rmSync(AUTH_DIR + '/' + f, { recursive: true, force: true }); }
+
+// Copia de las credenciales dentro del mismo volumen: si un corte de luz o un reinicio deja creds.json a medio escribir, se restaura
+// en vez de pedir otro QR. Se borra junto con la sesión cuando WhatsApp la cierra de verdad (limpiarAuth).
+const CREDS = () => AUTH_DIR + '/creds.json', RESPALDO = () => AUTH_DIR + '/_respaldo/creds.json';
+const jsonValido = (ruta) => { try { JSON.parse(require('fs').readFileSync(ruta, 'utf8')); return true; } catch { return false; } };
+function respaldarCreds() {
+  const fs = require('fs');
+  try { if (jsonValido(CREDS())) { fs.mkdirSync(AUTH_DIR + '/_respaldo', { recursive: true }); fs.copyFileSync(CREDS(), RESPALDO()); } } catch (e) { console.error('[wa] no se respaldaron las credenciales', e.message); }
+}
+function restaurarCredsSiHaceFalta() {
+  const fs = require('fs');
+  try { if (!jsonValido(CREDS()) && jsonValido(RESPALDO())) { fs.copyFileSync(RESPALDO(), CREDS()); console.log('[wa] credenciales restauradas desde el respaldo'); } } catch (e) { console.error('[wa] no se pudo restaurar el respaldo', e.message); }
+}
+
+// Reconexión: un solo reintento pendiente a la vez, con espera creciente (5 s → 60 s) y sin rendirse nunca: antes, si conectar() fallaba
+// (p. ej. sin internet un momento), no se reintentaba y la puerta quedaba desconectada hasta reiniciar el contenedor.
+let reintento = null, fallos = 0;
+function programarReconexion() {
+  if (reintento) return;
+  const espera = Math.min(60000, 5000 * 2 ** Math.min(fallos, 4));
+  reintento = setTimeout(async () => {
+    reintento = null;
+    try { await conectar(); } catch (e) { fallos++; console.error('[wa] no pudo conectar, se reintenta', e.message || e); estado = 'desconectado'; programarReconexion(); }
+  }, espera);
+}
+// Red de seguridad: si por cualquier motivo no hay conexión ni reintento pendiente, se vuelve a intentar.
+setInterval(() => { if (estado === 'desconectado' && !sock && !reintento) programarReconexion(); }, 60000);
+// Respaldo periódico de las credenciales mientras la sesión está activa.
+setInterval(() => { if (estado === 'conectado') respaldarCreds(); }, 30 * 60 * 1000);
 
 async function conectar() {
   estado = 'conectando';
+  restaurarCredsSiHaceFalta();
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  sock = makeWASocket({ auth: state, logger: pino({ level: 'silent' }), printQRInTerminal: false });
+  // keepAliveIntervalMs: latido frecuente para que la conexión no se corte por inactividad; markOnlineOnConnect:false para no
+  // aparecer «en línea» ni quitar las notificaciones del teléfono.
+  sock = makeWASocket({ auth: state, logger: pino({ level: 'silent' }), printQRInTerminal: false, keepAliveIntervalMs: 25000, markOnlineOnConnect: false });
   sock.ev.on('creds.update', saveCreds);
   cargarContactos();
   sock.ev.on('contacts.upsert', anotarContactos);
@@ -50,7 +84,8 @@ async function conectar() {
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr: nuevo }) => {
     if (nuevo) qr = nuevo;
     if (connection === 'open') {
-      estado = 'conectado'; qr = null; console.log('[wa] conectado');
+      estado = 'conectado'; qr = null; fallos = 0; console.log('[wa] conectado');
+      respaldarCreds();
       // La libreta de contactos solo llega al vincular; si falta (sesión anterior a esta función) se vuelve a pedir su estado de sincronización.
       if (contactos.size === 0) setTimeout(async () => {
         // La versión ya guardada de esa colección hace que solo lleguen novedades: se borra para que WhatsApp mande la libreta completa.
@@ -62,9 +97,10 @@ async function conectar() {
       const code = lastDisconnect?.error?.output?.statusCode;
       sock = null; qr = null; estado = 'desconectado';
       console.log('[wa] cerrado, código', code);
-      // Sesión cerrada desde el teléfono: se borra para pedir un QR nuevo; cualquier otro cierre reintenta.
-      if (code === DisconnectReason.loggedOut) { limpiarAuth(); contactos.clear(); }
-      setTimeout(() => conectar().catch(e => console.error('[wa]', e)), 5000);
+      // Sesión cerrada desde el teléfono: se borra la sesión para pedir un QR nuevo (la libreta de contactos se conserva); cualquier otro cierre reintenta.
+      if (code === DisconnectReason.loggedOut) limpiarAuth();
+      else fallos = Math.min(fallos + 1, 4);
+      programarReconexion();
     }
   });
 }
@@ -92,7 +128,7 @@ http.createServer(async (req, res) => {
       const habia = !!sock;
       try { await sock?.logout(); } catch (e) { console.log('[wa] logout falló, se limpia igual:', e.message || e); }
       // Con socket, el cierre por logout ya limpia y reconecta (ver connection.update); sin socket se hace acá.
-      if (!habia) { limpiarAuth(); contactos.clear(); qr = null; estado = 'desconectado'; conectar().catch(e => console.error('[wa]', e)); }
+      if (!habia) { limpiarAuth(); qr = null; estado = 'desconectado'; programarReconexion(); }
       return responder(res, 200, { ok: true });
     }
     if (req.method === 'POST' && req.url === '/enviar') {
@@ -109,4 +145,4 @@ http.createServer(async (req, res) => {
 
 // Un fallo suelto (p. ej. no poder guardar credenciales) se registra y no tumba la puerta.
 process.on('unhandledRejection', (e) => console.error('[wa] error no controlado', e));
-conectar().catch(e => console.error('[wa] no pudo iniciar', e));
+conectar().catch(e => { console.error('[wa] no pudo iniciar, se reintenta', e); estado = 'desconectado'; programarReconexion(); });
