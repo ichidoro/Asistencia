@@ -2969,7 +2969,13 @@ window.cargarMapaCodigo = async function () {
             enlazarMulti(box, aviso, selecciones[aviso], function () { if (cajaPersonas && cajaPersonas.innerHTML) cargarPersonas(cajaPersonas); });
             box.querySelector('.wa-sw').onchange = async function (ev) {
                 const r = await api('PUT', '/avisos/' + aviso, { activo: ev.target.checked });
-                if (!r.ok) { msg(esc(r.j.detail || 'No se pudo cambiar.')); ev.target.checked = !ev.target.checked; } else msg('Guardado.');
+                // El motivo se muestra aquí mismo (el mensaje general queda al final de la página y pasaba inadvertido); si falta destinatario, se abre la tabla para marcarlo.
+                let er = box.querySelector('.wa-err');
+                if (!er) { er = document.createElement('div'); er.className = 'wa-err alert alert-warning py-2 mt-2 mb-0'; er.style.fontSize = '0.85rem'; box.querySelector('.wa-sw').closest('.d-flex').after(er); }
+                if (!r.ok) {
+                    er.textContent = r.j.detail || 'No se pudo cambiar.'; ev.target.checked = !ev.target.checked; msg(esc(er.textContent));
+                    const bp = box.querySelector('.wa-personas'); if (bp && !cajaPersonas.innerHTML) bp.click();
+                } else { er.remove(); msg('Guardado.'); }
             };
             box.querySelectorAll('.wa-quitar').forEach(function (a) {
                 a.onclick = async function (ev) { ev.preventDefault(); await api('DELETE', '/destinos/' + a.getAttribute('data-id')); cargarAvisos(); };
