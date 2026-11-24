@@ -29,6 +29,33 @@ scheduler = AsyncIOScheduler()
 ESTADOS_POR_DEFINIR = ('PENDIENTE', 'EN_CURSO')
 
 
+async def _recalcular_hoy_si_cambio_el_calculo(asist_service):
+    """Si cambió el código que calcula (huella distinta a la guardada), recalcula una vez el día de hoy de quienes tienen
+    marcas hoy, sin forzar: respeta lo validado o rechazado a mano y lo cerrado (decisión del dueño, 23-11-2026). Si la
+    huella es la misma, no hace nada."""
+    try:
+        from backend.services.huella_calculo import CLAVE_AJUSTE, huella
+        from backend.services.quantum_matrix_engine import _get_now_local
+        actual = huella()
+        guardada = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = ?", (CLAVE_AJUSTE,))
+        if guardada and guardada["valor"] == actual:
+            logger.info("🔄 [Startup] El cálculo no cambió: el día de hoy no se recalcula.")
+            return
+        hoy = _get_now_local().strftime("%Y-%m-%d")
+        if guardada:
+            filas = await db.fetch_all("SELECT DISTINCT empleado_id FROM logs_raw WHERE fecha_hora LIKE ?", (hoy + "%",))
+            ids = {r["empleado_id"] for r in filas}
+            n = await asist_service.procesar_dia(hoy, force=False, empleado_ids=ids) if ids else 0
+            logger.success(f"✅ [Startup] Cambió el cálculo: se recalculó hoy ({hoy}) a {n} personas con marcas.")
+        # La primera vez solo se guarda la huella: no hay con qué comparar
+        await db.execute(
+            "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
+            (CLAVE_AJUSTE, actual, "Huella del código que calcula la asistencia (la pone el sistema al arrancar; no se edita)"))
+        await db.execute("UPDATE ajustes SET valor = ?, updated_at = CURRENT_TIMESTAMP WHERE clave = ?", (actual, CLAVE_AJUSTE))
+    except Exception as e:
+        logger.warning(f"⚠️ [Startup] No se pudo revisar la huella del cálculo: {e}")
+
+
 async def _recalcular_periodo_activo():
     """
     Completa al arrancar los días del período activo que no tienen resultado o que siguen por definir.
@@ -119,6 +146,7 @@ async def _recalcular_periodo_activo():
 
         logger.success(f"✅ [Startup] Recálculo automático completado: {len(dias_a_recalc)} días revisados, "
                        f"{completados} resultados calculados (faltaban o seguían por definir).")
+        await _recalcular_hoy_si_cambio_el_calculo(asist_service)
 
     except Exception as e:
         logger.error(f"❌ [Startup] Error en recálculo automático del período activo: {e}")

@@ -2629,6 +2629,7 @@ class AsistenciaService:
             SELECT a.*, t.nombre as turno_nombre,
                    t.tolerancia_retraso_descuento as tolerancia_atraso_turno,
                    t.tolerancia_salida_adelantada as tolerancia_salida_turno,
+                   t.ventana_en_curso_minutos as ventana_en_curso_turno,
                    he.estado as estado_he,
                    he.minutos_autorizados as minutos_extra_autorizados,
                    COALESCE((SELECT SUM(minutos) FROM compensaciones_he_inasistencia WHERE empleado_id = a.empleado_id AND fecha_inasistencia = a.fecha), 0.0) as minutos_compensados_he,
@@ -2813,6 +2814,12 @@ class AsistenciaService:
         for (eid, f_lib) in libretas_map.keys():
             if eid in matrix and f_lib not in matrix[eid]:
                 pendientes_recalculo.append((eid, f_lib))
+
+        # Días de hoy «en curso» con la espera de su horario vencida: se recalculan solo esos (pocas filas), para que no
+        # sigan «en curso» hasta mañana si la persona no volvió a marcar (decisión del dueño, 23-11-2026)
+        from backend.services.en_curso_vencido import vencidos
+        pendientes_recalculo.extend(vencidos((a for a in asistencias if a.get('empleado_id') in matrix), hoy_str,
+                                             _get_now_local()))
 
         MAX_RECALCULO_LECTURA = 300
         for (eid, f_rec) in pendientes_recalculo[:MAX_RECALCULO_LECTURA]:

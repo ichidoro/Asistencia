@@ -1,7 +1,7 @@
 {
- "archivos_revisados": 186,
+ "archivos_revisados": 188,
  "repetidas": {
-  "total": 148,
+  "total": 149,
   "top": [
    {
     "nombre": "esc",
@@ -136,7 +136,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1606,
+  "total": 1614,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -161,7 +161,7 @@
    {
     "funcion": "get_matrix_data_with_projections",
     "archivo": "backend/services/asistencia_service.py",
-    "lineas": 460
+    "lineas": 467
    },
    {
     "funcion": "render_pdf",
@@ -201,7 +201,7 @@
   },
   {
    "archivo": "backend/services/asistencia_service.py",
-   "lineas": 3439
+   "lineas": 3446
   },
   {
    "archivo": "frontend/js/sync_wizard.js",
