@@ -85,7 +85,8 @@
         const boton = (clase, texto, tit) => '<span class="bs-dia ' + clase + (editable ? ' bs-click' : '') + '" title="' + esc(tit) + '">' + texto + '</span>';
         // La sigla de la justificación del día se ve siempre, para no marcar por error un día que no trabajó (dueño, 23-11-2026)
         const sigla = (r.justif || {})[fecha];
-        const contJ = () => (sigla ? esc(sigla) : (typeof normal === 'function' ? normal() : ''));
+        // La etiqueta de estado de siempre (la de la vista Conceptos); la sigla sola solo si esa etiqueta no viene
+        const contJ = () => { const n = typeof normal === 'function' ? normal() : ''; return n || (sigla ? esc(sigla) : ''); };
         let html;
         // En blanco: el Fill Rate se gana; solo se ve lo que cambia la semana (dueño, 23-11-2026)
         if (cod === 'cumple') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para cambiar' : ''));
