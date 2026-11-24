@@ -280,6 +280,16 @@ const AuthService = {
                     }
                 });
 
+                // Cuenta que entra a Configuración solo por un permiso suelto (p. ej. WhatsApp) y no tiene «Ver»:
+                // las pestañas sin permiso propio quedan ocultas y se abre la primera que sí puede usar.
+                if (!AuthService.hasPermission('configuracion.ver')) {
+                    document.querySelectorAll('.cfg-item:not([data-permiso])').forEach(el => {
+                        el.classList.add('d-none'); el.style.display = 'none';
+                    });
+                    const primera = Array.from(document.querySelectorAll('.cfg-item[data-permiso]')).find(el => el.style.display !== 'none');
+                    if (primera) setTimeout(() => primera.click(), 0);
+                }
+
                 AuthService._ui_secured = true;
                 document.body.setAttribute('data-ui-secured', 'true');
                 resolve();
