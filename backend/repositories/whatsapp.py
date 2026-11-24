@@ -88,9 +88,10 @@ class WhatsappRepository:
     async def quitar_destino(self, destino_id: int) -> None:
         await self.db.execute("DELETE FROM whatsapp_destinos WHERE id = ?", (destino_id,))
 
-    async def empleados_activos(self) -> List[Dict[str, Any]]:
-        """Personas activas de Asistencia, para asignarles un aviso a chats."""
-        return await self.db.fetch_all("SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, a.nombre AS area FROM empleados e LEFT JOIN areas a ON a.id = e.area_id WHERE e.activo = 1 ORDER BY e.nombre, e.apellido_paterno")
+    async def empleados_activos(self, solo_art22: bool = False) -> List[Dict[str, Any]]:
+        """Personas activas de Asistencia, para asignarles un aviso a chats. solo_art22: solo las de Artículo 22 (excluido_asistencia = 1)."""
+        extra = " AND e.excluido_asistencia = 1" if solo_art22 else ""
+        return await self.db.fetch_all("SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, a.nombre AS area FROM empleados e LEFT JOIN areas a ON a.id = e.area_id WHERE e.activo = 1" + extra + " ORDER BY e.nombre, e.apellido_paterno")
 
     async def empleado(self, emp_id: int) -> Dict[str, Any] | None:
         return await self.db.fetch_one("SELECT nombre, apellido_paterno, apellido_materno FROM empleados WHERE id = ?", (emp_id,))

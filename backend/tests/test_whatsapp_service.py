@@ -221,3 +221,23 @@ def test_listar_destinatarios_marca_quien_recibe_y_respeta_el_filtro(monkeypatch
     por = {x["emp_id"]: x for x in r}
     assert por[2]["recibe"] and por[2]["estado"] == "ok" and por[2]["numero"] == "+56911112222" and not por[1]["recibe"] and por[1]["estado"] == "ninguno"
     assert por[1]["incluida"] and por[2]["incluida"] and not por[3]["incluida"]
+
+
+def test_resumen_a_jefatura_lista_solo_articulo_22(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+    pedido = {}
+
+    class Repo:
+        async def destinos_personas(self): return {}
+        async def destinos(self, aviso): return []
+        async def empleados_activos(self, solo_art22=False):
+            pedido["solo_art22"] = solo_art22
+            return []
+
+    async def contactos(): return []
+    monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
+    asyncio.run(wr.listar_destinatarios(None, Repo(), "resumen_jefatura"))
+    assert pedido["solo_art22"] is True
+    asyncio.run(wr.listar_destinatarios(None, Repo(), "exceso_velocidad"))
+    assert pedido["solo_art22"] is False

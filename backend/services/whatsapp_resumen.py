@@ -25,8 +25,9 @@ AVISOS = {
     },
     "resumen_jefatura": {
         "nombre": "Resumen semanal a jefatura",
-        "descripcion": "A los chats que se asignen: quiénes van más atrás de la meta del período, ordenados de menor a mayor avance.",
+        "descripcion": "A las personas de Artículo 22 que se asignen: quiénes van más atrás de la meta del período, ordenados de menor a mayor avance.",
         "usa_chats": True,
+        "solo_art22": True,  # los destinatarios se eligen entre el personal de Artículo 22 (jefatura)
     },
     "exceso_velocidad": {
         "nombre": "Alerta de exceso de velocidad (en vivo)",
@@ -202,7 +203,7 @@ async def listar_destinatarios(db: Any, repo: Any, aviso: str, filtro: Dict[str,
     contactos, manuales = await whatsapp_service.contactos(), await repo.destinos_personas()
     asignadas = {str(d["destino"]) for d in await repo.destinos(aviso)}
     out = []
-    for f in await repo.empleados_activos():
+    for f in await repo.empleados_activos(solo_art22=bool(AVISOS.get(aviso, {}).get("solo_art22"))):
         nombre = " ".join(str(f[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(f[k] or "").strip())
         estado, hallado = resolver_destino(f["nombre"] or "", f["apellido_paterno"] or "", f["apellido_materno"] or "", manuales.get(int(f["id"])), contactos)
         con = estado in ("ok", "manual")

@@ -175,6 +175,8 @@ async def agregar_persona_destino(aviso: str, emp_id: int, db: Database = Depend
     f = await repo.empleado(emp_id)
     if not f:
         raise HTTPException(404, "Esa persona no existe.")
+    if whatsapp_resumen.AVISOS[aviso].get("solo_art22") and emp_id not in {int(x["id"]) for x in await repo.empleados_activos(solo_art22=True)}:
+        raise HTTPException(400, "Este aviso solo se asigna a personal de Artículo 22.")
     nombre = " ".join(str(f[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(f[k] or "").strip())
     await repo.agregar_destino(aviso, whatsapp_resumen.PREFIJO_PERSONA + str(emp_id), nombre[:80])
     return {"ok": True}
