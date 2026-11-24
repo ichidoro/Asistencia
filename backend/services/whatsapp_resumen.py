@@ -143,26 +143,46 @@ def armar_mensaje(nombre: str, acum_min: float, meta_min: float, inicio: str, fi
     return "\n".join(lineas)
 
 
+RITMO_ALTO_H = 10  # sobre estas horas diarias para llegar a la meta se marca el caso como difícil de alcanzar
+
+
+def _nombre_propio(n: object) -> str:
+    """«PIÑA LONCOÑANCO JUAN» → «Piña Loncoñanco Juan» (la ficha viene en mayúsculas)."""
+    return " ".join(w.capitalize() for w in str(n or "").split())
+
+
+def _pct_pendiente(acum: float, meta: float) -> int:
+    """Avance de quien aún no llega: se trunca y nunca pasa de 99 (179:45 de 180:00 no es «100 %»)."""
+    return min(99, int(acum / meta * 100))
+
+
 def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, hoy: str) -> str:
-    """Consolidado: las personas que aún no llegan a la meta, de menor a mayor avance."""
+    """Consolidado: las personas que aún no llegan a la meta, de menor a mayor avance, con lo que necesitan por día para llegar."""
     dias = max(0, (date.fromisoformat(fin) - date.fromisoformat(hoy)).days)
     con_meta = [i for i in items if i["meta"] > 0]
+    sin_meta = len(items) - len(con_meta)
     cumplen = [i for i in con_meta if i["acum"] >= i["meta"]]
     atras = sorted((i for i in con_meta if i["acum"] < i["meta"]), key=lambda i: i["acum"] / i["meta"])
     prom = round(sum(min(i["acum"] / i["meta"], 1) for i in con_meta) / len(con_meta) * 100) if con_meta else 0
+    plazo = "hoy es el último día" if dias == 0 else f"quedan {_dias(dias)}"
     lineas = [
         "*RESUMEN SEMANAL · BOLSA DE HORAS*",
-        f"Período {_dm(inicio)} al {_dm(fin)} · quedan {_dias(dias)}",
+        f"Período {_dm(inicio)} al {_dm(fin)} · {plazo}",
         "",
-        f"▪ Personas en seguimiento: *{len(items)}*",
-        f"▪ Meta cumplida: *{len(cumplen)}*",
+        f"▪ Con meta cumplida: *{len(cumplen)} de {len(con_meta)}*" + (f" ({round(len(cumplen) / len(con_meta) * 100)} %)" if con_meta else ""),
         f"▪ Pendientes: *{len(atras)}*",
         f"▪ Avance promedio: *{prom} %*  {_barra(prom)}",
     ]
+    if sin_meta:
+        lineas.append(f"▪ Sin meta definida: {sin_meta}")
     if atras:
-        lineas += ["", "*Pendientes, de menor a mayor avance*"]
+        d = max(dias, 1)
+        lineas += ["", f"*Pendientes* (de menor a mayor avance)", f"🔴 requiere más de {RITMO_ALTO_H} h diarias · 🟡 alcanzable", ""]
         for n, i in enumerate(atras[:MAX_LINEAS_JEFATURA], 1):
-            lineas.append(f"{n}. {i['nombre']} · *{round(i['acum'] / i['meta'] * 100)} %* · {_hhmm(i['acum'])} de {_hhmm(i['meta'])} h · faltan {_hhmm(i['meta'] - i['acum'])} h")
+            falta = i["meta"] - i["acum"]
+            marca = "🔴" if falta / d > RITMO_ALTO_H * 60 else "🟡"
+            lineas.append(f"{marca} *{_nombre_propio(i['nombre'])}* · {_pct_pendiente(i['acum'], i['meta'])} %")
+            lineas.append(f"     {_hhmm(i['acum'])} de {_hhmm(i['meta'])} h · faltan *{_hhmm(falta)} h*" + (f" (≈ {_hhmm(falta / d)} h por día)" if dias > 1 else ""))
         if len(atras) > MAX_LINEAS_JEFATURA:
             lineas.append(f"… y {len(atras) - MAX_LINEAS_JEFATURA} más.")
     else:

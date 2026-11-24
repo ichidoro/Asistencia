@@ -80,9 +80,17 @@ def test_mensaje_jefatura_ordena_de_menor_a_mayor_avance():
         {"nombre": "Cami", "acum": 50 * 60, "meta": 180 * 60},
     ]
     m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-23")
-    assert "Meta cumplida: *1*" in m and "Pendientes: *2*" in m and "Avance promedio: *61 %*" in m
+    assert "Con meta cumplida: *1 de 3*" in m and "Pendientes: *2*" in m and "Avance promedio: *61 %*" in m and "quedan 2 días" in m
     assert m.index("Cami") < m.index("Ana") and "Beto" not in m
-    assert "1. Cami · *28 %* · 50:00 de 180:00 h · faltan 130:00 h" in m
+    assert "🔴 *Cami* · 27 %" in m and "50:00 de 180:00 h · faltan *130:00 h* (≈ 65:00 h por día)" in m
+
+
+def test_mensaje_jefatura_nombres_sin_gritar_y_nunca_100_pendiente():
+    from backend.services.whatsapp_resumen import armar_mensaje_jefatura
+    items = [{"nombre": "SILVA BRIONES JAVIER", "acum": 179 * 60 + 45, "meta": 180 * 60}, {"nombre": "SIN META", "acum": 0, "meta": 0}]
+    m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-25")
+    assert "Silva Briones Javier* · 99 %" in m and "100 %" not in m.split("Pendientes*")[1]
+    assert "hoy es el último día" in m and "Sin meta definida: 1" in m and "🟡" in m
 
 
 def test_destino_valido_acepta_contacto_del_telefono():
