@@ -241,3 +241,13 @@ def test_resumen_a_jefatura_lista_solo_articulo_22(monkeypatch):
     assert pedido["solo_art22"] is True
     asyncio.run(wr.listar_destinatarios(None, Repo(), "exceso_velocidad"))
     assert pedido["solo_art22"] is False
+
+
+def test_revisar_velocidad_responde_con_el_nombre_del_aviso(monkeypatch):
+    import asyncio
+    from backend.services import alerta_velocidad as av
+
+    async def flota(ruta, params): return {"flota": []}
+    monkeypatch.setattr(av.gps_nexacol, "_get", flota)
+    r = asyncio.run(av.revisar([], True, [], {}))
+    assert r["aviso"] == "exceso_velocidad" and r["sobre_limite"] == 0 and r["a_avisar"] == 0

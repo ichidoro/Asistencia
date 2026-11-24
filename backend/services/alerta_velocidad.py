@@ -90,7 +90,7 @@ async def revisar(destinos: List[str], simular: bool = True, choferes: List[Dict
     for e in por_avisar:
         e["estado_chofer"], hallado = contacto_del_chofer(e["chofer"], choferes or [], manuales or {}, contactos)
         e["destino_chofer"] = hallado["id"] if hallado else None
-    res: Dict[str, Any] = {"simulado": simular, "limite": LIMITE_KMH, "sobre_limite": len(excesos), "a_avisar": len(por_avisar),
+    res: Dict[str, Any] = {"simulado": simular, "aviso": "exceso_velocidad", "limite": LIMITE_KMH, "sobre_limite": len(excesos), "a_avisar": len(por_avisar),
                            "vista_previa": [{"patente": e["patente"], "chofer": e["chofer"], "chofer_recibe": e["destino_chofer"] is not None, "estado_chofer": e["estado_chofer"],
                                              "mensaje_jefatura": armar_mensaje(e), "mensaje_chofer": armar_mensaje_chofer(e)} for e in por_avisar[:2]]}
     if simular:
