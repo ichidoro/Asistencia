@@ -83,6 +83,9 @@
         const cod = (r.dias || {})[fecha];
         const editable = puedeEditar();
         const boton = (clase, texto, tit) => '<span class="bs-dia ' + clase + (editable ? ' bs-click' : '') + '" title="' + esc(tit) + '">' + texto + '</span>';
+        // La sigla de la justificación del día se ve siempre, para no marcar por error un día que no trabajó (dueño, 23-11-2026)
+        const sigla = (r.justif || {})[fecha];
+        const contJ = () => (sigla ? esc(sigla) : (typeof normal === 'function' ? normal() : ''));
         let html;
         // En blanco: el Fill Rate se gana; solo se ve lo que cambia la semana (dueño, 23-11-2026)
         if (cod === 'cumple') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para cambiar' : ''));
@@ -94,11 +97,18 @@
         else if (cod === 'pierde' || cod === 'proporcion') {
             const p = (r.perdidos || []).find(x => x.fecha === fecha);
             html = '<span class="bs-just ' + (cod === 'pierde' ? 'bs-x' : 'bs-pr') + '" title="' + esc(cod === 'pierde' ? 'Hace perder la semana: ' + (p ? p.causa : '') : 'Descuenta en proporción') + '">'
-                + (typeof normal === 'function' ? normal() : '') + '</span>';
-        } else if (cod === 'justificado') html = '<span class="bs-just bs-okj" title="Justificado: cuenta como cumplido">' + (typeof normal === 'function' ? normal() : '') + '</span>';
+                + contJ() + '</span>';
+        } else if (cod === 'justificado') html = '<span class="bs-just bs-okj" title="Justificado: cuenta como cumplido · no puede tener nota de crédito">' + contJ() + '</span>';
         else if (cod === 'libre') html = '<span class="bs-libre">' + (typeof normal === 'function' ? normal() : '') + '</span>';
         else if (cod === 'fuera') html = '<span class="bs-na" title="Sin turno ese día">·</span>';
         else html = '<span class="bs-na" title="Esta semana termina en el período siguiente y se evalúa ahí">' + (typeof normal === 'function' ? normal() : '') + '</span>';
+        // Cuántas notas de crédito tiene el día, con su número y razón al pasar el mouse
+        const ncs = (r.notas_credito || []).filter(n => n.fecha === fecha);
+        if (ncs.length) {
+            const tit = ncs.map(n => (n.numero ? 'NC ' + n.numero : 'NC sin número') + ' · ' + (n.razon || '') + (n.descuenta && n.monto ? ' · descuenta ' + pesos(n.monto) : '')
+                + (n.rol === 'peoneta' ? ' (del chofer con que iba)' : '')).join(' | ');
+            html += '<span class="bs-ncn" title="' + esc(tit) + '">NC' + (ncs.length > 1 ? '×' + ncs.length : '') + '</span>';
+        }
         return '<div class="bs-cel">' + html + '</div>';
     };
 
@@ -117,6 +127,7 @@
             + '<span><span class="bs-dia bs-x">N/C</span> no cumple: pierde la semana</span>'
             + '<span><span class="bs-just bs-okj">DEOP</span> justificado que cuenta como cumplido</span>'
             + '<span><span class="bs-just bs-pr">DEOP</span> justificado en proporción</span>'
+            + '<span><span class="bs-ncn">NC</span> tiene nota de crédito (×2: dos o más)</span>'
             + '<span>«Total semana»: el resultado de cada semana</span>'
             + (puedeEditar() ? '<span class="text-muted">Clic en un día: «Cumple» o «No cumple»</span>' : '');
     };
@@ -140,9 +151,10 @@
             .sort((a, b) => String(a.nombre_completo || '').localeCompare(String(b.nombre_completo || ''), 'es'));
     }
 
-    // Clic en un día de la vista (dueño, 23-11-2026): «Cumple» o «No cumple», con nota de crédito y su razón (si la razón
-    // es culpa del chofer, no cumple; si no, cumple), comentario y, para un chofer, los peonetas que iban con él ese día
-    // (reciben la misma marca). Se abre con lo que ya estaba, para corregirlo.
+    // Clic en un día de la vista (dueño, 23-11-2026): «Cumple» o «No cumple», con las notas de crédito del día (cada una
+    // con su número y su razón; si alguna es culpa del chofer, no cumple; si no, cumple; si la razón descuenta los
+    // productos, pide su valor), comentario y, para un chofer, los peonetas que iban con él ese día (reciben la misma
+    // marca). Se abre con lo que ya estaba, para corregirlo.
     window.mxBsMarcar = async function (empId, fecha) {
         const b = bonoSemanal();
         const d = datos();
@@ -151,103 +163,148 @@
         const r = evalDe(emp);
         if (!r) return;
         const cod = (r.dias || {})[fecha];
+        const sigla = (r.justif || {})[fecha];
         if (!['ok', 'nc', 'pendiente', 'cumple'].includes(cod)) {
             if (window.Avisos) window.Avisos.info(cod === 'libre' ? 'Día libre o feriado: no se evalúa.'
-                : cod === 'justificado' || cod === 'proporcion' || cod === 'pierde' ? 'Día justificado o con inasistencia: lo decide la configuración del bono.'
-                    : 'Este día no se evalúa en este período.');
+                : sigla ? 'Ese día tiene «' + sigla + '»: no trabajó, así que no se evalúa ni puede tener nota de crédito.'
+                    : cod === 'justificado' || cod === 'proporcion' || cod === 'pierde' ? 'Día justificado o con inasistencia: lo decide la configuración del bono.'
+                        : 'Este día no se evalúa en este período.');
             return;
         }
         if (!puedeEditar()) { if (window.Avisos) window.Avisos.info('Período cerrado o sin permiso para cambiarlo.'); return; }
         const quien = emp.nombre_completo || emp.nombre || '';
         const previa = (r.marcas || {})[fecha] || {};
-        const lista = (await razones()).filter(x => x.activa || x.id === previa.razon_nc_id);
+        const notasPrevias = (r.notas_credito || []).filter(n => n.fecha === fecha && n.rol === 'chofer');
+        const todas = await razones();
+        const usadas = new Set(notasPrevias.map(n => n.razon));
+        const lista = todas.filter(x => x.activa || usadas.has(x.nombre));
         const esChofer = typeof window.categoriaCargo === 'function' && window.categoriaCargo(emp.cargo || '') === 'chofer';
         let peon = [], propuestos = [];
         if (esChofer) {
             peon = peonetasConBono();
-            try {
-                const rr = await fetch('/api/asistencia/bono-semanal/acompanantes/?chofer_id=' + Number(empId) + '&fecha=' + fecha, { headers: authHead() });
-                propuestos = rr.ok ? ((await rr.json()).peonetas_ids || []) : [];
-            } catch (e) { propuestos = []; }
+            const guardados = (notasPrevias[0] && notasPrevias[0].peonetas_ids) || [];
+            if (guardados.length) propuestos = guardados;
+            else {
+                try {
+                    const rr = await fetch('/api/asistencia/bono-semanal/acompanantes/?chofer_id=' + Number(empId) + '&fecha=' + fecha, { headers: authHead() });
+                    propuestos = rr.ok ? ((await rr.json()).peonetas_ids || []) : [];
+                } catch (e) { propuestos = []; }
+            }
         }
         const nombreDe = p => (window.nombreTitulo ? window.nombreTitulo(p.nombre_completo) : p.nombre_completo);
         const opsPeon = sel => '<option value="">Ninguno</option>' + peon.map(p => '<option value="' + p.id + '"'
             + (Number(sel) === Number(p.id) ? ' selected' : '') + '>' + esc(nombreDe(p)) + '</option>').join('');
-        const opsRazon = '<option value="">Elija la razón…</option>' + lista.map(x => '<option value="' + x.id + '" data-culpa="' + (x.culpa_chofer ? 1 : 0) + '"'
-            + (previa.razon_nc_id === x.id ? ' selected' : '') + '>' + esc(x.nombre) + (x.culpa_chofer ? ' · culpa del chofer' : ' · no es culpa del chofer') + '</option>').join('');
+        const opsRazon = nombreSel => '<option value="">Elija la razón…</option>' + lista.map(x => '<option value="' + x.id + '" data-culpa="' + (x.culpa_chofer ? 1 : 0) + '" data-desc="' + (x.descuenta_productos ? 1 : 0) + '"'
+            + (nombreSel && x.nombre === nombreSel ? ' selected' : '') + '>' + esc(x.nombre) + (x.culpa_chofer ? ' · culpa del chofer' : ' · no es culpa del chofer')
+            + (x.descuenta_productos ? ' · descuenta productos' : '') + '</option>').join('');
+        // Una fila por nota de crédito: número, razón y, si la razón descuenta los productos, su valor
+        const filaNota = (n) => '<div class="bs-nota">'
+            + '<input type="text" class="bs-nota-num" maxlength="40" placeholder="N° de la nota" aria-label="Número de la nota de crédito" value="' + esc((n && n.numero) || '') + '">'
+            + '<select class="bs-nota-razon" aria-label="Razón de la nota de crédito">' + opsRazon(n && n.razon) + '</select>'
+            + '<input type="number" class="bs-nota-monto" min="1" step="1" placeholder="Valor $" aria-label="Valor de los productos a descontar" value="' + (n && n.monto ? Math.round(n.monto) : '') + '">'
+            + '<button type="button" class="bs-nota-quitar" aria-label="Quitar esta nota de crédito" title="Quitar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>'
+            + '</div>';
         // Encabezado: el nombre de la persona; debajo, el bono y el día (dueño, 23-11-2026)
         const yaMarcado = !!previa.marca;
         const html = '<div class="av-quien">' + esc(b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha) + (yaMarcado ? ' · editar evaluación' : '')) + '</div>'
             + '<div class="av-tx">' + (yaMarcado ? 'Hoy está marcado <b>«' + (previa.marca === 'cumple' ? 'Cumple' : 'No cumple') + '»</b>' + (previa.usuario ? ' por ' + esc(previa.usuario) : '')
-                + (previa.tiene_nc && previa.razon_nc ? ', con nota de crédito por ' + esc(previa.razon_nc) : '') + '. Cambie lo que necesite y guarde, o elimine la marca.'
+                + (notasPrevias.length ? ', con ' + (notasPrevias.length === 1 ? '1 nota de crédito' : notasPrevias.length + ' notas de crédito') : '') + '. Cambie lo que necesite y guarde, o elimine la marca.'
                 : 'Si un día no cumple, la semana no se paga.') + '</div>'
             + '<div class="av-campos">'
-            + '<label for="bs-nc">¿Tiene nota de crédito?<select id="bs-nc"><option value="0">No</option><option value="1"' + (previa.tiene_nc ? ' selected' : '') + '>Sí</option></select></label>'
-            + '<label for="bs-razon" id="bs-razon-wrap" style="' + (previa.tiene_nc ? '' : 'display:none') + '">Razón de la nota de crédito<select id="bs-razon">' + opsRazon + '</select>'
-            + (lista.length ? '' : '<small>No hay razones: créelas en Configuración › Notas de crédito.</small>') + '</label>'
+            + '<div class="bs-notas-wrap"><span class="bs-notas-tit">Notas de crédito del día</span>'
+            + '<div id="bs-notas">' + notasPrevias.map(filaNota).join('') + '</div>'
+            + '<button type="button" id="bs-nota-mas" class="bs-nota-mas"><i class="bi bi-plus-lg" aria-hidden="true"></i> Agregar nota de crédito</button>'
+            + (lista.length ? '' : '<small>No hay razones: créelas en Configuración › Notas de crédito.</small>') + '</div>'
             + '<div id="bs-efecto" class="av-tx" style="display:none"></div>'
             + '<label for="bs-coment">Comentario<input id="bs-coment" type="text" placeholder="Por ejemplo: no completó la carga" value="' + esc(previa.comentario || '') + '"></label>'
             + (esChofer ? '<label for="bs-p1">Peonetas que iban con el chofer (reciben la misma marca)<select id="bs-p1">' + opsPeon(propuestos[0]) + '</select>'
                 + '<select id="bs-p2" style="margin-top:6px">' + opsPeon(propuestos[1]) + '</select>'
-                + (propuestos.length ? '<small>Propuestos desde la libreta de ese día; se pueden cambiar.</small>' : '') + '</label>' : '')
+                + (propuestos.length ? '<small>' + (notasPrevias.length ? 'Los que se guardaron ese día' : 'Propuestos desde la libreta de ese día') + '; se pueden cambiar.</small>' : '') + '</label>' : '')
             + '</div>'
             + (yaMarcado ? '<div style="margin-top:12px;text-align:left"><button type="button" id="bs-eliminar" class="bs-eliminar">'
-                + '<i class="bi bi-trash3" aria-hidden="true"></i> Eliminar marca (el día queda sin marcar)</button></div>' : '');
+                + '<i class="bi bi-trash3" aria-hidden="true"></i> Eliminar marca y sus notas (el día queda sin marcar)</button></div>' : '');
         if (!window.Swal) { if (window.Avisos) window.Avisos.error('No se pudo abrir la ventana.'); return; }
         let eliminar = false;
+        const leerNotas = () => Array.from(document.querySelectorAll('#bs-notas .bs-nota')).map(f => {
+            const op = f.querySelector('.bs-nota-razon').selectedOptions[0];
+            return { numero: (f.querySelector('.bs-nota-num').value || '').trim(), razon_id: op && op.value ? Number(op.value) : null,
+                culpa: !!(op && op.dataset.culpa === '1'), descuenta: !!(op && op.dataset.desc === '1'),
+                monto: Number(f.querySelector('.bs-nota-monto').value || 0) };
+        });
+        const validar = (notas) => {
+            const vistos = new Set();
+            for (const n of notas) {
+                if (!n.numero) return 'Cada nota de crédito necesita su número.';
+                if (vistos.has(n.numero.toUpperCase())) return 'La nota de crédito ' + n.numero + ' está repetida.';
+                vistos.add(n.numero.toUpperCase());
+                if (!n.razon_id) return 'Elija la razón de la nota de crédito ' + n.numero + '.';
+                if (n.descuenta && !(n.monto > 0)) return 'La nota de crédito ' + n.numero + ' descuenta los productos: indique su valor.';
+            }
+            return '';
+        };
+        const peonetasElegidos = () => esChofer ? [...new Set(['bs-p1', 'bs-p2'].map(id => Number(document.getElementById(id).value || 0)).filter(Boolean))] : [];
         const res = await window.Swal.fire({
             title: (window.nombreTitulo ? window.nombreTitulo(quien) : quien),
-            html: html,
+            html: html, width: 'min(680px, calc(100vw - 32px))',
             showDenyButton: true, showCancelButton: true, reverseButtons: true, focusConfirm: false,
             confirmButtonText: 'No cumple', denyButtonText: 'Cumple', cancelButtonText: 'Cancelar',
             customClass: { confirmButton: 'av-btn av-btn-borra', denyButton: 'av-btn av-btn-pri', title: 'bs-titulo' },
             didOpen: () => {
-                // Con nota de crédito, la razón decide: se oculta «Cumple» / «No cumple» y queda un solo «Guardar»
-                const nc = document.getElementById('bs-nc'), razon = document.getElementById('bs-razon');
+                // Con notas de crédito, sus razones deciden: se oculta «Cumple» / «No cumple» y queda un solo «Guardar»
+                const cont = document.getElementById('bs-notas');
                 const pintar = () => {
-                    const con = nc.value === '1';
-                    document.getElementById('bs-razon-wrap').style.display = con ? '' : 'none';
-                    const op = razon.options[razon.selectedIndex];
+                    cont.querySelectorAll('.bs-nota').forEach(f => {
+                        const op = f.querySelector('.bs-nota-razon').selectedOptions[0];
+                        f.querySelector('.bs-nota-monto').style.display = op && op.dataset.desc === '1' ? '' : 'none';
+                    });
+                    const notas = leerNotas();
                     const efecto = document.getElementById('bs-efecto');
                     const deny = window.Swal.getDenyButton(), conf = window.Swal.getConfirmButton();
-                    if (con) {
+                    if (notas.length) {
                         deny.style.display = 'none';
                         conf.textContent = 'Guardar';
-                        efecto.style.display = op && op.value ? '' : 'none';
-                        efecto.textContent = op && op.value ? (op.dataset.culpa === '1' ? 'Culpa del chofer: el día queda «No cumple» y la semana no se paga.' : 'No es culpa del chofer: el día queda «Cumple».') : '';
+                        const conRazon = notas.filter(n => n.razon_id);
+                        const culpa = conRazon.some(n => n.culpa);
+                        const desc = conRazon.filter(n => n.descuenta).reduce((s, n) => s + (n.monto || 0), 0);
+                        efecto.style.display = conRazon.length ? '' : 'none';
+                        efecto.textContent = !conRazon.length ? '' : (culpa ? 'Hay una nota por culpa del chofer: el día queda «No cumple» y la semana no se paga.'
+                            : 'Ninguna nota es culpa del chofer: el día queda «Cumple».') + (desc > 0 ? ' Valor a descontar al chofer: ' + pesos(desc) + '.' : '');
                     } else {
                         deny.style.display = '';
                         conf.textContent = 'No cumple';
                         efecto.style.display = 'none';
                     }
                 };
-                nc.addEventListener('change', pintar);
-                razon.addEventListener('change', pintar);
+                document.getElementById('bs-nota-mas').addEventListener('click', () => {
+                    cont.insertAdjacentHTML('beforeend', filaNota(null));
+                    pintar();
+                    const ult = cont.querySelector('.bs-nota:last-child .bs-nota-num');
+                    if (ult) ult.focus();
+                });
+                cont.addEventListener('click', e => {
+                    const q = e.target.closest('.bs-nota-quitar');
+                    if (q) { q.closest('.bs-nota').remove(); pintar(); }
+                });
+                cont.addEventListener('change', pintar);
+                cont.addEventListener('input', pintar);
                 pintar();
                 const del = document.getElementById('bs-eliminar');
                 if (del) del.addEventListener('click', () => { eliminar = true; window.Swal.close(); });
             },
             preConfirm: () => {
-                const con = document.getElementById('bs-nc').value === '1';
-                const rid = document.getElementById('bs-razon').value;
-                if (con && !rid) { window.Swal.showValidationMessage('Elija la razón de la nota de crédito.'); return false; }
-                return {
-                    tiene_nc: con, razon_nc_id: rid ? Number(rid) : null,
-                    comentario: (document.getElementById('bs-coment').value || '').trim() || null,
-                    peonetas: esChofer ? [...new Set(['bs-p1', 'bs-p2'].map(id => Number(document.getElementById(id).value || 0)).filter(Boolean))] : []
-                };
+                const notas = leerNotas();
+                const error = validar(notas);
+                if (error) { window.Swal.showValidationMessage(error); return false; }
+                return { notas, comentario: (document.getElementById('bs-coment').value || '').trim() || null, peonetas: peonetasElegidos() };
             },
             preDeny: () => {
-                if (document.getElementById('bs-nc').value === '1') { window.Swal.showValidationMessage('Con nota de crédito, la razón decide: use «Guardar».'); return false; }
-                return {
-                    comentario: (document.getElementById('bs-coment').value || '').trim() || null,
-                    peonetas: esChofer ? [...new Set(['bs-p1', 'bs-p2'].map(id => Number(document.getElementById(id).value || 0)).filter(Boolean))] : []
-                };
+                if (leerNotas().length) { window.Swal.showValidationMessage('Con notas de crédito, sus razones deciden: use «Guardar».'); return false; }
+                return { notas: [], comentario: (document.getElementById('bs-coment').value || '').trim() || null, peonetas: peonetasElegidos() };
             }
         });
         if (eliminar) {
             const ok = await window.uiConfirm('¿Eliminar la marca del ' + window.formatFechaDDMMYYYY(fecha) + '?',
-                { quien, items: ['El día queda sin marcar: cuenta como cumplido.', 'Las marcas de sus peonetas se corrigen en la fila de cada uno.'], confirmText: 'Eliminar marca', danger: true });
+                { quien, items: ['El día queda sin marcar: cuenta como cumplido.', 'Sus notas de crédito de ese día también se borran.', 'Las marcas de sus peonetas se corrigen en la fila de cada uno.'], confirmText: 'Eliminar marca', danger: true });
             if (!ok) return;
             try {
                 const resp = await fetch('/api/asistencia/bono-semanal/no-cumple/', { method: 'POST', headers: authHead(),
@@ -263,8 +320,9 @@
         }
         if (res.isDismissed) return;
         const v = res.value || {};
-        const cuerpo = { bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: !!res.isConfirmed && !v.tiene_nc,
-            comentario: v.comentario || null, tiene_nc: !!v.tiene_nc, razon_nc_id: v.razon_nc_id || null, peonetas_ids: v.peonetas || [] };
+        const notas = (v.notas || []).map(n => ({ numero: n.numero, razon_id: n.razon_id, monto: n.descuenta ? n.monto : null }));
+        const cuerpo = { bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: !!res.isConfirmed && !notas.length,
+            comentario: v.comentario || null, notas, peonetas_ids: v.peonetas || [] };
         try {
             const resp = await fetch('/api/asistencia/bono-semanal/no-cumple/', { method: 'POST', headers: authHead(), body: JSON.stringify(cuerpo) });
             const out = await resp.json().catch(() => ({}));

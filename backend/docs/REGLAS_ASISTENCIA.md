@@ -26,6 +26,7 @@ Este documento define la especificación técnica canónica y las reglas de nego
 ### Desde cuándo cuenta una persona (ambos tipos)
 
 - **Todo cuenta desde la asignación de turno (decisión del dueño, 23-11-2026)**: la fecha de ingreso de la ficha es solo referencial. BioAlba la reemplaza por la fecha de creación del usuario en el reloj, y si la persona se fue y volvió mantiene la antigua. Por eso la grilla, los bonos en proporción, la meta de la Bolsa Flexible, la antigüedad del bono 4 Productos y el inicio del historial de cargos cuentan desde el **inicio del turno continuo** vigente en el período configurado: la asignación de turno más antigua que toca el período y, hacia atrás, las asignaciones pegadas a ella (sin un día de corte). Un cambio de turno sin corte mantiene el inicio del primero; si la persona se fue y volvió, cuenta desde su turno nuevo. Código: `backend/services/inicio_turno.py`; pruebas: `test_inicio_turno.py`.
+- **En la grilla, los días antes de la asignación del turno van rayados (decisión del dueño, 23-11-2026)**, igual que los días después de una baja del período, para que una celda en blanco no se confunda con un día sin marcar. La fecha es la del inicio del turno (`inicio_turno`), no la de ingreso.
 - **Renovar un contrato es como si nada pasara**: solo se alarga la fecha de término y las asignaciones de turno. La pantalla de bloqueo obliga a decidir (renovar, indefinido o no renovar) los contratos que vencen dentro de los días configurados (`dias_alerta_bloqueante`) o ya vencidos, para que nunca se llegue al término sin decisión.
 
 ---
@@ -195,6 +196,14 @@ Pruebas: `test_dashboard_pendientes.py`, `test_dashboard_indicadores.py` y `test
 - **Lo ya validado:** al recalcular, los +2 y llamados ya decididos (jornada extra u horas extra aprobadas) vuelven a horas extra por aprobar, y las ESP rechazadas vuelven a «por validar».
 - **Cómo se guarda:** las horas extra del día (`minutos_extra_bruto`) incluyen todo; `minutos_extra_mas2`, `minutos_extra_llamado` y `minutos_extra_esp` dicen cuánto viene de un +2, de un llamado o de la jornada especial pasada a horas extra. Si el día suma un +2, un llamado o una ESP después de que se decidieron sus horas extra, o la decisión venía de la validación antigua, el día vuelve a quedar por aprobar. El Excel trae la columna «DE +2 Y EME».
 - **Al desplegar el cambio:** hay que recalcular (Reprocesar) los períodos abiertos para que lo guardado con la regla antigua pase a la nueva.
+
+## 10. Bono semanal Fill Rate: notas de crédito (decisiones del dueño, 23-11-2026)
+
+- **Varias notas de crédito por día**, cada una con su **número** (obligatorio, sin repetir en el día) y su **razón** (Configuración → Notas de crédito). Si alguna razón es culpa del chofer, el día queda «No cumple» y la semana no se paga; si ninguna lo es, el día queda «Cumple».
+- **Razones que descuentan el valor de los productos** (por ejemplo, extravío de la carga): la razón tiene el interruptor «¿Descuenta el valor de los productos?» y la nota pide su valor. Ese valor se descuenta **solo al chofer** que registró la nota (los peonetas que iban con él pierden el día, pero no el descuento) y va como **valor a descontar aparte**: no se resta del bono.
+- **No hay nota de crédito en un día justificado** (por ejemplo, descanso operativo: la persona no trabajó). Se rechaza también si uno de los peonetas elegidos tiene justificación ese día. La celda del Fill Rate muestra la sigla de la justificación para no marcar por error.
+- Las notas se guardan en la fila del chofer (tabla `bono_notas_credito`) con los peonetas que iban con él; la razón se copia tal como estaba ese día. Los días marcados antes de pedir el número (una sola nota, sin número) se siguen viendo y se cuentan en la hoja para completarlos.
+- **Hoja Fill Rate del cierre y del preinforme**: en una página aparte del PDF, por área y tipo de horario. Por persona: lo ganado en cada semana (o $0 con la causa y el día), el bono y el valor a descontar. Abajo, las notas de crédito del tramo: fecha, número, razón, efecto, quiénes iban y descuento. Código: `informe_cierre_pdf.hoja_fill_rate`.
 
 ## Cómo se prueba
 

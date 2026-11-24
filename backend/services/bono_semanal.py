@@ -155,6 +155,29 @@ def evaluar_persona(bono: Dict[str, Any], monto_semana: float, semanas: List[tup
             "dias": codigos, "perdidos": perdidos, "motivo": motivo}
 
 
+def notas_de(emp_id: int, notas: List[Dict[str, Any]], marcas: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Las notas de crédito de una persona: las que registró (rol «chofer») y las de los choferes con los que iba
+    (rol «peoneta»). Un día marcado con la ventana anterior (una sola nota, sin número) se muestra igual, sin número."""
+    out = []
+    for n in notas:
+        if int(n["empleado_id"]) == emp_id:
+            rol = "chofer"
+        elif emp_id in (n.get("peonetas_ids") or []):
+            rol = "peoneta"
+        else:
+            continue
+        out.append({"fecha": str(n["fecha"])[:10], "numero": n.get("numero"), "razon": n.get("razon_nombre"),
+                    "culpa": bool(n.get("culpa_chofer")), "descuenta": bool(n.get("descuenta")),
+                    "monto": float(n.get("monto") or 0), "rol": rol, "chofer_id": int(n["empleado_id"]),
+                    "peonetas_ids": list(n.get("peonetas_ids") or [])})
+    con_notas = {x["fecha"] for x in out}
+    for f, m in sorted(marcas.items()):
+        if m.get("tiene_nc") and m.get("razon_nc") and f not in con_notas:
+            out.append({"fecha": f, "numero": None, "razon": m.get("razon_nc"), "culpa": m.get("marca") == "no_cumple",
+                        "descuenta": False, "monto": 0.0, "rol": "chofer", "chofer_id": emp_id, "peonetas_ids": []})
+    return sorted(out, key=lambda x: (x["fecha"], x["numero"] or ""))
+
+
 async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados: List[Dict[str, Any]],
                                fecha_inicio: str, fecha_fin: str, hoy: str) -> Dict[int, Dict[str, Any]]:
     """El bono semanal para cada persona: {empleado_id: resultado}. A quien no tiene uno de los horarios del bono, o
@@ -193,7 +216,8 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
     for r in filas:
         dias_emp.setdefault(int(r["empleado_id"]), {})[str(r["fecha"])[:10]] = dict(r)
     just = await db.fetch_all(
-        f"SELECT j.empleado_id, j.fecha_inicio, j.fecha_fin, j.tipo_id, jt.nombre AS tipo_nombre FROM justificaciones j "
+        f"SELECT j.empleado_id, j.fecha_inicio, j.fecha_fin, j.tipo_id, jt.nombre AS tipo_nombre, jt.nomenclatura "
+        f"FROM justificaciones j "
         f"JOIN justificacion_tipos jt ON jt.id = j.tipo_id WHERE j.empleado_id IN ({ph}) AND j.fecha_inicio <= ? "
         "AND j.fecha_fin >= ?", (*ids, hasta, desde))
     just_emp: Dict[int, Dict[str, Dict]] = {}
@@ -221,6 +245,7 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
             detalle = "; ".join(x for x in ((f"nota de crédito por {m['razon_nc_nombre']}" if m.get("tiene_nc") and m.get("razon_nc_nombre") else None),
                                            m.get("comentario")) if x) or None
             nc_emp.setdefault(int(m["empleado_id"]), {})[str(m["fecha"])[:10]] = detalle
+    notas = await ConfiguracionRepository(db).get_notas_credito([bono["id"]], desde, hasta)
     from backend.services.bolsa_prorrateo import salida_decidida
     for e, regla in candidatos:
         salida = salida_decidida(e.get("fecha_salida"), e.get("activo"), e.get("decision_vencimiento"))
@@ -234,6 +259,12 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
             if res[e["id"]].get("dias", {}).get(f) in ("ok", "pendiente"):
                 res[e["id"]]["dias"][f] = "cumple"
         res[e["id"]]["marcas"] = marcas_emp.get(e["id"], {})
+        # La justificación de cada día, para que la celda la muestre y no se marque por error (dueño, 23-11-2026)
+        res[e["id"]]["justif"] = {f: (j.get("nomenclatura") or j.get("tipo_nombre") or "") for f, j in just_emp.get(e["id"], {}).items()}
+        notas_e = notas_de(e["id"], notas, marcas_emp.get(e["id"], {}))
+        res[e["id"]]["notas_credito"] = notas_e
+        # El valor de los productos se descuenta solo a quien registró la nota (el chofer; dueño, 23-11-2026)
+        res[e["id"]]["descuento_productos"] = int(round(sum(n["monto"] for n in notas_e if n["rol"] == "chofer" and n["descuenta"])))
     for r in res.values():
         r["bono_id"] = bono["id"]   # la grilla lo usa para marcar los días
     return res

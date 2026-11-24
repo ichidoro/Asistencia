@@ -1111,6 +1111,8 @@ async def get_catalogo_generos(
 class RazonNotaCredito(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=120)
     culpa_chofer: bool = False
+    # Además de decidir el Fill Rate, descuenta el valor de los productos de la nota (dueño, 23-11-2026)
+    descuenta_productos: bool = False
     activa: bool = True
 
 
@@ -1133,7 +1135,7 @@ async def crear_razon_nota_credito(
     nombre = req.nombre.strip()
     if any(str(r["nombre"]).strip().upper() == nombre.upper() for r in await repo.get_razones_nota_credito()):
         raise HTTPException(status_code=400, detail="Ya existe una razón con ese nombre.")
-    return {"id": await repo.crear_razon_nota_credito(nombre, req.culpa_chofer)}
+    return {"id": await repo.crear_razon_nota_credito(nombre, req.culpa_chofer, req.descuenta_productos)}
 
 
 @router.put("/razones-nota-credito/{razon_id}/")
@@ -1148,7 +1150,7 @@ async def actualizar_razon_nota_credito(
     nombre = req.nombre.strip()
     if any(r["id"] != razon_id and str(r["nombre"]).strip().upper() == nombre.upper() for r in await repo.get_razones_nota_credito()):
         raise HTTPException(status_code=400, detail="Ya existe una razón con ese nombre.")
-    if not await repo.actualizar_razon_nota_credito(razon_id, nombre, req.culpa_chofer, req.activa):
+    if not await repo.actualizar_razon_nota_credito(razon_id, nombre, req.culpa_chofer, req.activa, req.descuenta_productos):
         raise HTTPException(status_code=404, detail="La razón no existe.")
     return {"ok": True}
 

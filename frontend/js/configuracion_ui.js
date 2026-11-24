@@ -2122,13 +2122,13 @@ window.cargarRazonesNotaCredito = async function () {
     montarCatalogoB('razones-nc-container', {
         clave: 'razones-nc',
         titulo: 'Notas de crédito',
-        descripcion: 'Razones de nota de crédito que se eligen al evaluar el Fill Rate de un día. Si la razón es culpa del chofer, ese día no cumple y la semana no se paga.',
+        descripcion: 'Razones de nota de crédito que se eligen al evaluar el Fill Rate de un día. Si la razón es culpa del chofer, ese día no cumple y la semana no se paga. Si descuenta los productos, su valor se descuenta al chofer en el cierre.',
         acciones: (canEdit ? '<button type="button" class="fcB-btn pri" onclick="window.nuevaRazonNotaCredito()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva razón</button>' : '')
             + '<button type="button" class="fcB-btn" onclick="cargarRazonesNotaCredito()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Actualizar</button>',
         items: razones,
         id: function (r) { return r.id; },
         etiqueta: function (r) { return r.nombre; },
-        sub: function (r) { return (r.culpa_chofer ? 'Culpa del chofer' : 'No es culpa del chofer') + (r.usos ? ' · usada ' + r.usos + (r.usos === 1 ? ' vez' : ' veces') : ''); },
+        sub: function (r) { return (r.culpa_chofer ? 'Culpa del chofer' : 'No es culpa del chofer') + (r.descuenta_productos ? ' · descuenta productos' : '') + (r.usos ? ' · usada ' + r.usos + (r.usos === 1 ? ' vez' : ' veces') : ''); },
         apagado: function (r) { return !r.activa; },
         vacio: 'Todavía no hay razones. Cree la primera con «Nueva razón».',
         ficha: function (r, panel) {
@@ -2136,6 +2136,8 @@ window.cargarRazonesNotaCredito = async function () {
                 + F.campo('Nombre', F.texto('rnc-nombre', r.nombre, canEdit ? ' maxlength="120"' : ' disabled'))
                 + F.campo('¿Es culpa del chofer?', F.seg('rnc-culpa', [['1', 'Sí: no cumple'], ['0', 'No: cumple']], r.culpa_chofer ? '1' : '0', !canEdit),
                     'Si es culpa del chofer, el día no cumple y la semana no se paga.')
+                + F.campo('¿Descuenta el valor de los productos?', F.seg('rnc-desc', [['1', 'Sí: se descuenta'], ['0', 'No']], r.descuenta_productos ? '1' : '0', !canEdit),
+                    'Por ejemplo, extravío de la carga: al registrar la nota se pide su valor, y va como valor a descontar al chofer en la hoja Fill Rate del cierre.')
                 + F.campo('En uso', F.interruptor('rnc-activa', !!r.activa, 'Se puede elegir al evaluar un día'))
                 + F.campo('Historial', '<span>' + (r.usos ? 'Usada en ' + r.usos + (r.usos === 1 ? ' día' : ' días') + ': se guarda tal como estaba ese día.' : 'Aún no se usa.') + '</span>')
                 + (canEdit ? F.pie('', '<button type="button" class="fcB-btn pri" onclick="window.guardarRazonNotaCredito(' + r.id + ', this)"><i class="bi bi-check2" aria-hidden="true"></i>Guardar</button>') : '');
@@ -2170,7 +2172,8 @@ window.guardarRazonNotaCredito = async function (id, btn) {
     if (!nombre) { showToast('Falta el nombre de la razón.', 'warning'); return; }
     try {
         await _pedirRazonNC('/api/configuracion/razones-nota-credito/' + id + '/', 'PUT', {
-            nombre: nombre, culpa_chofer: window.FichaCfg.leerSeg(panel, 'rnc-culpa') === '1', activa: panel.querySelector('#rnc-activa').checked });
+            nombre: nombre, culpa_chofer: window.FichaCfg.leerSeg(panel, 'rnc-culpa') === '1',
+            descuenta_productos: window.FichaCfg.leerSeg(panel, 'rnc-desc') === '1', activa: panel.querySelector('#rnc-activa').checked });
         showToast('Razón guardada.', 'success');
         window.FichaCfg.recordar('razones-nc', id);
         cargarRazonesNotaCredito();

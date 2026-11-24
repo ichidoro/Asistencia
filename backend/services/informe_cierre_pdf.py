@@ -211,8 +211,11 @@ def bonos_persona(ev: Dict[str, Any]):
                       'parcial': (asig, per) if califica and per and asig is not None and asig != per else None,
                       'asistidos': (asis, lab) if califica and lab and asis is not None and asis != lab else None,
                       'perdidos': list(v.get('perdidos') or []),
-                      # Bono semanal (Fill Rate, 23-11-2026): cada semana con su resultado
-                      'semanas': list(v.get('semanas') or []) if v.get('semanal') else None}
+                      # Bono semanal (Fill Rate, 23-11-2026): cada semana con su resultado, sus notas de crédito y el
+                      # valor a descontar por productos (hoja Fill Rate del cierre)
+                      'semanas': list(v.get('semanas') or []) if v.get('semanal') else None,
+                      'notas': list(v.get('notas_credito') or []) if v.get('semanal') else [],
+                      'descuento': int(v.get('descuento_productos') or 0) if v.get('semanal') else 0}
     return montos, detalle
 
 
@@ -229,7 +232,7 @@ def armar_personas(datos: Dict[str, Any], etiqueta, justif: List[Dict[str, Any]]
         dd = matrix.get(str(r['emp_id'])) or matrix.get(r['emp_id']) or {}
         p = {'emp_id': r['emp_id'], 'rut': rut_visible(r.get('rut')), 'nombre': r['nombre'],
              'activo': r.get('activo') != 'NO', 'baja': e.get('baja_periodo'), 'tipo': 'BOLSA' if es_bolsa else 'CICLO',
-             'horario': e.get('turno') or 'Sin horario asignado',
+             'horario': e.get('turno') or 'Sin horario asignado', 'cargo': e.get('cargo') or '',
              'horas': float(e['meta_horas_semanales']) if e.get('turno') and e.get('meta_horas_semanales') is not None else None,
              'n_atr': int(r.get('cnt_atr') or 0), 'n_sad': int(r.get('cnt_sad') or 0),
              }
@@ -672,6 +675,63 @@ def detalle_bonos(inf: Dict[str, Any]) -> Dict[str, List[str]]:
     return {'no_pagados': no_pagados, 'en_parte': en_parte}
 
 
+def hoja_fill_rate(inf: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """La hoja Fill Rate del cierre (dueño, 23-11-2026), una por bono semanal: por persona, lo ganado en cada semana, el
+    total y el valor a descontar por productos; y el detalle de las notas de crédito del tramo (número, razón, efecto,
+    quiénes iban en el camión y descuento). El descuento va aparte: no se resta del bono."""
+    nombres = {p['emp_id']: p['nombre'] for p in inf['personas']}
+    hojas = OrderedDict()
+    for p in inf['personas']:
+        for b, d in (p.get('bonos_det') or {}).items():
+            if d.get('semanas') is None:
+                continue
+            h = hojas.setdefault(b, {'bono': b, 'semanas': [], 'filas': [], 'notas': [], 'sin_numero': 0})
+            if len(d['semanas']) > len(h['semanas']):
+                h['semanas'] = [(s['desde'], s['hasta']) for s in d['semanas']]
+            celdas = {}
+            for s in d['semanas']:
+                if s['estado'] == 'pierde':
+                    x = (s.get('perdidos') or [{}])[0]
+                    # La causa tal como la dio la evaluación: «No cumple», una licencia, una inasistencia…
+                    causa = str(x.get('causa') or 'No se paga').split(':')[0]
+                    texto, nota = '$0', (f'{causa} {_dm(x["fecha"])}' if x.get('fecha') else causa)
+                elif s['estado'] == 'proporcional':
+                    texto = pesos(s['monto'])
+                    nota = f'{s["dias_turno"] - s.get("dias_proporcion", 0)} de {s["dias_turno"]} días'
+                elif s['estado'] == 'en_curso':
+                    texto, nota = '$0', 'En curso'
+                elif s['estado'] == 'sin_turno':
+                    texto, nota = '—', 'Sin turno'
+                else:
+                    texto, nota = pesos(s['monto']), ''
+                celdas[s['desde']] = {'estado': s['estado'], 'texto': texto, 'nota': nota}
+            h['filas'].append({'emp_id': p['emp_id'], 'rut': p['rut'], 'nombre': p['nombre'], 'cargo': p.get('cargo') or '',
+                               'celdas': celdas, 'total': int(d['monto'] or 0), 'descuento': int(d.get('descuento') or 0)})
+            for n in d.get('notas') or []:
+                if n.get('rol') != 'chofer':
+                    continue
+                # Marcadas antes de pedir el número (23-11-2026): están en la fila del chofer y de cada peoneta, sin saber
+                # quién iba con quién; no se listan (saldrían repetidas), se cuentan para completarlas
+                if not n.get('numero'):
+                    h['sin_numero'] += 1
+                    continue
+                if n.get('culpa'):
+                    efecto = 'Pierde la semana y descuenta' if n.get('descuenta') else 'Pierde la semana'
+                else:
+                    efecto = 'Descuenta' if n.get('descuenta') else 'No afecta'
+                quienes = [p['nombre']] + [nombres.get(x, 'peoneta de otra área') for x in n.get('peonetas_ids') or []]
+                h['notas'].append({'fecha': n['fecha'], 'numero': n.get('numero') or 'sin número', 'razon': n.get('razon') or '',
+                                   'efecto': efecto, 'quienes': quienes,
+                                   'monto': int(round(n.get('monto') or 0)) if n.get('descuenta') else 0})
+    for h in hojas.values():
+        h['notas'].sort(key=lambda x: (x['fecha'], x['numero']))
+        h['total_bono'] = sum(f['total'] for f in h['filas'])
+        h['total_descuento'] = sum(f['descuento'] for f in h['filas'])
+        h['n_notas'] = len(h['notas'])
+        h['n_descuentan'] = sum(1 for x in h['notas'] if x['monto'])
+    return list(hojas.values())
+
+
 def _dm(fecha: str) -> str:
     return f'{fecha[8:10]}-{fecha[5:7]}'
 
@@ -785,7 +845,7 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.pdfbase.pdfmetrics import stringWidth
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether, PageBreak
 
     _registrar_fuentes()
     H = colors.HexColor
@@ -1155,6 +1215,85 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
             historia += [Paragraph(x, st_av, bulletText='•') for x in avisos[1:]]
     if not preinforme:
         historia += [Spacer(1, 26), KeepTogether([firmas])]
+
+    # ── Hoja Fill Rate (dueño, 23-11-2026): en una página aparte, distinta del resumen
+    for hoja in hoja_fill_rate(inf):
+        st_fr_t = ParagraphStyle('frt', fontName=_f('BarlowSC-Bold'), fontSize=13, leading=16, textColor=H(C_NAVY))
+        st_fr_s = ParagraphStyle('frs', fontName=_f('Barlow'), fontSize=8.3, leading=10.5, textColor=H(C_INK_2))
+        st_fr_c = ParagraphStyle('frc', fontName=_f('Barlow-SemiBold'), fontSize=7.4, leading=8.8, textColor=H(C_INK_2))
+        st_fr_n = ParagraphStyle('frn', fontName=_f('Barlow'), fontSize=7.6, leading=9.2, textColor=H(C_INK))
+        st_fr_v = ParagraphStyle('frv', fontName=_f('Barlow'), fontSize=7.6, leading=9.2, textColor=H(C_INK), alignment=1)
+        st_fr_h = ParagraphStyle('frh', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13, textColor=H(C_NAVY))
+        semanas_h = hoja['semanas']
+        cab = [Paragraph('RUT', st_fr_c), Paragraph('NOMBRE', st_fr_c), Paragraph('CARGO', st_fr_c)]
+        cab += [Paragraph(f'SEMANA<br/>{_dm(a)} AL {_dm(b)}', st_fr_c) for a, b in semanas_h]
+        cab += [Paragraph('BONO', st_fr_c), Paragraph('A DESCONTAR', st_fr_c)]
+        filas_fr = [cab]
+        for f in hoja['filas']:
+            fila = [f['rut'], Paragraph(f['nombre'], st_fr_n), Paragraph(f['cargo'], st_fr_n)]
+            for a, _b in semanas_h:
+                c = f['celdas'].get(a)
+                if not c:
+                    fila.append('')
+                    continue
+                color = C_PINK if c['estado'] == 'pierde' else C_INK
+                fila.append(Paragraph(f'<font color="{color}">{c["texto"]}</font>' + (f'<br/><font size="6.6" color="{C_INK_2 if c["estado"] != "pierde" else C_PINK}">{c["nota"]}</font>' if c['nota'] else ''), st_fr_v))
+            fila += [pesos(f['total']) if f['total'] else '—', pesos(f['descuento']) if f['descuento'] else '—']
+            filas_fr.append(fila)
+        n_fr = len(hoja['filas'])
+        filas_fr.append([f'Total · {n_fr} {"persona" if n_fr == 1 else "personas"}', '', ''] + [''] * len(semanas_h)
+                        + [pesos(hoja['total_bono']) if hoja['total_bono'] else '—',
+                           pesos(hoja['total_descuento']) if hoja['total_descuento'] else '—'])
+        w_rut, w_car, w_mon = 62, 70, 66
+        w_sem = 64
+        w_nom = max(120, util - w_rut - w_car - 2 * w_mon - w_sem * len(semanas_h))
+        if w_nom + w_rut + w_car + 2 * w_mon + w_sem * len(semanas_h) > util:
+            w_sem = max(44, (util - w_rut - w_car - 2 * w_mon - 120) / max(1, len(semanas_h)))
+            w_nom = util - w_rut - w_car - 2 * w_mon - w_sem * len(semanas_h)
+        t_fr = Table(filas_fr, colWidths=[w_rut, w_nom, w_car] + [w_sem] * len(semanas_h) + [w_mon, w_mon], repeatRows=1, hAlign='LEFT')
+        est_fr = [('FONT', (0, 1), (-1, -1), _f('Barlow'), 7.6), ('TEXTCOLOR', (0, 1), (-1, -1), H(C_INK)),
+                  ('BACKGROUND', (0, 0), (-1, 0), H(C_NAVY_SOFT)), ('LINEBELOW', (0, 0), (-1, 0), 0.8, H(C_NAVY)),
+                  ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('VALIGN', (0, 0), (-1, 0), 'BOTTOM'),
+                  ('ALIGN', (-2, 1), (-1, -1), 'RIGHT'), ('TEXTCOLOR', (-1, 1), (-1, -1), H(C_PINK)),
+                  ('FONT', (-2, 1), (-1, -1), _f('Barlow-Bold'), 7.6),
+                  ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                  ('TOPPADDING', (0, 0), (-1, -1), 2.6), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.6),
+                  ('SPAN', (0, -1), (2 + len(semanas_h), -1)), ('FONT', (0, -1), (-1, -1), _f('Barlow-Bold'), 7.4),
+                  ('LINEABOVE', (0, -1), (-1, -1), 1.1, H(C_INK)), ('LINEBEFORE', (-2, 0), (-2, -1), 0.6, H(C_LINE))]
+        for x in range(3, 3 + len(semanas_h)):
+            est_fr.append(('LINEBEFORE', (x, 0), (x, -1), 0.4, H(C_LINE)))
+        for k in range(1, len(filas_fr) - 1):
+            est_fr.append(('LINEBELOW', (0, k), (-1, k), 0.4, H(C_LINE_2)))
+            if k % 2 == 0:
+                est_fr.append(('BACKGROUND', (0, k), (-1, k), H(C_ZEBRA)))
+        t_fr.setStyle(TableStyle(est_fr))
+        sub = (f'Período {fmt_f(fecha_inicio)} al {fmt_f(fecha_fin)} · cada semana va de lunes a domingo y se paga en el período '
+               f'donde cae su domingo. El valor a descontar por productos va aparte: no se resta del bono.')
+        historia += [PageBreak(), Paragraph(f'{hoja["bono"]} · {(area or "Todas").title()} · {inf["titulo_horas"]}', st_fr_t),
+                     Spacer(1, 2), Paragraph(sub, st_fr_s), Spacer(1, 8), t_fr]
+        resumen_fr = (f'Bono a pagar: <b>{pesos(hoja["total_bono"])}</b> · A descontar por productos: '
+                      f'<b><font color="{C_PINK}">{pesos(hoja["total_descuento"])}</font></b> · Notas de crédito: <b>{hoja["n_notas"]}</b>'
+                      + (f' ({hoja["n_descuentan"]} {"descuenta" if hoja["n_descuentan"] == 1 else "descuentan"})' if hoja['n_descuentan'] else ''))
+        if hoja['sin_numero']:
+            resumen_fr += (f' · <font color="{C_PINK}">{hoja["sin_numero"]} {"día marcado" if hoja["sin_numero"] == 1 else "días marcados"} con nota de '
+                           f'crédito sin número (marcados antes de pedirlo, en la fila del chofer y de sus peonetas): conviene completarlos en la grilla</font>')
+        historia += [Spacer(1, 6), Paragraph(resumen_fr, st_fr_s)]
+        if hoja['notas']:
+            cab_n = [Paragraph(x, st_fr_c) for x in ('FECHA', 'N° NOTA', 'RAZÓN', 'EFECTO', 'QUIÉNES IBAN', 'DESCUENTO')]
+            filas_n = [cab_n] + [[_dm(x['fecha']), Paragraph(x['numero'], st_fr_n), Paragraph(x['razon'], st_fr_n),
+                                  Paragraph(f'<font color="{C_PINK if x["efecto"] != "No afecta" else C_INK_2}">{x["efecto"]}</font>', st_fr_n),
+                                  Paragraph(', '.join(x['quienes']), st_fr_n), pesos(x['monto']) if x['monto'] else '—']
+                                 for x in hoja['notas']]
+            anchos_n = [46, 70, 150, 110, util - 46 - 70 - 150 - 110 - 70, 70]
+            t_n = Table(filas_n, colWidths=anchos_n, repeatRows=1, hAlign='LEFT')
+            est_n = [('FONT', (0, 1), (-1, -1), _f('Barlow'), 7.6), ('BACKGROUND', (0, 0), (-1, 0), H(C_NAVY_SOFT)),
+                     ('LINEBELOW', (0, 0), (-1, 0), 0.8, H(C_NAVY)), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                     ('ALIGN', (-1, 1), (-1, -1), 'RIGHT'), ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                     ('TOPPADDING', (0, 0), (-1, -1), 2.4), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.4)]
+            for k in range(1, len(filas_n)):
+                est_n.append(('LINEBELOW', (0, k), (-1, k), 0.4, H(C_LINE_2)))
+            t_n.setStyle(TableStyle(est_n))
+            historia += [Spacer(1, 12), KeepTogether([Paragraph('Notas de crédito del tramo', st_fr_h), Spacer(1, 4), t_n])]
 
     def pie(canvas, doc):
         canvas.saveState()

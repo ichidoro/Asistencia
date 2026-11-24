@@ -17,9 +17,9 @@
 @keyframes fl-pagina { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fl-sube   { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fl-fundido { from { opacity: 0; } to { opacity: 1; } }
-/* la grilla ya no llega con desenfoque (era lo más caro de pintar) */
-@keyframes mxEntra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes mxFilaIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* La grilla llega con un solo fundido corto: sin desplazamiento ni filas en cascada, que se veían como una «televisión
+   vieja» y retrasaban casi 1 s la tabla ya cargada (dueño, 23-11-2026) */
+@keyframes mxEntra { from { opacity: 0; } to { opacity: 1; } }
 
 .page.active { animation: fl-pagina 200ms var(--fl-out) backwards; }
 .page.active .mx-page-head { animation: fl-sube 240ms var(--fl-out) 30ms backwards; }
@@ -31,7 +31,7 @@
 .marcaciones-filter-bar .row > [class*="col-"]:nth-child(4) { animation-delay: 145ms; }
 .marcaciones-filter-bar .row > [class*="col-"]:nth-child(5) { animation-delay: 170ms; }
 .marcaciones-filter-bar .row > [class*="col-"]:nth-child(6) { animation-delay: 195ms; }
-.mx-entra { animation: mxEntra 260ms var(--fl-out) both; }
+.mx-entra { animation: mxEntra 150ms ease-out both; }
 
 /* ── Plegables ────────────────────────────────────────────────────────────
    Bootstrap (collapse/accordion) con la curva fuerte; bloques por horario y flecha (el movimiento de las filas

@@ -239,11 +239,11 @@ window.mxPintarChips = function () {
     if (b) b.classList.toggle('es-visible', !!(s.area || s.turnoId || s.empleadoId || s.fechasElegidas));
 };
 
-// Esqueleto de carga (en vez del círculo que gira) y entrada suave de la grilla. Solo cuando la persona pidió la carga:
+// Esqueleto de carga (en vez del círculo que gira; su brillo pasa a la vez por todas las filas) y entrada suave de la grilla. Solo cuando la persona pidió la carga:
 // el refresco automático en silencio no anima. Todo con opacidad/transform, que no recalcula el diseño de la tabla.
 const MX_SKELETON_HTML = '<div class="mx-skel" role="status" aria-live="polite"><span class="visually-hidden">Cargando asistencia…</span>'
     + '<div class="mx-skel-fila mx-skel-cab"><i></i><i></i><i></i><i></i><i></i><i></i></div>'
-    + Array.from({ length: 9 }, (_, n) => `<div class="mx-skel-fila" style="--d:${n * 70}ms"><i></i><i></i><i></i><i></i><i></i><i></i></div>`).join('')
+    + Array.from({ length: 9 }, () => '<div class="mx-skel-fila"><i></i><i></i><i></i><i></i><i></i><i></i></div>').join('')
     + '</div>';
 window._mxAnimarProximo = false;
 window.mxTrasPintar = function (container) {
@@ -253,12 +253,8 @@ window.mxTrasPintar = function (container) {
     container.classList.remove('mx-entra');
     void container.offsetWidth;
     container.classList.add('mx-entra');
+    // Un solo fundido corto de toda la grilla: las filas ya no entran en cascada (dueño, 23-11-2026)
     container.addEventListener('animationend', e => { if (e.target === container) container.classList.remove('mx-entra'); }, { once: false });
-    container.querySelectorAll('tbody tr').forEach((tr, i) => {
-        if (i >= 16) return;
-        tr.style.animation = `mxFilaIn .45s var(--mx-ease) ${i * 24}ms both`;
-        tr.addEventListener('animationend', () => { tr.style.animation = ''; }, { once: true });
-    });
 };
 
 // Cambiar de vista (diseño HD): la pastilla de la vista elegida se desliza desde la anterior y los días cambian con un
@@ -6911,6 +6907,10 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
     const sPrefix = isSaldoZero ? '' : (r.saldo > 0 ? '+' : '-');
     // Baja del período: rótulo con la fecha, fila en gris y días después de la salida rayados (dueño, 23-11-2026)
     const bajaF = window.mxBajaPeriodo(emp);
+    // Desde cuándo cuenta: la asignación del horario (no la fecha de ingreso, que es referencial). Los días anteriores
+    // van rayados como los de después de una baja (dueño, 23-11-2026)
+    const infoT = (emp && (emp.info || emp)) || {};
+    const inicioT = infoT.inicio_turno ? String(infoT.inicio_turno).slice(0, 10) : null;
     const nameClass = bajaF ? 'gc-baja-nom' : '';
     const bajaChip = bajaF ? '<span class="gc-baja-chip" title="Se va el ' + window.formatFechaDDMMYYYY(bajaF) + '. Se paga y descuenta como el resto; no cuenta en la dotación.">Baja ' + bajaF.slice(8, 10) + '-' + bajaF.slice(5, 7) + '</span>' : '';
 
@@ -6978,7 +6978,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         const ariaCelda = enRevision
             ? 'Día por revisar: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d) + '. Una regla de marcaciones dejó este día en revisión.'
             : 'Acciones de asistencia: ' + nomAria + ', ' + window.formatFechaDDMMYYYY(d);
-        const clasePostBaja = (bajaF && d > bajaF) ? ' gc-post-baja' : '';
+        const clasePostBaja = ((bajaF && d > bajaF) || (inicioT && d < inicioT)) ? ' gc-post-baja' : '';
         // Vista Fill Rate (23-11-2026): el clic en el día marca «Cumple» o «No cumple» (no abre las acciones de asistencia) y
         // después de cada domingo va la columna con el total de la semana (bono_semanal_ui.js)
         const vistaFr = stateMarcacionesApp.viewMode === 'fillrate' && !!window.mxBsCelda;

@@ -232,3 +232,24 @@
   padding: 8px 12px; font: 600 13px 'Barlow', system-ui, sans-serif; cursor: pointer; }
 .swal2-popup.av-dlg .bs-eliminar:hover { background: #fdecee; }
 .swal2-container .swal2-popup.av-dlg .swal2-title.bs-titulo { font-size: 24px !important; line-height: 1.2 !important; letter-spacing: 0 !important; text-transform: none !important; }
+/* Fill Rate: varias notas de crédito por día, cada una con su número, razón y valor si descuenta productos (23-11-2026) */
+.swal2-popup.av-dlg .bs-notas-wrap { display: flex; flex-direction: column; gap: 8px; }
+.swal2-popup.av-dlg .bs-notas-tit { font: 600 11px 'Barlow', system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--av-ink3); }
+.swal2-popup.av-dlg .bs-nota { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) 40px; gap: 6px; align-items: center; }
+.swal2-popup.av-dlg .bs-nota input, .swal2-popup.av-dlg .bs-nota select {
+  height: 40px; border-radius: 10px; border: 0; box-shadow: inset 0 0 0 1px var(--av-ln); padding: 0 10px; min-width: 0;
+  font: 400 14px 'Barlow', system-ui, sans-serif; color: var(--av-ink); background: #fff;
+}
+.swal2-popup.av-dlg .bs-nota-num { grid-column: 1; }
+.swal2-popup.av-dlg .bs-nota-razon { grid-column: 2; }
+.swal2-popup.av-dlg .bs-nota-monto { grid-column: 3; }
+.swal2-popup.av-dlg .bs-nota-quitar { grid-column: 4; height: 40px; border: 0; border-radius: 10px; background: #fff; color: #b4232f; box-shadow: inset 0 0 0 1px #e1707a; cursor: pointer; }
+.swal2-popup.av-dlg .bs-nota-quitar:hover { background: #fdecee; }
+.swal2-popup.av-dlg .bs-nota-mas { align-self: flex-start; border: 0; border-radius: 10px; background: #fff; color: #1b2f8f; box-shadow: inset 0 0 0 1px #c9d2ef;
+  padding: 8px 12px; font: 600 13px 'Barlow', system-ui, sans-serif; cursor: pointer; }
+.swal2-popup.av-dlg .bs-nota-mas:hover { background: #eef1fb; }
+@media (max-width: 560px) {
+  .swal2-popup.av-dlg .bs-nota { grid-template-columns: minmax(0, 1fr) 40px; }
+  .swal2-popup.av-dlg .bs-nota-quitar { grid-column: 2; grid-row: 1; }
+  .swal2-popup.av-dlg .bs-nota-razon, .swal2-popup.av-dlg .bs-nota-monto { grid-column: 1 / -1; }
+}

@@ -4448,16 +4448,12 @@ tr:hover .emp-name-cell {
 /* Esqueleto de carga de la grilla */
 .mx-skel { display: grid; gap: 8px; padding: 2px 0; }
 .mx-skel-fila { display: grid; grid-template-columns: 2.2fr repeat(5, 1fr); gap: 12px; align-items: center; padding: 12px 16px; border-radius: 10px; background: #fff; border: 1px solid var(--ui-line); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
-.mx-skel-fila i { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, #e8edf5 25%, #f6f8fc 50%, #e8edf5 75%); background-size: 200% 100%; animation: mxShimmer 1.5s ease-in-out infinite; animation-delay: var(--d, 0ms); }
+.mx-skel-fila i { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, #e8edf5 25%, #f6f8fc 50%, #e8edf5 75%); background-size: 200% 100%; animation: mxShimmer 1.5s ease-in-out infinite; }
 .mx-skel-cab { background: #f1f5fb; }
 .mx-skel-cab i { height: 9px; background: #dbe3f1; animation: none; }
 @keyframes mxShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
-/* Entrada de la grilla cuando la persona pidió la carga */
-.mx-entra { animation: mxEntra .42s var(--mx-ease) both; }
-@keyframes mxEntra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes mxFilaIn { from { opacity: 0; } to { opacity: 1; } }
-
+/* Entrada de la grilla cuando la persona pidió la carga: .mx-entra y su fundido están en fluidez.css */
 @media (prefers-reduced-motion: reduce) {
     .mx-chip, .mx-chip.es-nuevo, .mx-entra, .mx-skel-fila i { animation: none !important; }
     .marcaciones-filter-bar .btn, .mx-chip button, .marcaciones-filter-bar .form-select { transition: none; }
@@ -4515,9 +4511,6 @@ tr:hover .emp-name-cell {
 @keyframes mxHeadIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 @keyframes mxBarIn { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes mxColIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-/* la grilla llega con un leve desenfoque que se aclara y sus primeras filas en cascada (más marcado que antes) */
-@keyframes mxEntra { from { opacity: 0; transform: translateY(14px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
-@keyframes mxFilaIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes mxChipIn { from { opacity: 0; transform: translateY(-8px) scale(.82); } 60% { opacity: 1; transform: translateY(1px) scale(1.04); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
