@@ -142,7 +142,10 @@
     window.mxBsSemanaCelda = function (emp, domingo) {
         const r = evalDe(emp);
         const cont = r ? chipSemana(r, domingo) : '';
-        return '<td class="col-day bs-sem-td text-center p-0 align-middle">' + (cont || '<span class="bs-na">·</span>') + '</td>';
+        // La semana perdida ($0) lleva rayas rojas, como los días sin turno pero en rojo (dueño, 23-11-2026)
+        const s = r ? (r.semanas || []).find(x => x.hasta === domingo) : null;
+        const perdida = s && s.estado === 'pierde' ? ' bs-sem-perdida' : '';
+        return '<td class="col-day bs-sem-td' + perdida + ' text-center p-0 align-middle">' + (cont || '<span class="bs-na">·</span>') + '</td>';
     };
 
     window.mxBsLeyenda = function () {

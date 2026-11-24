@@ -1,7 +1,7 @@
 # Graph Report - Asistencia  (2026-11-23)
 
 ## Corpus Check
-- 308 files · ~582,736 words
+- 308 files · ~582,785 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 64 file(s) not represented in the graph (top: .css 33, .woff2 14, (none) 6)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6242b95d`
+- Built from commit: `bbe488f6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1168,7 +1168,7 @@ Cohesion: 0.24
 Nodes (13): abrirPop(), api(), cargarAvisos(), cargarPersonas(), cerrarPop(), disponibles(), enlazarMulti(), itemsMulti() (+5 more)
 
 ## Knowledge Gaps
-- **33 isolated node(s):** `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado`, `Destinatarios del correo del informe de cierre por cargar`, `Fuentes Barlow TTF para el informe de cierre PDF` (+28 more)
+- **33 isolated node(s):** `services/reglas_marcas_corridas.py (ensayar_regla)`, `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado`, `services/dashboard_detalle.py (Ver detalle)` (+28 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2159 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **75 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -1176,15 +1176,15 @@ Nodes (13): abrirPop(), api(), cargarAvisos(), cargarPersonas(), cerrarPop(), di
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `SecurityContext` connect `SecurityContext` to `ConfiguracionRepository`, `TurnoRepository`, `_servicio`, `update_justificacion`, `delete_libreta_180h`, `ocr_libreta_180h_upload`, `gps_nexacol.py`, `TurnoRepository`, `routers/configuracion.py`, `ConfiguracionService`, `.sync_marcaciones`, `routers/whatsapp.py`, `AreaRepository`, `Any`, `PorteriaRepository`, `create_pagador`, `reasignar_turno_acompanante_180h`, `CalendarioService`, `routers/productos_4.py`, `RequireAnyPermission`, `typing`, `ReportService`, `AsistenciaService`, `routers/sync.py`, `Any`, `Any`, `VisitasRepository`, `asistencia_marcas.py`, `json`, `update_rol`, `routers/seguridad.py`, `EmpleadoRepository`, `deshacer_registro`, `corregir_borradores_duplicados.py`, `reproceso_masivo_async`, `_get`, `whatsapp_service.py`, `marcar_presencia`, `FlotaRepository`, `save_libreta_180h`, `destino_valido`, `LlavesRepository`, `get_libreta_foto`, `_solo_super`, `routers/productos_4.py`, `AsistenciaService`, `update_assignment_date`, `velocidades_choferes`, `delete_rol`, `update_catalogo_hallazgo`, `export_turnos_ciclo`, `Any`, `SeguridadRepository`?**
-  _High betweenness centrality (0.086) - this node is a cross-community bridge._
+  _High betweenness centrality (0.085) - this node is a cross-community bridge._
 - **Are the 292 inferred relationships involving `SecurityContext` (e.g. with `exportar_excel()` and `get_empleados_art22()`) actually correct?**
   _`SecurityContext` has 292 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado` to the rest of the system?**
+- **What connects `services/reglas_marcas_corridas.py (ensayar_regla)`, `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend` to the rest of the system?**
   _33 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Recomendaciones #1 a #9 ordenadas por ganancia/costo` be split into smaller, more focused modules?**
   _Cohesion score 0.13725490196078433 - nodes in this community are weakly interconnected._
 - **Why does `AsistenciaRepository` connect `Any` to `ConfiguracionRepository`, `TurnoRepository`, `SecurityContext`, `_servicio`, `update_justificacion`, `.sync_marcaciones`, `test_reglas_salida.py`, `Etapa 4: consultas SQL a su lugar`, `routers/configuracion.py`, `ConfiguracionService`, `routers/whatsapp.py`, `AreaRepository`, `asyncio`, `reasignar_turno_acompanante_180h`, `routers/productos_4.py`, `typing`, `ReportService`, `AsistenciaService`, `recalculo_service.py`, `routers/sync.py`, `BonoService`, `asistencia_marcas.py`, `corregir_borradores_duplicados.py`, `reproceso_masivo_async`, `CambioLaborService`, `reglas_marcas_corridas.py`, `update_assignment_date`, `AsistenciaService`, `velocidades_choferes`, `events.py`, `test_historial_cierres_periodo.py`?**
-  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+  _High betweenness centrality (0.067) - this node is a cross-community bridge._
 - **Are the 40 inferred relationships involving `AsistenciaRepository` (e.g. with `acompanantes_del_dia()` and `marcar_no_cumple()`) actually correct?**
   _`AsistenciaRepository` has 40 INFERRED edges - model-reasoned connections that need verification._
 - **Should `Articulo22Repository` be split into smaller, more focused modules?**

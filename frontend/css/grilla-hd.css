@@ -291,3 +291,8 @@ td.bs-sem-td .bs-sem { font-size: 11px; padding: 1px 6px; }
 .bs-ncn.bs-x { background: #fdecee; color: #b4232f; }
 /* «?»: día trabajado que falta evaluar (dueño, 23-11-2026) */
 .bs-dia.bs-sin { background: #eef1f7; color: #4a5468; }
+/* Fill Rate: el «Total semana» de una semana perdida va rayado en rojo, como los días sin turno pero en rojo (23-11-2026) */
+#marcaciones-view-container td.bs-sem-td.bs-sem-perdida, td.bs-sem-td.bs-sem-perdida {
+  background-color: #fdf3f4 !important;
+  background-image: repeating-linear-gradient(135deg, rgba(225, 112, 122, .30) 0 4px, transparent 4px 7px) !important;
+}
