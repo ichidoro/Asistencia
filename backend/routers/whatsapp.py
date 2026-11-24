@@ -161,7 +161,7 @@ async def encender_aviso(aviso: str, datos: AvisoIn, db: Database = Depends(get_
     meta = _aviso_o_404(aviso)
     repo = await _repo(db)
     if datos.activo and meta["usa_chats"] and not await repo.destinos(aviso):
-        raise HTTPException(400, "Asigne al menos un chat antes de encender este aviso.")
+        raise HTTPException(400, "Marque al menos una persona (botón «Revisar y asignar contacto por persona») antes de encender este aviso.")
     await repo.poner_activo(aviso, datos.activo)
     return {"ok": True}
 

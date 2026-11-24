@@ -2951,23 +2951,13 @@ window.cargarMapaCodigo = async function () {
                     + '<div class="d-flex flex-wrap gap-2 align-items-center mt-3"><span class="text-muted" style="font-size:0.85rem;"><i class="bi bi-funnel"></i> Solo de:</span>'
                     + multiselect('areas', 'Áreas', sel) + multiselect('cargos', 'Cargos', sel)
                     + '<span class="text-muted" style="font-size:0.78rem;">(cada lista muestra solo lo que existe en lo que marque en la otra, con cuántas personas hay)</span></div>';
-                if (usaChats) {
-                    h += '<div class="mt-3" style="font-size:0.9rem;"><b>Se envía a:</b> ';
-                    const chats = a.destinos.filter(function (d) { return d.destino.indexOf('emp:') !== 0; }), nPers = a.destinos.length - chats.length;
-                    h += (nPers ? '<span class="badge rounded-pill bg-primary me-1 py-2"><i class="bi bi-person-vcard-fill"></i> ' + nPers + (nPers === 1 ? ' persona' : ' personas') + ' (ver tabla)</span>' : '') + (chats.length ? chats.map(function (d) {
-                        const esGrupo = d.destino.indexOf('@g.us') > 0, esPersona = d.destino.indexOf('emp:') === 0, enc = esPersona && (d.estado === 'ok' || d.estado === 'manual');
-                        return '<span class="badge rounded-pill bg-light text-dark border me-1 py-2"><i class="bi ' + (esGrupo ? 'bi-people-fill text-success' : esPersona ? 'bi-person-vcard-fill text-primary' : 'bi-person-fill text-primary') + '"></i> ' + esc(d.etiqueta || d.destino)
-                            + (esPersona ? ' <span class="' + (enc ? 'text-success' : 'text-danger') + '" style="font-weight:400;" title="' + esc(enc ? 'Su WhatsApp: ' + (d.contacto || '') : 'No se encontró su contacto en el teléfono: no recibirá el aviso') + '">' + (enc ? '· WhatsApp ✓' : '· sin contacto') + '</span>' : '')
-                            + ' <a href="#" class="wa-quitar text-danger text-decoration-none ms-1" data-id="' + d.id + '" title="Quitar">✕</a></span>';
-                    }).join('') : (nPers ? '' : '<span class="text-muted">nadie asignado</span>'));
-                    h += '</div><div class="d-flex flex-wrap gap-2 mt-2 align-items-center">'
-                        + '<span class="text-muted" style="font-size:0.85rem;">Grupo de WhatsApp o chat (opcional):</span>'
-                        + '<input class="form-control wa-buscar" placeholder="Buscar un contacto o grupo, o escribir un celular" style="max-width:360px;">'
-                        + '<input class="form-control wa-eti" placeholder="Nombre (opcional)" style="max-width:170px;">'
-                        + '<button class="btn btn-outline-primary wa-add">Asignar</button></div>';
-                    if (contactos && !contactos.length && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">WhatsApp entrega los contactos al vincular y aún no llegó ninguno: puede escribir un celular, o cortar la conexión y vincular de nuevo.</div>';
-                }
-                h += '<div class="mt-3"><button class="btn btn-sm btn-outline-primary wa-personas"><i class="bi bi-people"></i> ' + (usaChats ? 'Elegir quién lo recibe y revisar su contacto' : 'Revisar y asignar contacto por persona') + '</button><div class="wa-personas-box mt-2"></div></div>';
+                // Igual que el resumen personal: los destinatarios se eligen en la tabla por persona. Solo se muestran los grupos o chats sueltos que ya estuvieran asignados, para poder quitarlos.
+                const chatsViejos = usaChats ? a.destinos.filter(function (d) { return d.destino.indexOf('emp:') !== 0; }) : [];
+                if (chatsViejos.length) h += '<div class="mt-3" style="font-size:0.9rem;"><b>Chats asignados antes:</b> ' + chatsViejos.map(function (d) {
+                    return '<span class="badge rounded-pill bg-light text-dark border me-1 py-2"><i class="bi ' + (d.destino.indexOf('@g.us') > 0 ? 'bi-people-fill text-success' : 'bi-person-fill text-primary') + '"></i> ' + esc(d.etiqueta || d.destino)
+                        + ' <a href="#" class="wa-quitar text-danger text-decoration-none ms-1" data-id="' + d.id + '" title="Quitar">✕</a></span>';
+                }).join('') + '</div>';
+                h += '<div class="mt-3"><button class="btn btn-sm btn-outline-primary wa-personas"><i class="bi bi-people"></i> ' + 'Revisar y asignar contacto por persona' + '</button><div class="wa-personas-box mt-2"></div></div>';
                 h += '<div class="mt-3"><button class="btn btn-sm btn-outline-secondary me-2 wa-sim">Simular (no envía)</button>'
                     + '<button class="btn btn-sm btn-primary wa-env">Enviar ahora</button></div></div>';
                 return h;
@@ -2984,24 +2974,20 @@ window.cargarMapaCodigo = async function () {
             box.querySelectorAll('.wa-quitar').forEach(function (a) {
                 a.onclick = async function (ev) { ev.preventDefault(); await api('DELETE', '/destinos/' + a.getAttribute('data-id')); cargarAvisos(); };
             });
-            const buscar = box.querySelector('.wa-buscar');
-            if (buscar) selector(buscar);
-            const add = box.querySelector('.wa-add');
-            if (add) add.onclick = async function () {
-                const texto = buscar.value.trim(), eti = box.querySelector('.wa-eti').value.trim();
-                if (!texto) { msg('Elija un contacto o grupo, o escriba un celular.'); return; }
-                const hit = elegido(buscar);
-                const r = await api('POST', '/avisos/' + aviso + '/destinos', { destino: hit ? hit.id : texto, etiqueta: eti || (hit ? hit.nombre : '') });
-                if (!r.ok) { msg(esc(r.j.detail || 'No se pudo asignar.')); return; }
-                msg('Chat asignado.'); cargarAvisos();
-            };
             const correr = async function (simular) {
                 msg(simular ? 'Calculando…' : 'Enviando… puede tardar unos minutos.');
                 const r = await api('POST', '/resumen-semanal', { simular: simular, aviso: aviso });
                 if (!r.ok) return msg(esc(r.j.detail || 'Error al calcular el resumen.'));
                 const j = r.j;
+                if (j.aviso === 'exceso_velocidad') {
+                    let tv = 'Límite: <b>' + j.limite + ' km/h</b>. Camiones sobre el límite ahora: <b>' + j.sobre_limite + '</b>; a avisar: <b>' + j.a_avisar + '</b>.';
+                    if (simular && !(j.vista_previa || []).length) tv += '<div class="text-muted">Ningún camión de la Flota en vivo está sobre el límite en este momento.</div>';
+                    if (simular) tv += (j.vista_previa || []).map(function (v) { return '<div class="mt-2"><b>Jefatura</b></div><pre class="p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.mensaje_jefatura) + '</pre><div><b>Chofer</b> (' + esc(v.chofer || 'sin asignar') + ', ' + (v.chofer_recibe ? 'recibe' : 'no recibe') + ')</div><pre class="p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.mensaje_chofer) + '</pre>'; }).join('');
+                    else tv += '<div class="mt-1">Enviados a jefatura: <b>' + j.enviados + '</b>, a choferes: <b>' + j.choferes_avisados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
+                    return msg(tv);
+                }
                 let t = '<b>' + j.personas + '</b> personas en Bolsa (dentro del filtro). ';
-                t += j.chats != null ? 'Chats asignados: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> con contacto asignado o encontrado.';
+                t += j.chats != null ? 'Reciben el aviso: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> con contacto asignado o encontrado.';
                 if ((j.sin_contacto || []).length) t += '<div class="text-muted">Sin contacto con su nombre (no se les envía): ' + esc(j.sin_contacto.join(', ')) + '</div>';
                 if ((j.ambiguos || []).length) t += '<div class="text-muted">Con más de un contacto posible (no se les envía): ' + esc(j.ambiguos.join('; ')) + '</div>';
                 if (simular && (j.coincidencias || []).length) t += '<details class="mt-2"><summary>Revisar a quién llegaría (' + j.coincidencias.length + ')</summary><table class="table table-sm mt-1" style="font-size:0.8rem;"><thead><tr><th>Persona</th><th>Contacto</th><th>Número</th></tr></thead><tbody>' + j.coincidencias.map(function (x) { return '<tr><td>' + esc(x.persona) + '</td><td>' + esc(x.contacto) + '</td><td>' + esc(x.numero) + '</td></tr>'; }).join('') + '</tbody></table></details>';
