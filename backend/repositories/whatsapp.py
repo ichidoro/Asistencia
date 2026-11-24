@@ -3,6 +3,10 @@ from typing import Any, Dict, List
 from backend.core.database import Database
 
 
+# Filtro con el que parte un aviso que lo trae de fábrica: se siembra una sola vez y desde ahí se edita como el de cualquier otro aviso.
+FILTROS_SEMILLA = {"resumen_general": {"cargo": ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]}}
+
+
 class WhatsappRepository:
     """Qué avisos automáticos están encendidos y a qué chats (grupos o celulares) va cada uno."""
 
@@ -28,17 +32,27 @@ class WhatsappRepository:
             await self.db.execute("CREATE TABLE IF NOT EXISTS whatsapp_filtros (aviso TEXT NOT NULL, tipo TEXT NOT NULL, valor TEXT NOT NULL, PRIMARY KEY (aviso, tipo, valor))")
         if not await self.db.table_exists("whatsapp_persona_destino"):
             await self.db.execute("CREATE TABLE IF NOT EXISTS whatsapp_persona_destino (emp_id INTEGER PRIMARY KEY, destino TEXT NOT NULL, etiqueta TEXT)")
+        for aviso, por_tipo in FILTROS_SEMILLA.items():
+            if await self.db.fetch_one("SELECT 1 FROM whatsapp_filtros WHERE aviso = ? AND tipo = 'semilla'", (aviso,)):
+                continue
+            for tipo, valores in por_tipo.items():
+                for v in valores:
+                    if not await self.db.fetch_one("SELECT 1 FROM whatsapp_filtros WHERE aviso = ? AND tipo = ? AND valor = ?", (aviso, tipo, v)):
+                        await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, ?, ?)", (aviso, tipo, v))
+            await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, 'semilla', '1')", (aviso,))
 
     async def filtros(self, aviso: str = "") -> Dict[str, Dict[str, List[str]]]:
         """Áreas y cargos a los que se limita cada aviso (lista vacía = todos). {aviso: {areas: [...], cargos: [...]}}"""
         filas = await self.db.fetch_all("SELECT aviso, tipo, valor FROM whatsapp_filtros" + (" WHERE aviso = ?" if aviso else "") + " ORDER BY valor", (aviso,) if aviso else None)
         out: Dict[str, Dict[str, List[str]]] = {}
         for r in filas:
+            if r["tipo"] == "semilla":
+                continue
             out.setdefault(r["aviso"], {"areas": [], "cargos": []})["areas" if r["tipo"] == "area" else "cargos"].append(r["valor"])
         return out
 
     async def fijar_filtros(self, aviso: str, areas: List[str], cargos: List[str]) -> None:
-        await self.db.execute("DELETE FROM whatsapp_filtros WHERE aviso = ?", (aviso,))
+        await self.db.execute("DELETE FROM whatsapp_filtros WHERE aviso = ? AND tipo != 'semilla'", (aviso,))
         for tipo, valores in (("area", areas), ("cargo", cargos)):
             for v in dict.fromkeys(x.strip() for x in valores if x and x.strip()):
                 await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, ?, ?)", (aviso, tipo, v))

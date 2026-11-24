@@ -366,6 +366,9 @@ def test_a_mano_el_resumen_personal_muestra_y_envia_los_dos_mensajes(monkeypatch
     assert enviados == ["CIERRE"]
 
 
+FILTRO_BODEGA = {"areas": [], "cargos": ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]}
+
+
 class _SvcGeneral:
     """Servicio falso: dos de bodega (uno con atraso hoy y horas extras ayer), un chofer que no cuenta y uno de bodega inactivo."""
     class repository:
@@ -385,7 +388,7 @@ class _SvcGeneral:
 def test_resumen_general_atrasos_de_hoy_solo_cargos_de_bodega_activos():
     import asyncio
     from backend.services.whatsapp_resumen import novedades_general, armar_mensaje_general
-    it = asyncio.run(novedades_general(_SvcGeneral, "2026-11-24", "atrasos"))
+    it = asyncio.run(novedades_general(_SvcGeneral, "2026-11-24", "atrasos", FILTRO_BODEGA))
     assert [i["nombre"] for i in it] == ["PEREZ JUAN"] and it[0]["minutos"] == 25 and it[0]["entrada"] == "08:25"
     m = armar_mensaje_general("atrasos", it, "2026-11-24")
     assert "ATRASOS DE HOY" in m and "Perez Juan" in m and "entró 08:25 (25 min de atraso)" in m
@@ -397,7 +400,7 @@ def test_resumen_general_horas_extras_del_dia_anterior_y_lunes_revisa_el_fin_de_
     from backend.services.whatsapp_resumen import novedades_general, armar_mensaje_general, dias_a_revisar
     assert dias_a_revisar("2026-11-24") == [date(2026, 11, 23)]                                   # martes: el lunes
     assert dias_a_revisar("2026-11-23") == [date(2026, 11, 20), date(2026, 11, 21), date(2026, 11, 22)]  # lunes: viernes a domingo
-    it = asyncio.run(novedades_general(_SvcGeneral, "2026-11-24", "extras"))
+    it = asyncio.run(novedades_general(_SvcGeneral, "2026-11-24", "extras", FILTRO_BODEGA))
     m = armar_mensaje_general("extras", it, "2026-11-24")
     assert "HORAS EXTRAS" in m and "Lunes 23/11" in m and "Perez Juan" in m and "1:30 h" in m and "Diaz" not in m
 

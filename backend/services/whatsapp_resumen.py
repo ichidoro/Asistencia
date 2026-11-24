@@ -16,9 +16,6 @@ from backend.services import whatsapp_service
 PAUSA_ENTRE_ENVIOS_SEG = 3  # no ráfagas: un número nuevo que dispara muchos mensajes seguidos arriesga bloqueo
 MAX_LINEAS_JEFATURA = 50    # el mensaje de WhatsApp se corta en 4000 caracteres
 
-# Cargos de bodega que mira el resumen general (se usan si el aviso no tiene un filtro de cargos propio).
-CARGOS_GENERAL = ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]
-
 # Catálogo de avisos automáticos. `franja`: manana (lunes a viernes 08:00) o tarde (20:00: cada viernes y el día del cierre del período). `usa_chats`: van a los chats asignados; si no, a cada persona.
 AVISOS = {
     "resumen_personal": {
@@ -35,7 +32,7 @@ AVISOS = {
     },
     "resumen_general": {
         "nombre": "Resumen general de bodega (atrasos y horas extras)",
-        "descripcion": "A los chats que se asignen, sobre ayudantes de bodega, inventario, jefe de bodega, operador de grúa y supervisor de carga, según su marcaje: a las 12:00 avisa quién marcó atrasado hoy y a las 08:00 quién hizo horas extras el día anterior (el lunes, de viernes a domingo). Si no hay novedades no envía nada.",
+        "descripcion": "A los chats que se asignen, sobre ayudantes de bodega, inventario, jefe de bodega, operador de grúa y supervisor de carga, según su marcaje (el filtro de cargos parte con esos cinco y se puede cambiar como en los demás avisos): a las 12:00 avisa quién marcó atrasado hoy y a las 08:00 quién hizo horas extras el día anterior (el lunes, de viernes a domingo). Si no hay novedades no envía nada.",
         "usa_chats": True,
         "franjas": {"manana": "extras", "mediodia": "atrasos"},
     },
@@ -326,9 +323,6 @@ async def novedades_general(asistencia_service, hoy: str, momento: str, filtro: 
     dias = [date.fromisoformat(hoy)] if momento == "atrasos" else dias_a_revisar(hoy)
     db = asistencia_service.repository.db
     fichas = {int(r["id"]): r for r in await db.fetch_all("SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, e.activo, a.nombre AS area FROM empleados e LEFT JOIN areas a ON a.id = e.area_id")}
-    filtro = dict(filtro or {})
-    if not filtro.get("cargos"):
-        filtro["cargos"] = CARGOS_GENERAL
     matriz = await asistencia_service.get_matrix_data_with_projections(
         dias[0].month, dias[0].year, area=None, turno_id=None, fecha_inicio_override=dias[0].isoformat(), fecha_fin_override=dias[-1].isoformat())
     celdas = matriz.get("matrix", {})
