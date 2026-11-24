@@ -2770,7 +2770,7 @@ window.cargarMapaCodigo = async function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
     const esc = function (t) { return window.Ayuda.esc(t); };   // el escape común de ayudantes.js (regla del proyecto)
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
-    let timer = null, grupos = null, contactos = null, opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
+    let timer = null, grupos = null, contactos = null, contactosEn = 0, opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
 
     async function api(metodo, ruta, cuerpo) {
         const r = await fetch('/api/whatsapp' + ruta, { method: metodo, headers: H(), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
@@ -2840,7 +2840,14 @@ window.cargarMapaCodigo = async function () {
     }
     function selector(inp) {
         inp.setAttribute('autocomplete', 'off');
-        inp.addEventListener('focus', function () { abrirPop(inp); });
+        // WhatsApp entrega los contactos con retraso: si al cargar la pantalla aún no habían llegado, la lista quedaba solo con grupos. Se vuelven a pedir al abrir el selector.
+        inp.addEventListener('focus', async function () {
+            abrirPop(inp);
+            if (contactos && contactos.length && Date.now() - contactosEn < 30000) return;
+            const co = await api('GET', '/contactos');
+            contactosEn = Date.now();
+            if (co.ok && (co.j.contactos || []).length !== (contactos || []).length) { contactos = co.j.contactos || []; if (document.activeElement === inp) abrirPop(inp); }
+        });
         inp.addEventListener('input', function () { inp._sel = null; abrirPop(inp); });
         inp.addEventListener('blur', function () { setTimeout(function () { if (popInput === inp) cerrarPop(); }, 120); });
         inp.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') cerrarPop(); });
