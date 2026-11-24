@@ -16,7 +16,7 @@ from backend.services import whatsapp_service
 PAUSA_ENTRE_ENVIOS_SEG = 3  # no ráfagas: un número nuevo que dispara muchos mensajes seguidos arriesga bloqueo
 MAX_LINEAS_JEFATURA = 50    # el mensaje de WhatsApp se corta en 4000 caracteres
 
-# Catálogo de avisos automáticos (lunes 08:00). `usa_chats`: van a los chats asignados; si no, a cada persona.
+# Catálogo de avisos automáticos (todos los días 08:00). `usa_chats`: van a los chats asignados; si no, a cada persona.
 AVISOS = {
     "resumen_personal": {
         "nombre": "Resumen semanal a cada persona",
@@ -32,7 +32,7 @@ AVISOS = {
         "nombre": "Alerta de exceso de velocidad (en vivo)",
         "descripcion": "A los chats que se asignen: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta más de 95 km/h, con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
         "usa_chats": True,
-        "tiempo_real": True,  # no va en el cron del lunes: lo dispara cron-alerta-velocidad.sh
+        "tiempo_real": True,  # no va en el cron de las 08:00: lo dispara cron-alerta-velocidad.sh
     },
 }
 
@@ -126,7 +126,6 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
     """Consolidado de todas las personas con meta, de más a menos horas: quiénes ya cumplieron y a quiénes les falta (con lo que necesitan por día)."""
     dias = max(0, (date.fromisoformat(fin) - date.fromisoformat(hoy)).days)
     con_meta = [i for i in items if i["meta"] > 0]
-    sin_meta = len(items) - len(con_meta)
     cumplen = [i for i in con_meta if i["acum"] >= i["meta"]]
     atras = sorted((i for i in con_meta if i["acum"] < i["meta"]), key=lambda i: i["acum"] / i["meta"])
     prom = round(sum(min(i["acum"] / i["meta"], 1) for i in con_meta) / len(con_meta) * 100) if con_meta else 0
@@ -139,9 +138,6 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
         f"▪ Pendientes: *{len(atras)}*",
         f"▪ Avance promedio: *{prom} %*  {_barra(prom)}",
     ]
-    if sin_meta:
-        nombres = ", ".join(_nombre_propio(i["nombre"]) for i in items if i["meta"] <= 0)
-        lineas.append(f"▪ Sin meta en el período: {sin_meta} ({nombres})")
     if con_meta:
         d = max(dias, 1)
         lineas += ["", f"✅ meta cumplida · 🟡 alcanzable · 🔴 requiere más de {RITMO_ALTO_H} h diarias"]
