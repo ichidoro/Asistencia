@@ -3003,8 +3003,8 @@ window.cargarMapaCodigo = async function () {
     }
 
     // ── Contacto por persona: ver a quién llega cada resumen y fijarlo a mano ──
-    const ETIQ = { manual: 'Manual', ok: 'Por nombre', ambiguo: 'Ambiguo', ninguno: 'Sin contacto' };
-    const COL = { manual: 'bg-primary', ok: 'bg-success', ambiguo: 'bg-warning text-dark', ninguno: 'bg-danger' };
+    const ETIQ = { manual: 'Manual', ok: 'Por nombre', ambiguo: 'Ambiguo', ninguno: 'Sin contacto', norecibe: 'No recibe' };
+    const COL = { manual: 'bg-primary', ok: 'bg-success', ambiguo: 'bg-warning text-dark', ninguno: 'bg-danger', norecibe: 'bg-secondary' };
     async function cargarPersonas(caja) {
         const previo = caja.querySelector('.wp-scroll');
         const scrollY = previo ? previo.scrollTop : 0, filtroPrev = caja.querySelector('.wp-estado') ? caja.querySelector('.wp-estado').value : '', textoPrev = caja.querySelector('.wp-buscar') ? caja.querySelector('.wp-buscar').value : '';
@@ -3012,7 +3012,7 @@ window.cargarMapaCodigo = async function () {
         const avisoDe = caja.closest('[data-aviso]').getAttribute('data-aviso');
         const r = await api('GET', '/personas?aviso=' + encodeURIComponent(avisoDe));
         if (!r.ok) { caja.innerHTML = esc(r.j.detail || 'No se pudo cargar.'); return; }
-        const orden = { ninguno: 0, ambiguo: 1, ok: 2, manual: 3 };
+        const orden = { ninguno: 0, ambiguo: 1, ok: 2, manual: 3, norecibe: 4 };
         const lista = r.j.personas.slice().sort(function (a, b) { return (b.incluida - a.incluida) || orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre, 'es'); });
         const n = function (e) { return lista.filter(function (p) { return p.incluida && p.estado === e; }).length; };
         const dentro = lista.filter(function (p) { return p.incluida; }).length, esChat = lista.length && lista[0].recibe !== undefined, reciben = lista.filter(function (p) { return p.recibe; }).length;

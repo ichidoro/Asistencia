@@ -219,7 +219,7 @@ def test_listar_destinatarios_marca_quien_recibe_y_respeta_el_filtro(monkeypatch
     monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
     r = asyncio.run(wr.listar_destinatarios(None, Repo(), "resumen_jefatura", {"areas": [], "cargos": ["CHOFER", "PEONETA", "JEFE"]}))
     por = {x["emp_id"]: x for x in r}
-    assert por[2]["recibe"] and por[2]["estado"] == "ok" and por[2]["numero"] == "+56911112222" and not por[1]["recibe"] and por[1]["estado"] == "ninguno"
+    assert por[2]["recibe"] and por[2]["estado"] == "ok" and por[2]["numero"] == "+56911112222" and not por[1]["recibe"] and por[1]["estado"] == "norecibe" and por[1]["contacto"] is None
     assert por[1]["incluida"] and por[2]["incluida"] and not por[3]["incluida"]
 
 

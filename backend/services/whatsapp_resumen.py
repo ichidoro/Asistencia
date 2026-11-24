@@ -206,9 +206,12 @@ async def listar_destinatarios(db: Any, repo: Any, aviso: str, filtro: Dict[str,
     for f in await repo.empleados_activos(solo_art22=bool(AVISOS.get(aviso, {}).get("solo_art22"))):
         nombre = " ".join(str(f[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(f[k] or "").strip())
         estado, hallado = resolver_destino(f["nombre"] or "", f["apellido_paterno"] or "", f["apellido_materno"] or "", manuales.get(int(f["id"])), contactos)
+        recibe = PREFIJO_PERSONA + str(f["id"]) in asignadas
+        if not recibe and estado != "manual":
+            estado, hallado = "norecibe", None  # quien no recibe el aviso no muestra el contacto que se le encontraría: parecería asignado
         con = estado in ("ok", "manual")
         out.append({"emp_id": f["id"], "nombre": nombre, "area": f["area"] or "", "cargo": f["cargo"] or "", "incluida": pasa_filtro(f["area"], f["cargo"], filtro),
-                    "recibe": PREFIJO_PERSONA + str(f["id"]) in asignadas, "estado": estado, "contacto": hallado["nombre"] if con else None,
+                    "recibe": recibe, "estado": estado, "contacto": hallado["nombre"] if con else None,
                     "numero": _numero_de(hallado["id"]) if con else None, "candidatos": [x["nombre"] for x in hallado] if estado == "ambiguo" else []})
     return out
 
