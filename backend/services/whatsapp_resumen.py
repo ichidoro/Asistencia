@@ -14,24 +14,23 @@ from loguru import logger
 from backend.services import whatsapp_service
 
 PAUSA_ENTRE_ENVIOS_SEG = 3  # no ráfagas: un número nuevo que dispara muchos mensajes seguidos arriesga bloqueo
-MAX_LINEAS_JEFATURA = 40    # el mensaje de WhatsApp se corta en 4000 caracteres
+MAX_LINEAS_JEFATURA = 50    # el mensaje de WhatsApp se corta en 4000 caracteres
 
 # Catálogo de avisos automáticos (lunes 08:00). `usa_chats`: van a los chats asignados; si no, a cada persona.
 AVISOS = {
     "resumen_personal": {
         "nombre": "Resumen semanal a cada persona",
-        "descripcion": "A cada persona de Bolsa Flexible, en su propio WhatsApp: cuánto lleva de su meta de 180 h y cuánto le falta. Se la busca por nombre entre los contactos del teléfono (los números de la ficha no se usan).",
+        "descripcion": "A cada persona de Bolsa Flexible, en su propio WhatsApp: cuánto lleva de su meta de 180 h y cuánto le falta. Solo le llega a quien tenga un contacto asignado a mano (los números de la ficha no se usan).",
         "usa_chats": False,
     },
     "resumen_jefatura": {
         "nombre": "Resumen semanal a jefatura",
-        "descripcion": "A las personas de Artículo 22 que se asignen: quiénes van más atrás de la meta del período, ordenados de menor a mayor avance.",
+        "descripcion": "A las personas que se asignen (de cualquier área): todas las personas del filtro, de más a menos horas, con quiénes ya cumplieron la meta del período y a quiénes les falta.",
         "usa_chats": True,
-        "solo_art22": True,  # los destinatarios se eligen entre el personal de Artículo 22 (jefatura)
     },
     "exceso_velocidad": {
         "nombre": "Alerta de exceso de velocidad (en vivo)",
-        "descripcion": "A los chats que se asignen: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta más de 95 km/h, con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano o el que se encuentra por nombre en el teléfono, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
+        "descripcion": "A los chats que se asignen: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta más de 95 km/h, con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
         "usa_chats": True,
         "tiempo_real": True,  # no va en el cron del lunes: lo dispara cron-alerta-velocidad.sh
     },
@@ -124,7 +123,7 @@ def _pct_pendiente(acum: float, meta: float) -> int:
 
 
 def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, hoy: str) -> str:
-    """Consolidado: las personas que aún no llegan a la meta, de menor a mayor avance, con lo que necesitan por día para llegar."""
+    """Consolidado de todas las personas con meta, de más a menos horas: quiénes ya cumplieron y a quiénes les falta (con lo que necesitan por día)."""
     dias = max(0, (date.fromisoformat(fin) - date.fromisoformat(hoy)).days)
     con_meta = [i for i in items if i["meta"] > 0]
     sin_meta = len(items) - len(con_meta)
@@ -142,18 +141,20 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
     ]
     if sin_meta:
         lineas.append(f"▪ Sin meta definida: {sin_meta}")
-    if atras:
+    if con_meta:
         d = max(dias, 1)
-        lineas += ["", f"*Pendientes* (de menor a mayor avance)", f"🔴 requiere más de {RITMO_ALTO_H} h diarias · 🟡 alcanzable", ""]
-        for n, i in enumerate(atras[:MAX_LINEAS_JEFATURA], 1):
-            falta = i["meta"] - i["acum"]
-            marca = "🔴" if falta / d > RITMO_ALTO_H * 60 else "🟡"
-            lineas.append(f"{marca} *{_nombre_propio(i['nombre'])}* · {_pct_pendiente(i['acum'], i['meta'])} %")
-            lineas.append(f"     {_hhmm(i['acum'])} de {_hhmm(i['meta'])} h · faltan *{_hhmm(falta)} h*" + (f" (≈ {_hhmm(falta / d)} h por día)" if dias > 1 else ""))
-        if len(atras) > MAX_LINEAS_JEFATURA:
-            lineas.append(f"… y {len(atras) - MAX_LINEAS_JEFATURA} más.")
-    else:
-        lineas += ["", "✅ Todas las personas cumplieron la meta."]
+        lineas += ["", "*Detalle por persona* (de más a menos horas)", f"✅ meta cumplida · 🟡 alcanzable · 🔴 requiere más de {RITMO_ALTO_H} h diarias", ""]
+        todos = sorted(con_meta, key=lambda i: i["acum"], reverse=True)
+        for i in todos[:MAX_LINEAS_JEFATURA]:
+            nombre = _nombre_propio(i["nombre"])
+            if i["acum"] >= i["meta"]:
+                lineas.append(f"✅ *{nombre}* · {_hhmm(i['acum'])} h (+{_hhmm(i['acum'] - i['meta'])})")
+            else:
+                falta = i["meta"] - i["acum"]
+                marca = "🔴" if falta / d > RITMO_ALTO_H * 60 else "🟡"
+                lineas.append(f"{marca} *{nombre}* · {_hhmm(i['acum'])} h ({_pct_pendiente(i['acum'], i['meta'])} %) · faltan *{_hhmm(falta)} h*" + (f" (≈ {_hhmm(falta / d)} h/día)" if dias > 1 else ""))
+        if len(todos) > MAX_LINEAS_JEFATURA:
+            lineas.append(f"… y {len(todos) - MAX_LINEAS_JEFATURA} más.")
     lineas += ["", "_Mensaje automático de Asistencia Aguacol._"]
     return "\n".join(lineas)
 

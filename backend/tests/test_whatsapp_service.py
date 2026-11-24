@@ -72,7 +72,7 @@ def test_enviar_a_un_grupo_lo_manda_tal_cual(monkeypatch):
     assert visto["cuerpo"]["to"] == "120363025246125486@g.us"
 
 
-def test_mensaje_jefatura_ordena_de_menor_a_mayor_avance():
+def test_mensaje_jefatura_lista_a_todos_de_mas_a_menos_horas():
     from backend.services.whatsapp_resumen import armar_mensaje_jefatura
     items = [
         {"nombre": "Ana", "acum": 100 * 60, "meta": 180 * 60},
@@ -81,15 +81,16 @@ def test_mensaje_jefatura_ordena_de_menor_a_mayor_avance():
     ]
     m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-23")
     assert "Con meta cumplida: *1 de 3*" in m and "Pendientes: *2*" in m and "Avance promedio: *61 %*" in m and "quedan 2 días" in m
-    assert m.index("Cami") < m.index("Ana") and "Beto" not in m
-    assert "🔴 *Cami* · 27 %" in m and "50:00 de 180:00 h · faltan *130:00 h* (≈ 65:00 h por día)" in m
+    assert m.index("Beto") < m.index("Ana") < m.index("Cami")   # más horas arriba, y quien cumplió también sale
+    assert "✅ *Beto* · 190:00 h (+10:00)" in m
+    assert "🔴 *Cami* · 50:00 h (27 %) · faltan *130:00 h* (≈ 65:00 h/día)" in m
 
 
 def test_mensaje_jefatura_nombres_sin_gritar_y_nunca_100_pendiente():
     from backend.services.whatsapp_resumen import armar_mensaje_jefatura
     items = [{"nombre": "SILVA BRIONES JAVIER", "acum": 179 * 60 + 45, "meta": 180 * 60}, {"nombre": "SIN META", "acum": 0, "meta": 0}]
     m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-25")
-    assert "Silva Briones Javier* · 99 %" in m and "100 %" not in m.split("Pendientes*")[1]
+    assert "Silva Briones Javier* · 179:45 h (99 %)" in m and "100 %" not in m.split("Detalle por persona*")[1]
     assert "hoy es el último día" in m and "Sin meta definida: 1" in m and "🟡" in m
 
 
@@ -211,7 +212,7 @@ def test_listar_destinatarios_marca_quien_recibe_y_respeta_el_filtro(monkeypatch
     assert por[1]["incluida"] and por[2]["incluida"] and not por[3]["incluida"]
 
 
-def test_resumen_a_jefatura_lista_solo_articulo_22(monkeypatch):
+def test_resumen_a_jefatura_ofrece_personas_de_cualquier_area(monkeypatch):
     import asyncio
     from backend.services import whatsapp_resumen as wr
     pedido = {}
@@ -226,7 +227,7 @@ def test_resumen_a_jefatura_lista_solo_articulo_22(monkeypatch):
     async def contactos(): return []
     monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
     asyncio.run(wr.listar_destinatarios(None, Repo(), "resumen_jefatura"))
-    assert pedido["solo_art22"] is True
+    assert pedido["solo_art22"] is False   # ya no se limita al Artículo 22
     asyncio.run(wr.listar_destinatarios(None, Repo(), "exceso_velocidad"))
     assert pedido["solo_art22"] is False
 
