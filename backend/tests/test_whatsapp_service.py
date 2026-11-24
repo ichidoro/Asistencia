@@ -91,7 +91,7 @@ def test_mensaje_jefatura_nombres_sin_gritar_y_nunca_100_pendiente():
     items = [{"nombre": "SILVA BRIONES JAVIER", "acum": 179 * 60 + 45, "meta": 180 * 60}, {"nombre": "SIN META", "acum": 0, "meta": 0}]
     m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-25")
     assert "Silva Briones Javier* · 179:45 h (99 %)" in m and "100 %" not in m.split("alcanzable")[1]
-    assert "hoy es el último día" in m and "Sin meta definida: 1" in m and "🟡" in m
+    assert "hoy es el último día" in m and "Sin meta en el período: 1 (Sin Meta)" in m and "🟡" in m
 
 
 def test_destino_valido_acepta_contacto_del_telefono():

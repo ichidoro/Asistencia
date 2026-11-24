@@ -140,7 +140,8 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
         f"▪ Avance promedio: *{prom} %*  {_barra(prom)}",
     ]
     if sin_meta:
-        lineas.append(f"▪ Sin meta definida: {sin_meta}")
+        nombres = ", ".join(_nombre_propio(i["nombre"]) for i in items if i["meta"] <= 0)
+        lineas.append(f"▪ Sin meta en el período: {sin_meta} ({nombres})")
     if con_meta:
         d = max(dias, 1)
         lineas += ["", f"✅ meta cumplida · 🟡 alcanzable · 🔴 requiere más de {RITMO_ALTO_H} h diarias"]
