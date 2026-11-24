@@ -50,7 +50,7 @@ def test_mensaje_semanal_falta_y_cumplida():
     assert "Estimado/a Hans" in m and "*169:30 h* de 180:00 h" in m and "*94 %*" in m and "▰▰▰▰▰▰▰▰▰▱" in m
     assert "Pendiente: *10:30 h*" in m and "Plazo: 2 días" in m and "5:15 h por día" in m
     ok = armar_mensaje("Ana", 194 * 60 + 30, 180 * 60, "2026-10-26", "2026-11-25", "2026-11-25")
-    assert "Meta cumplida*, con 14:30 h sobre lo exigido" in ok and "Pendiente" not in ok and "Plazo" not in ok
+    assert "Meta cumplida*, con 14:30 h de horas extras" in ok and "Pendiente" not in ok and "Plazo" not in ok
 
 
 def test_destino_valido_acepta_grupo_o_celular():
@@ -291,7 +291,7 @@ def test_alerta_de_velocidad_tambien_va_a_la_jefatura_del_resumen():
 def test_mensaje_de_cierre_dice_como_le_fue():
     from backend.services.whatsapp_resumen import armar_mensaje_cierre
     ok = armar_mensaje_cierre("JUAN PEREZ", 185 * 60, 180 * 60, "2026-10-26", "2026-11-25")
-    assert "CIERRE DEL PERÍODO" in ok and "Estimado/a Juan" in ok and "Meta cumplida" in ok and "5:00 h sobre lo exigido" in ok
+    assert "CIERRE DEL PERÍODO" in ok and "Estimado/a Juan" in ok and "Meta cumplida" in ok and "5:00 h de horas extras" in ok
     mal = armar_mensaje_cierre("Ana", 170 * 60, 180 * 60, "2026-10-26", "2026-11-25")
     assert "No alcanzó la meta: faltaron *10:00 h*" in mal and "94 %" in mal
 
@@ -337,3 +337,30 @@ def test_cada_franja_envia_solo_sus_avisos(monkeypatch):
     llamados.clear()
     asyncio.run(wr.enviar_automaticos(Svc(), Repo(), "2026-11-25", "tarde"))
     assert llamados == [("resumen_personal", "cierre")]
+
+
+def test_a_mano_el_resumen_personal_muestra_y_envia_los_dos_mensajes(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+    enviados = []
+
+    async def construir(*a, **k):
+        return {"inicio": "2026-10-26", "fin": "2026-11-25", "personas": [{"incluida": True, "nombre": "Ana", "telefono": "56911112222@s.whatsapp.net", "estado": "manual", "candidatos": [],
+                                                                       "contacto": "Ana", "mensaje": "SEMANAL", "mensaje_cierre": "CIERRE"}]}
+
+    async def contactos(): return []
+
+    async def enviar(d, t): enviados.append(t); return True
+
+    async def sin_pausa(_): return None
+    monkeypatch.setattr(wr, "construir", construir)
+    monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
+    monkeypatch.setattr(wr.whatsapp_service, "enviar", enviar)
+    monkeypatch.setattr(wr.asyncio, "sleep", sin_pausa)
+    sim = asyncio.run(wr.enviar_resumen(None, "2026-11-24", simular=True, aviso="resumen_personal", tipo="ambos"))
+    assert [v["mensaje"] for v in sim["vista_previa"]] == ["SEMANAL", "CIERRE"]
+    asyncio.run(wr.enviar_resumen(None, "2026-11-24", simular=False, aviso="resumen_personal", tipo="ambos"))
+    assert enviados == ["SEMANAL", "CIERRE"]
+    enviados.clear()
+    asyncio.run(wr.enviar_resumen(None, "2026-11-24", simular=False, aviso="resumen_personal", tipo="cierre"))
+    assert enviados == ["CIERRE"]

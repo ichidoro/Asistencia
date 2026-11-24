@@ -232,7 +232,8 @@ async def resumen_semanal(datos: ResumenIn, db: Database = Depends(get_db), _: S
     if meta.get("tiempo_real"):
         return await _revisar_velocidad(db, repo, destinos or [], datos.simular)
     return await whatsapp_resumen.enviar_resumen(AsistenciaService(AsistenciaRepository(db)), _hoy(), datos.simular, datos.aviso, destinos, await repo.destinos_personas(),
-                                                 (await repo.filtros(datos.aviso)).get(datos.aviso))
+                                                 (await repo.filtros(datos.aviso)).get(datos.aviso),
+                                                 tipo="ambos")  # a mano (Simular / Enviar ahora) se ven y se envían los dos mensajes; el cron envía solo el que toca
 
 
 @router.post("/resumen-semanal/cron")

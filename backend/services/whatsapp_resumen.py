@@ -102,7 +102,7 @@ def armar_mensaje(nombre: str, acum_min: float, meta_min: float, inicio: str, fi
         f"▪ Acumulado: *{_hhmm(acum_min)} h* de {_hhmm(meta_min)} h",
     ]
     if acum_min >= meta_min:
-        lineas.append(f"✅ *Meta cumplida*, con {_hhmm(acum_min - meta_min)} h sobre lo exigido.")
+        lineas.append(f"✅ *Meta cumplida*, con {_hhmm(acum_min - meta_min)} h de horas extras.")
     else:
         falta = meta_min - acum_min
         lineas.append(f"▪ Pendiente: *{_hhmm(falta)} h*")
@@ -126,7 +126,7 @@ def armar_mensaje_cierre(nombre: str, acum_min: float, meta_min: float, inicio: 
     ]
     if meta_min > 0 and acum_min >= meta_min:
         lineas += [f"{_barra(pct)}  *{pct} %*", f"▪ Horas del período: *{_hhmm(acum_min)} h* de {_hhmm(meta_min)} h",
-                   f"✅ *Meta cumplida*, con {_hhmm(acum_min - meta_min)} h sobre lo exigido."]
+                   f"✅ *Meta cumplida*, con {_hhmm(acum_min - meta_min)} h de horas extras."]
     elif meta_min > 0:
         lineas += [f"{_barra(pct)}  *{_pct_pendiente(acum_min, meta_min)} %*", f"▪ Horas del período: *{_hhmm(acum_min)} h* de {_hhmm(meta_min)} h",
                    f"▪ No alcanzó la meta: faltaron *{_hhmm(meta_min - acum_min)} h*."]
@@ -248,7 +248,7 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
                          destinos: List[str] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None,
                          filtro: Dict[str, List[str]] | None = None, tipo: str = "semanal") -> Dict[str, Any]:
     """simular=True no envía nada: devuelve a quién y qué se enviaría. `destinos` solo para el aviso a chats.
-    `tipo` (solo resumen personal): semanal | cierre (cómo le fue en el período que hoy termina)."""
+    `tipo` (solo resumen personal): semanal | cierre (cómo le fue en el período que hoy termina) | ambos (solo para probar a mano: se ven y se envían los dos)."""
     base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales, filtro)
     personas = [p for p in base["personas"] if p["incluida"]]  # lo que queda fuera del filtro de área y cargo no se cuenta ni se envía
     if aviso == "resumen_jefatura":
@@ -274,22 +274,25 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
         res.update(enviados=enviados, fallidos=fallidos)
         return res
 
-    clave = "mensaje_cierre" if tipo == "cierre" else "mensaje"
+    claves = ["mensaje", "mensaje_cierre"] if tipo == "ambos" else ["mensaje_cierre" if tipo == "cierre" else "mensaje"]
     con_tel = [i for i in personas if i["telefono"]]
     res = {"simulado": simular, "aviso": aviso, "personas": len(personas), "con_contacto": len(con_tel),
            "sin_contacto": [i["nombre"] for i in personas if i["estado"] == "ninguno"], "manuales": sum(1 for i in personas if i["estado"] == "manual"),
            "ambiguos": [f"{i['nombre']} (¿{' o '.join(i['candidatos'])}?)" for i in personas if i["estado"] == "ambiguo"]}
     if simular:
         res["coincidencias"] = [{"persona": i["nombre"], "contacto": i["contacto"], "numero": _numero_de(i["telefono"])} for i in con_tel]
-        res["vista_previa"] = [{"nombre": i["nombre"], "telefono": _numero_de(i["telefono"]), "mensaje": i[clave]} for i in con_tel[:2]]
+        etiqueta = {"mensaje": " · resumen del viernes", "mensaje_cierre": " · cierre del período"} if tipo == "ambos" else {}
+        res["vista_previa"] = [{"nombre": i["nombre"] + etiqueta.get(k, ""), "telefono": _numero_de(i["telefono"]), "mensaje": i[k]}
+                               for i in con_tel[:(1 if tipo == "ambos" else 2)] for k in claves]
         return res
     enviados = fallidos = 0
     for i in con_tel:
-        if await whatsapp_service.enviar(i["telefono"], i[clave]):
-            enviados += 1
-        else:
-            fallidos += 1
-        await asyncio.sleep(PAUSA_ENTRE_ENVIOS_SEG)
+        for k in claves:
+            if await whatsapp_service.enviar(i["telefono"], i[k]):
+                enviados += 1
+            else:
+                fallidos += 1
+            await asyncio.sleep(PAUSA_ENTRE_ENVIOS_SEG)
     logger.info(f"WhatsApp resumen personal ({tipo}): {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin contacto")
     res.update(enviados=enviados, fallidos=fallidos)
     return res
