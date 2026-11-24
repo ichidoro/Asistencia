@@ -32,7 +32,7 @@ AVISOS = {
     },
     "resumen_general": {
         "nombre": "Resumen general de bodega (atrasos y horas extras)",
-        "descripcion": "A los chats que se asignen, sobre ayudantes de bodega, inventario, jefe de bodega, operador de grúa y supervisor de carga, según su marcaje (el filtro de cargos parte con esos cinco y se puede cambiar como en los demás avisos): a las 12:00 avisa quién marcó atrasado hoy y a las 08:00 quién hizo horas extras el día anterior (el lunes, de viernes a domingo). Si no hay novedades no envía nada.",
+        "descripcion": "A los chats que se asignen, sobre ayudantes de bodega, inventario, jefe de bodega, operador de grúa y supervisor de carga de Logística Tradicional, según su marcaje (el filtro de área y cargos parte con eso y se puede cambiar como en los demás avisos): a las 12:00 avisa quién marcó atrasado hoy y a las 08:00 quién hizo horas extras el día anterior (el lunes, de viernes a domingo). Si no hay novedades no envía nada.",
         "usa_chats": True,
         "franjas": {"manana": "extras", "mediodia": "atrasos"},
     },

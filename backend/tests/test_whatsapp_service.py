@@ -366,7 +366,7 @@ def test_a_mano_el_resumen_personal_muestra_y_envia_los_dos_mensajes(monkeypatch
     assert enviados == ["CIERRE"]
 
 
-FILTRO_BODEGA = {"areas": [], "cargos": ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]}
+FILTRO_BODEGA = {"areas": ["LOGÍSTICA TRADICIONAL"], "cargos": ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]}
 
 
 class _SvcGeneral:
@@ -442,3 +442,24 @@ def test_resumen_general_cada_franja_hace_lo_suyo(monkeypatch):
     for franja in ("manana", "mediodia", "tarde"):
         asyncio.run(wr.enviar_automaticos(Svc(), Repo(), "2026-11-24", franja))
     assert llamados == [("resumen_general", "extras"), ("resumen_general", "atrasos")]
+
+
+def test_resumen_general_solo_logistica_tradicional():
+    import asyncio
+    from backend.services.whatsapp_resumen import novedades_general
+
+    class Otra(_SvcGeneral):
+        class repository:
+            class db:
+                @staticmethod
+                async def fetch_all(q, p=()):
+                    f = lambda i, n, a, ar: {"id": i, "nombre": n, "apellido_paterno": a, "apellido_materno": "", "cargo": "INVENTARIO", "activo": 1, "area": ar}
+                    return [f(1, "JUAN", "PEREZ", "LOGISTICA TRADICIONAL"), f(3, "ANA", "ROJAS", "LOGISTICA RETAIL")]
+    dia = {"minutos_atraso": 10, "hora_entrada_real": "08:10"}
+    Otra.get_matrix_data_with_projections = staticmethod(lambda *a, **k: _async({"empleados": [{"id": 1}, {"id": 3}], "matrix": {"1": {"2026-11-24": dia}, "3": {"2026-11-24": dia}}}))
+    it = asyncio.run(novedades_general(Otra, "2026-11-24", "atrasos", FILTRO_BODEGA))
+    assert [i["nombre"] for i in it] == ["PEREZ JUAN"]   # la de Retail queda fuera aunque tenga el mismo cargo
+
+
+async def _async(v):
+    return v

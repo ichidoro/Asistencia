@@ -1,10 +1,18 @@
+import unicodedata
 from typing import Any, Dict, List
 
 from backend.core.database import Database
 
 
-# Filtro con el que parte un aviso que lo trae de fábrica: se siembra una sola vez y desde ahí se edita como el de cualquier otro aviso.
-FILTROS_SEMILLA = {"resumen_general": {"cargo": ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]}}
+# Filtro con el que parte un aviso que lo trae de fábrica: se siembra una sola vez por versión y desde ahí se edita como el de cualquier otro aviso.
+# Subir la versión vuelve a sembrarlo (reemplaza el filtro de ese aviso).
+FILTROS_SEMILLA = {"resumen_general": {"version": "2", "area": ["LOGISTICA TRADICIONAL"],
+                                       "cargo": ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]}}
+
+
+def _clave(t: object) -> str:
+    """Sin tildes ni mayúsculas: «Logística» y «LOGISTICA» son el mismo nombre."""
+    return " ".join(unicodedata.normalize("NFKD", str(t or "")).encode("ascii", "ignore").decode().upper().split())
 
 
 class WhatsappRepository:
@@ -32,14 +40,18 @@ class WhatsappRepository:
             await self.db.execute("CREATE TABLE IF NOT EXISTS whatsapp_filtros (aviso TEXT NOT NULL, tipo TEXT NOT NULL, valor TEXT NOT NULL, PRIMARY KEY (aviso, tipo, valor))")
         if not await self.db.table_exists("whatsapp_persona_destino"):
             await self.db.execute("CREATE TABLE IF NOT EXISTS whatsapp_persona_destino (emp_id INTEGER PRIMARY KEY, destino TEXT NOT NULL, etiqueta TEXT)")
-        for aviso, por_tipo in FILTROS_SEMILLA.items():
-            if await self.db.fetch_one("SELECT 1 FROM whatsapp_filtros WHERE aviso = ? AND tipo = 'semilla'", (aviso,)):
+        for aviso, semilla in FILTROS_SEMILLA.items():
+            if await self.db.fetch_one("SELECT 1 FROM whatsapp_filtros WHERE aviso = ? AND tipo = 'semilla' AND valor = ?", (aviso, semilla["version"])):
                 continue
-            for tipo, valores in por_tipo.items():
-                for v in valores:
-                    if not await self.db.fetch_one("SELECT 1 FROM whatsapp_filtros WHERE aviso = ? AND tipo = ? AND valor = ?", (aviso, tipo, v)):
-                        await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, ?, ?)", (aviso, tipo, v))
-            await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, 'semilla', '1')", (aviso,))
+            # Se usa el nombre tal como está en las fichas (con sus tildes) para que la pantalla lo muestre marcado.
+            reales = await self.opciones_filtro()
+            existentes = {"area": reales["areas"], "cargo": reales["cargos"]}
+            await self.db.execute("DELETE FROM whatsapp_filtros WHERE aviso = ? AND tipo != 'semilla'", (aviso,))
+            for tipo in ("area", "cargo"):
+                por_clave = {_clave(x): x for x in existentes[tipo]}
+                for v in semilla[tipo]:
+                    await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, ?, ?)", (aviso, tipo, por_clave.get(_clave(v), v)))
+            await self.db.execute("INSERT INTO whatsapp_filtros (aviso, tipo, valor) VALUES (?, 'semilla', ?)", (aviso, semilla["version"]))
 
     async def filtros(self, aviso: str = "") -> Dict[str, Dict[str, List[str]]]:
         """Áreas y cargos a los que se limita cada aviso (lista vacía = todos). {aviso: {areas: [...], cargos: [...]}}"""
