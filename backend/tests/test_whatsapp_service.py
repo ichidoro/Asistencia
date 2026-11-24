@@ -210,7 +210,7 @@ def test_listar_destinatarios_marca_quien_recibe_y_respeta_el_filtro(monkeypatch
     class Repo:
         async def destinos_personas(self): return {}
         async def destinos(self, aviso): return [{"destino": "emp:2"}]
-        async def empleados_activos(self):
+        async def empleados_activos(self, solo_art22=False):
             return [{"id": 1, "nombre": "Juan", "apellido_paterno": "Pérez", "apellido_materno": "", "cargo": "CHOFER", "area": "LOGÍSTICA TRADICIONAL"},
                     {"id": 2, "nombre": "Daniel", "apellido_paterno": "Rojas", "apellido_materno": "", "cargo": "JEFE", "area": "LOGÍSTICA TRADICIONAL"},
                     {"id": 3, "nombre": "Ana", "apellido_paterno": "Soto", "apellido_materno": "", "cargo": "ADMINISTRATIVO", "area": "FINANZAS"}]
