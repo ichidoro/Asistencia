@@ -2992,6 +2992,7 @@ window.cargarMapaCodigo = async function () {
                     else tv += '<div class="mt-1">Enviados a jefatura: <b>' + j.enviados + '</b>, a choferes: <b>' + j.choferes_avisados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
                     return msg(tv);
                 }
+                if (j.motivo) return msg('<b>No se envió nada.</b> ' + esc(j.motivo));
                 let t = '<b>' + j.personas + '</b> personas en Bolsa (dentro del filtro). ';
                 t += j.chats != null ? 'Reciben el aviso: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> con contacto asignado a mano.';
                 if ((j.sin_contacto || []).length) t += '<div class="text-muted">Sin contacto asignado (no se les envía): ' + esc(j.sin_contacto.join(', ')) + '</div>';

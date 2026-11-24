@@ -218,6 +218,12 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
     base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales, filtro)
     personas = [p for p in base["personas"] if p["incluida"]]  # lo que queda fuera del filtro de área y cargo no se cuenta ni se envía
     if aviso == "resumen_jefatura":
+        if not personas:
+            # Nunca se manda un consolidado vacío ("0 de 0"): se dice por qué no hay nadie.
+            en_bolsa = len(base["personas"])
+            motivo = ("No hay personas en Bolsa Flexible en este período." if not en_bolsa else
+                      f"Hay {en_bolsa} personas en Bolsa Flexible, pero ninguna cumple el filtro de área y cargo de este aviso. Revise el filtro: solo entran quienes están en Bolsa Flexible.")
+            return {"simulado": simular, "aviso": aviso, "personas": 0, "chats": len(destinos or []), "enviados": 0, "fallidos": 0, "motivo": motivo, "vista_previa": []}
         texto = armar_mensaje_jefatura(personas, base["inicio"], base["fin"], hoy)
         chats = destinos or []
         res: Dict[str, Any] = {"simulado": simular, "aviso": aviso, "personas": len(personas), "chats": len(chats), "vista_previa": [{"nombre": "Mensaje consolidado", "telefono": ", ".join(chats) or "(sin chats asignados)", "mensaje": texto}]}

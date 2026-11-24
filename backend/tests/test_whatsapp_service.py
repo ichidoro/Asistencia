@@ -246,3 +246,21 @@ def test_alerta_velocidad_solo_camiones_tradicional():
     from backend.services.alerta_velocidad import detectar
     flota = [_camion("TCKK47", 98, grupo="OTROS"), _camion("SKBH17", 98), _camion("RR11", 120, grupo="RETAIL"), _camion("PL22", 99, grupo="PLASTICOS"), _camion("SG33", 101, grupo=None), _camion("TR44", 97, grupo=" tradicional ")]
     assert sorted(e["patente"] for e in detectar(flota)) == ["SKBH17", "TR44"]
+
+
+def test_resumen_a_jefatura_vacio_no_se_envia(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+    enviados = []
+
+    async def construir(*a, **k):
+        return {"inicio": "2026-10-26", "fin": "2026-11-25", "personas": [{"incluida": False, "nombre": "X", "acum": 0, "meta": 100}]}
+
+    async def enviar(d, t): enviados.append(d); return True
+    monkeypatch.setattr(wr, "construir", construir)
+    monkeypatch.setattr(wr.whatsapp_service, "enviar", enviar)
+
+    async def contactos(): return []
+    monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
+    r = asyncio.run(wr.enviar_resumen(None, "2026-11-24", simular=False, aviso="resumen_jefatura", destinos=["120@g.us"], filtro={"areas": ["X"], "cargos": []}))
+    assert r["personas"] == 0 and "filtro" in r["motivo"] and enviados == []
