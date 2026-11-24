@@ -364,3 +364,78 @@ def test_a_mano_el_resumen_personal_muestra_y_envia_los_dos_mensajes(monkeypatch
     enviados.clear()
     asyncio.run(wr.enviar_resumen(None, "2026-11-24", simular=False, aviso="resumen_personal", tipo="cierre"))
     assert enviados == ["CIERRE"]
+
+
+class _SvcGeneral:
+    """Servicio falso: dos de bodega (uno con atraso hoy y horas extras ayer), un chofer que no cuenta y uno de bodega inactivo."""
+    class repository:
+        class db:
+            @staticmethod
+            async def fetch_all(q, p=()):
+                f = lambda i, n, a, c, act: {"id": i, "nombre": n, "apellido_paterno": a, "apellido_materno": "", "cargo": c, "activo": act, "area": "LOGISTICA TRADICIONAL"}
+                return [f(1, "JUAN", "PEREZ", "OPERADOR GRÚA", 1), f(2, "LUIS", "DIAZ", "CHOFER", 1), f(3, "ANA", "ROJAS", "INVENTARIO", 1), f(4, "OTRO", "SOTO", "JEFE BODEGA", 0)]
+
+    @staticmethod
+    async def get_matrix_data_with_projections(mes, anio, **k):
+        dia = {"minutos_atraso": 25, "hora_entrada_real": "2026-11-24T08:25:00", "minutos_extra_bruto": 90}
+        return {"empleados": [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}],
+                "matrix": {"1": {"2026-11-24": dia, "2026-11-23": dia}, "2": {"2026-11-24": dia, "2026-11-23": dia}, "3": {"2026-11-24": {"minutos_atraso": 0}, "2026-11-23": {}}, "4": {"2026-11-24": dia, "2026-11-23": dia}}}
+
+
+def test_resumen_general_atrasos_de_hoy_solo_cargos_de_bodega_activos():
+    import asyncio
+    from backend.services.whatsapp_resumen import novedades_general, armar_mensaje_general
+    it = asyncio.run(novedades_general(_SvcGeneral, "2026-11-24", "atrasos"))
+    assert [i["nombre"] for i in it] == ["PEREZ JUAN"] and it[0]["minutos"] == 25 and it[0]["entrada"] == "08:25"
+    m = armar_mensaje_general("atrasos", it, "2026-11-24")
+    assert "ATRASOS DE HOY" in m and "Perez Juan" in m and "entró 08:25 (25 min de atraso)" in m
+
+
+def test_resumen_general_horas_extras_del_dia_anterior_y_lunes_revisa_el_fin_de_semana():
+    import asyncio
+    from datetime import date
+    from backend.services.whatsapp_resumen import novedades_general, armar_mensaje_general, dias_a_revisar
+    assert dias_a_revisar("2026-11-24") == [date(2026, 11, 23)]                                   # martes: el lunes
+    assert dias_a_revisar("2026-11-23") == [date(2026, 11, 20), date(2026, 11, 21), date(2026, 11, 22)]  # lunes: viernes a domingo
+    it = asyncio.run(novedades_general(_SvcGeneral, "2026-11-24", "extras"))
+    m = armar_mensaje_general("extras", it, "2026-11-24")
+    assert "HORAS EXTRAS" in m and "Lunes 23/11" in m and "Perez Juan" in m and "1:30 h" in m and "Diaz" not in m
+
+
+def test_resumen_general_sin_novedades_no_envia_nada(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+    enviados = []
+
+    async def novedades(*a, **k): return []
+
+    async def enviar(d, t): enviados.append(t); return True
+    monkeypatch.setattr(wr, "novedades_general", novedades)
+    monkeypatch.setattr(wr.whatsapp_service, "enviar", enviar)
+    r = asyncio.run(wr.enviar_general(None, "2026-11-24", False, ["120@g.us"], None, "ambos"))
+    assert r["con_novedades"] == 0 and enviados == []
+    assert wr.armar_mensaje_general("atrasos", [], "2026-11-24") is None
+
+
+def test_resumen_general_cada_franja_hace_lo_suyo(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+    llamados = []
+
+    class Repo:
+        async def avisos_activos(self): return {"resumen_general": True}
+        async def destinos_personas(self): return {}
+        async def filtros(self, a): return {}
+        async def destinos(self, a): return []
+
+    async def enviar_resumen(svc, hoy, **k): llamados.append((k["aviso"], k["tipo"])); return {}
+
+    async def destinos_chat(db, repo, aviso): return []
+
+    class Svc:
+        class repository: db = None
+    monkeypatch.setattr(wr, "enviar_resumen", enviar_resumen)
+    monkeypatch.setattr(wr, "destinos_chat", destinos_chat)
+    for franja in ("manana", "mediodia", "tarde"):
+        asyncio.run(wr.enviar_automaticos(Svc(), Repo(), "2026-11-24", franja))
+    assert llamados == [("resumen_general", "extras"), ("resumen_general", "atrasos")]

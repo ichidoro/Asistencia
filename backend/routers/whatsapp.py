@@ -28,7 +28,7 @@ class ResumenIn(BaseModel):
 
 class ResumenCron(BaseModel):
     cron_secret: str
-    franja: str = "manana"  # manana (08:00, lunes a viernes) | tarde (20:00, cada día: el servidor decide si toca viernes o cierre)
+    franja: str = "manana"  # manana (08:00) | mediodia (12:00) | tarde (20:00): cada cron dice cuál es; el servidor decide qué toca
 
 
 class AvisoIn(BaseModel):

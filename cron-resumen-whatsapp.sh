@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Resumen diario de horas (lunes a viernes) (Bolsa vs meta) por WhatsApp. Llama a POST /api/whatsapp/resumen-semanal/cron.
-# franja manana = resumen a jefatura; franja tarde = resumen a cada persona (viernes y día del cierre).
+# franja mediodia = atrasos de hoy del resumen general de bodega:  0 12 * * 1-5 bash /ruta/asistencia/cron-resumen-whatsapp.sh mediodia >> ... 2>&1
+# franja manana = resumen a jefatura y horas extras del día anterior (resumen general); franja tarde = resumen a cada persona (viernes y día del cierre).
 #   0 20 * * * bash /ruta/asistencia/cron-resumen-whatsapp.sh tarde >> /ruta/asistencia/logs/cron_whatsapp.log 2>&1
 # cron sugerido (lunes a viernes 08:00):  0 8 * * 1-5 bash /ruta/asistencia/cron-resumen-whatsapp.sh >> /ruta/asistencia/logs/cron_whatsapp.log 2>&1
-FRANJA="${1:-manana}"   # manana | tarde
+FRANJA="${1:-manana}"   # manana | mediodia | tarde
 set -euo pipefail
 cd "$(dirname "$0")"
 envget() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }

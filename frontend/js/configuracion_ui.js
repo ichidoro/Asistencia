@@ -2941,7 +2941,7 @@ window.cargarMapaCodigo = async function () {
         const c = document.getElementById('wa-avisos');
         if (!c) return;
         opciones = cfg.opciones || opciones;
-        c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(jefatura: lunes a viernes 08:00 · a cada persona: viernes y día del cierre 20:00; si el cron está instalado en el servidor)</span></h6>'
+        c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(jefatura y horas extras de bodega: lunes a viernes 08:00 · atrasos de bodega: lunes a viernes 12:00 · a cada persona: viernes y día del cierre 20:00; si el cron está instalado en el servidor)</span></h6>'
             + cfg.avisos.map(function (a) {
                 const usaChats = !!a.usa_chats, sel = selecciones[a.aviso] = { areas: (a.filtros && a.filtros.areas || []).slice(), cargos: (a.filtros && a.filtros.cargos || []).slice() };
                 let h = '<div class="border rounded p-3 mb-3" data-aviso="' + esc(a.aviso) + '">'
@@ -2991,6 +2991,12 @@ window.cargarMapaCodigo = async function () {
                     if (simular) tv += (j.vista_previa || []).map(function (v) { return '<div class="mt-2"><b>Jefatura</b></div><pre class="p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.mensaje_jefatura) + '</pre><div><b>Chofer</b> (' + esc(v.chofer || 'sin asignar') + ', ' + (v.chofer_recibe ? 'recibe' : 'no recibe') + ')</div><pre class="p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.mensaje_chofer) + '</pre>'; }).join('');
                     else tv += '<div class="mt-1">Enviados a jefatura: <b>' + j.enviados + '</b>, a choferes: <b>' + j.choferes_avisados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
                     return msg(tv);
+                }
+                if (j.aviso === 'resumen_general') {
+                    let tg = 'Mensajes con novedades: <b>' + j.con_novedades + '</b>. Reciben el aviso: <b>' + j.chats + '</b>.';
+                    if (simular) tg += (j.vista_previa || []).map(function (v) { return '<div class="mt-2"><b>' + esc(v.nombre) + '</b></div><pre class="p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.mensaje) + '</pre>'; }).join('');
+                    else tg += '<div class="mt-1">Enviados: <b>' + j.enviados + '</b>, fallidos: <b>' + j.fallidos + '</b>.</div>';
+                    return msg(tg);
                 }
                 if (j.motivo) return msg('<b>No se envió nada.</b> ' + esc(j.motivo));
                 let t = '<b>' + j.personas + '</b> personas en Bolsa (dentro del filtro). ';

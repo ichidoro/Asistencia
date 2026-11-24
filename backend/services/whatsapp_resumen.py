@@ -6,7 +6,7 @@ Hay dos avisos: uno para cada persona (a su propio celular) y uno consolidado pa
 import asyncio
 import re
 import unicodedata
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List
 
 from loguru import logger
@@ -15,6 +15,9 @@ from backend.services import whatsapp_service
 
 PAUSA_ENTRE_ENVIOS_SEG = 3  # no ráfagas: un número nuevo que dispara muchos mensajes seguidos arriesga bloqueo
 MAX_LINEAS_JEFATURA = 50    # el mensaje de WhatsApp se corta en 4000 caracteres
+
+# Cargos de bodega que mira el resumen general (se usan si el aviso no tiene un filtro de cargos propio).
+CARGOS_GENERAL = ["AYUDANTE DE BODEGA", "INVENTARIO", "JEFE BODEGA", "OPERADOR GRUA", "SUPERVISOR CARGA"]
 
 # Catálogo de avisos automáticos. `franja`: manana (lunes a viernes 08:00) o tarde (20:00: cada viernes y el día del cierre del período). `usa_chats`: van a los chats asignados; si no, a cada persona.
 AVISOS = {
@@ -29,6 +32,12 @@ AVISOS = {
         "franja": "manana",
         "descripcion": "A las personas que se asignen (de cualquier área): todas las personas del filtro, de más a menos horas, con quiénes ya cumplieron la meta del período y a quiénes les falta.",
         "usa_chats": True,
+    },
+    "resumen_general": {
+        "nombre": "Resumen general de bodega (atrasos y horas extras)",
+        "descripcion": "A los chats que se asignen, sobre ayudantes de bodega, inventario, jefe de bodega, operador de grúa y supervisor de carga, según su marcaje: a las 12:00 avisa quién marcó atrasado hoy y a las 08:00 quién hizo horas extras el día anterior (el lunes, de viernes a domingo). Si no hay novedades no envía nada.",
+        "usa_chats": True,
+        "franjas": {"manana": "extras", "mediodia": "atrasos"},
     },
     "exceso_velocidad": {
         "nombre": "Alerta de exceso de velocidad (en vivo)",
@@ -249,6 +258,8 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
                          filtro: Dict[str, List[str]] | None = None, tipo: str = "semanal") -> Dict[str, Any]:
     """simular=True no envía nada: devuelve a quién y qué se enviaría. `destinos` solo para el aviso a chats.
     `tipo` (solo resumen personal): semanal | cierre (cómo le fue en el período que hoy termina) | ambos (solo para probar a mano: se ven y se envían los dos)."""
+    if aviso == "resumen_general":
+        return await enviar_general(asistencia_service, hoy, simular, destinos, filtro, tipo if tipo in ("atrasos", "extras") else "ambos")
     base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales, filtro)
     personas = [p for p in base["personas"] if p["incluida"]]  # lo que queda fuera del filtro de área y cargo no se cuenta ni se envía
     if aviso == "resumen_jefatura":
@@ -294,6 +305,102 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
                 fallidos += 1
             await asyncio.sleep(PAUSA_ENTRE_ENVIOS_SEG)
     logger.info(f"WhatsApp resumen personal ({tipo}): {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin contacto")
+    res.update(enviados=enviados, fallidos=fallidos)
+    return res
+
+
+def dias_a_revisar(hoy: str) -> List[date]:
+    """Los días cuyas horas extras se informan a las 08:00: el anterior; el lunes, viernes a domingo (no hay envío sábado ni domingo)."""
+    d = date.fromisoformat(hoy)
+    return [d - timedelta(days=n) for n in ((3, 2, 1) if d.weekday() == 0 else (1,))]
+
+
+def _hora(v: object) -> str:
+    t = str(v or "")
+    t = t.split("T")[-1].split(" ")[-1]
+    return t[:5]
+
+
+async def novedades_general(asistencia_service, hoy: str, momento: str, filtro: Dict[str, List[str]] | None = None) -> List[Dict[str, Any]]:
+    """Personas con atraso hoy (momento «atrasos») o con horas extras en los días anteriores (momento «extras»), según el marcaje."""
+    dias = [date.fromisoformat(hoy)] if momento == "atrasos" else dias_a_revisar(hoy)
+    db = asistencia_service.repository.db
+    fichas = {int(r["id"]): r for r in await db.fetch_all("SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, e.activo, a.nombre AS area FROM empleados e LEFT JOIN areas a ON a.id = e.area_id")}
+    filtro = dict(filtro or {})
+    if not filtro.get("cargos"):
+        filtro["cargos"] = CARGOS_GENERAL
+    matriz = await asistencia_service.get_matrix_data_with_projections(
+        dias[0].month, dias[0].year, area=None, turno_id=None, fecha_inicio_override=dias[0].isoformat(), fecha_fin_override=dias[-1].isoformat())
+    celdas = matriz.get("matrix", {})
+    out = []
+    for emp in matriz.get("empleados", []):
+        f = fichas.get(int(emp["id"]))
+        if not f or not f["activo"] or not pasa_filtro(f["area"], f["cargo"], filtro):
+            continue
+        por_dia = celdas.get(str(emp["id"])) or celdas.get(emp["id"]) or {}
+        nombre = " ".join(str(f[k] or "").strip() for k in ("apellido_paterno", "apellido_materno", "nombre") if str(f[k] or "").strip())
+        for d in dias:
+            di = por_dia.get(d.isoformat())
+            if not isinstance(di, dict):
+                continue
+            if momento == "atrasos":
+                if (di.get("minutos_atraso") or 0) > 0 and int(di.get("deuda_condonada") or 0) not in (2, 3, 5) and di.get("hora_entrada_real"):
+                    out.append({"nombre": nombre, "cargo": f["cargo"] or "", "dia": d, "minutos": round(di["minutos_atraso"]), "entrada": _hora(di.get("hora_entrada_real"))})
+            else:
+                extra = max(di.get("minutos_extra_bruto") or 0, di.get("minutos_extra_autorizados") or 0)
+                if extra > 0:
+                    out.append({"nombre": nombre, "cargo": f["cargo"] or "", "dia": d, "minutos": round(extra), "entrada": ""})
+    return sorted(out, key=lambda x: (x["dia"], x["nombre"]))
+
+
+_DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+def armar_mensaje_general(momento: str, items: List[Dict[str, Any]], hoy: str) -> str | None:
+    """None si no hay novedades (en ese caso no se envía nada)."""
+    if not items:
+        return None
+    if momento == "atrasos":
+        lineas = ["*ATRASOS DE HOY · BODEGA*", f"Marcajes hasta las 12:00 del {_dm(hoy)}", ""]
+        for i in items:
+            lineas.append(f"▪ *{_nombre_propio(i['nombre'])}* · {_nombre_propio(i['cargo'])} · entró {i['entrada']} ({i['minutos']} min de atraso)")
+    else:
+        lineas = ["*HORAS EXTRAS · BODEGA*", "Según el marcaje del día anterior" if len({i["dia"] for i in items}) == 1 else "Según el marcaje de los días anteriores", ""]
+        dia_actual = None
+        for i in items:
+            if i["dia"] != dia_actual:
+                dia_actual = i["dia"]
+                lineas.append(f"*{_DIAS_ES[dia_actual.weekday()].capitalize()} {_dm(dia_actual.isoformat())}*")
+            lineas.append(f"▪ *{_nombre_propio(i['nombre'])}* · {_nombre_propio(i['cargo'])} · {_hhmm(i['minutos'])} h")
+    lineas += ["", "_Mensaje automático de Asistencia Aguacol._"]
+    return "\n".join(lineas)
+
+
+async def enviar_general(asistencia_service, hoy: str, simular: bool, destinos: List[str] | None, filtro: Dict[str, List[str]] | None, momento: str) -> Dict[str, Any]:
+    """Resumen general de bodega. `momento`: atrasos | extras | ambos (a mano). Solo se envía lo que tiene novedades."""
+    momentos = ["extras", "atrasos"] if momento == "ambos" else [momento]
+    chats = destinos or []
+    mensajes = []
+    for m in momentos:
+        texto = armar_mensaje_general(m, await novedades_general(asistencia_service, hoy, m, filtro), hoy)
+        mensajes.append({"momento": m, "mensaje": texto})
+    res: Dict[str, Any] = {"simulado": simular, "aviso": "resumen_general", "chats": len(chats),
+                           "con_novedades": sum(1 for x in mensajes if x["mensaje"]),
+                           "vista_previa": [{"nombre": {"extras": "Horas extras (día anterior)", "atrasos": "Atrasos de hoy"}[x["momento"]],
+                                             "telefono": ", ".join(chats) or "(sin chats asignados)", "mensaje": x["mensaje"] or "Sin novedades: no se enviaría nada."} for x in mensajes]}
+    if simular:
+        return res
+    enviados = fallidos = 0
+    for x in mensajes:
+        if not x["mensaje"]:
+            continue
+        for d in chats:
+            if await whatsapp_service.enviar(d, x["mensaje"]):
+                enviados += 1
+            else:
+                fallidos += 1
+            await asyncio.sleep(PAUSA_ENTRE_ENVIOS_SEG)
+    logger.info(f"WhatsApp resumen general: {enviados} enviados, {fallidos} fallidos")
     res.update(enviados=enviados, fallidos=fallidos)
     return res
 
@@ -353,15 +460,17 @@ async def enviar_automaticos(asistencia_service, repo, hoy: str, franja: str = "
     activos = await repo.avisos_activos()
     out: Dict[str, Any] = {}
     for aviso in AVISOS:
-        if not activos.get(aviso) or AVISOS[aviso].get("tiempo_real") or AVISOS[aviso].get("franja", "manana") != franja:
+        meta = AVISOS[aviso]
+        franjas = meta.get("franjas") or {meta.get("franja", "manana"): None}
+        if not activos.get(aviso) or meta.get("tiempo_real") or franja not in franjas:
             continue
-        tipo = "semanal"
+        tipo = franjas[franja] or "semanal"
         if aviso == "resumen_personal":
             tipo = await tipo_de_hoy(asistencia_service, hoy)
             if tipo is None:
                 out[aviso] = {"omitido": "hoy no es viernes ni cierre de período"}
                 continue
-        chats = await destinos_chat(asistencia_service.repository.db, repo, aviso) if AVISOS[aviso]["usa_chats"] else None
+        chats = await destinos_chat(asistencia_service.repository.db, repo, aviso) if meta["usa_chats"] else None
         out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats, manuales=await repo.destinos_personas(),
                                           filtro=(await repo.filtros(aviso)).get(aviso), tipo=tipo)
     return out
