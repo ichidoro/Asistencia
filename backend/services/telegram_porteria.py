@@ -3,6 +3,7 @@
 Configuración por entorno (nunca en el repo, que es público): TELEGRAM_PORTERIA_TOKEN y TELEGRAM_PORTERIA_CHAT_ID.
 Sin token no hace nada; sin chat id lo busca una vez en los mensajes que alguien le haya escrito al bot.
 """
+import asyncio
 import html
 import os
 import re
@@ -59,8 +60,19 @@ async def avisar_marca(emp: dict, tipo: str, hora: str, registrado_por: str) -> 
             msg = (f"{barra * 12}\n\n{icono}  <b>{apodo}</b> {verbo}\n\n"
                    f"<blockquote>🕐  <b>{html.escape(hora[:5])} hrs</b>\n📅  {dia} {ahora:%d-%m-%Y}\n🛂  Portería · Artículo 22\n✍️  Registró: {html.escape(str(registrado_por))}</blockquote>\n"
                    f"{barra * 12}")
-            async with ses.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat, "text": msg, "parse_mode": "HTML"}) as r:
-                if r.status != 200:
-                    logger.warning(f"[ART22] Telegram respondió {r.status}: {(await r.text())[:200]}")
+            # Hasta 3 intentos: un corte de red suelto (p. ej. «Connection reset by peer», visto el 17-11) ya no pierde el aviso.
+            for intento in range(1, 4):
+                try:
+                    async with ses.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat, "text": msg, "parse_mode": "HTML"}) as r:
+                        if r.status == 200:
+                            logger.info(f"[ART22] Telegram: aviso de {apodo} ({'entrada' if tipo == 'E' else 'salida'} {hora[:5]}) enviado")
+                            return
+                        logger.warning(f"[ART22] Telegram respondió {r.status} (intento {intento}): {(await r.text())[:200]}")
+                        if r.status not in (429, 500, 502, 503, 504):
+                            return  # token o chat mal puestos: reintentar no sirve
+                except Exception as ex:
+                    logger.warning(f"[ART22] Telegram falló (intento {intento}): {ex}")
+                await asyncio.sleep(2 * intento)
+            logger.error(f"[ART22] Telegram: NO se pudo avisar de {apodo} ({tipo} {hora[:5]}) tras 3 intentos")
     except Exception as ex:
         logger.warning(f"[ART22] Telegram falló: {ex}")

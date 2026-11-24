@@ -31,6 +31,9 @@ router = APIRouter(
 # ============================================
 # AVISO DE TELEGRAM (vigilados)
 # ============================================
+_avisos_en_curso: set = set()  # referencia fuerte: asyncio solo guarda referencias débiles a las tareas y una sin dueño puede desaparecer
+
+
 async def _avisar_tras_plazo(db, reg_id, emp, tipo, hora, registrador, espera):
     """Espera el plazo de Deshacer y no avisa una marca que se deshizo (sin plazo, avisa enseguida)."""
     if espera > 0 and reg_id:
@@ -194,7 +197,9 @@ async def marcar_presencia(
     )
     segundos = await segundos_para_deshacer(db)
 
-    asyncio.create_task(_avisar_tras_plazo(db, reg_id, emp, nuevo_tipo, hora_actual, registrador, segundos))
+    tarea = asyncio.create_task(_avisar_tras_plazo(db, reg_id, emp, nuevo_tipo, hora_actual, registrador, segundos))
+    _avisos_en_curso.add(tarea)
+    tarea.add_done_callback(_avisos_en_curso.discard)
     nombre_emp = f"{emp.get('apellido_paterno', '')} {emp.get('nombre', '')}"
     tipo_label = "ENTRADA" if nuevo_tipo == "E" else "SALIDA"
     logger.info(f"[ART22] {tipo_label}: {nombre_emp} (ID={empleado_id}) a las {hora_actual} - Reg: {registrador}")
