@@ -31,7 +31,7 @@ AVISOS = {
     },
     "exceso_velocidad": {
         "nombre": "Alerta de exceso de velocidad (en vivo)",
-        "descripcion": "A los chats que se asignen: apenas un camión de la Flota en vivo de Nexacol reporta más de 95 km/h, con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano o el que se encuentra por nombre en el teléfono, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
+        "descripcion": "A los chats que se asignen: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta más de 95 km/h, con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano o el que se encuentra por nombre en el teléfono, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
         "usa_chats": True,
         "tiempo_real": True,  # no va en el cron del lunes: lo dispara cron-alerta-velocidad.sh
     },

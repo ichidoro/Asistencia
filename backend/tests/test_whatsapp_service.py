@@ -145,8 +145,8 @@ def test_filtro_por_area_y_cargo_acepta_varios_y_exige_cada_tipo():
     assert pasa_filtro("  Logística   Retail ", "Chofer", {"areas": ["logística retail"], "cargos": []}) is True  # espacios y mayúsculas
 
 
-def _camion(pat, v, edad=1, chofer="Juan Pérez", lugar="Ruta 5 Sur, Curicó", f="24-11-2026 10:32:10"):
-    return {"patente": pat, "chofer": chofer, "edadMin": edad, "ultimo": {"v": v, "lugar": lugar, "f": f}}
+def _camion(pat, v, edad=1, chofer="Juan Pérez", lugar="Ruta 5 Sur, Curicó", f="24-11-2026 10:32:10", grupo="TRADICIONAL"):
+    return {"patente": pat, "grupo": grupo, "chofer": chofer, "edadMin": edad, "ultimo": {"v": v, "lugar": lugar, "f": f}}
 
 
 def test_alerta_velocidad_detecta_solo_sobre_95_y_con_reporte_reciente():
@@ -259,3 +259,9 @@ def test_revisar_velocidad_responde_con_el_nombre_del_aviso(monkeypatch):
     monkeypatch.setattr(av.gps_nexacol, "_get", flota)
     r = asyncio.run(av.revisar([], True, [], {}))
     assert r["aviso"] == "exceso_velocidad" and r["sobre_limite"] == 0 and r["a_avisar"] == 0
+
+
+def test_alerta_velocidad_solo_camiones_tradicional():
+    from backend.services.alerta_velocidad import detectar
+    flota = [_camion("TCKK47", 98, grupo="OTROS"), _camion("SKBH17", 98), _camion("RR11", 120, grupo="RETAIL"), _camion("PL22", 99, grupo="PLASTICOS"), _camion("SG33", 101, grupo=None), _camion("TR44", 97, grupo=" tradicional ")]
+    assert sorted(e["patente"] for e in detectar(flota)) == ["SKBH17", "TR44"]

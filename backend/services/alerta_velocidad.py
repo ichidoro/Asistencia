@@ -15,6 +15,7 @@ from backend.services.whatsapp_resumen import resolver_destino
 
 LIMITE_KMH = 95        # pedido de la jefatura: sobre esta velocidad se avisa
 EDAD_MAX_MIN = 3       # un reporte más viejo no es "en vivo": su velocidad ya no dice dónde va el camión
+GRUPO = "TRADICIONAL"  # por ahora solo se avisa de camiones del grupo Tradicional (el grupo que Nexacol trae de la plataforma de GPS; sin grupo cuenta como otro)
 REPETIR_MIN = 15       # mientras siga el exceso, se vuelve a avisar del mismo camión solo pasado este tiempo
 PAUSA_ENTRE_ENVIOS_SEG = 1
 
@@ -23,13 +24,13 @@ _avisado: Dict[str, float] = {}
 
 
 def detectar(flota: List[Dict[str, Any]], limite: float = LIMITE_KMH) -> List[Dict[str, Any]]:
-    """Camiones con reporte reciente sobre el límite, del más rápido al más lento."""
+    """Camiones del grupo Tradicional con reporte reciente sobre el límite, del más rápido al más lento."""
     out = []
     for c in flota:
         u = c.get("ultimo") or {}
         v = u.get("v")
         edad = c.get("edadMin")
-        if not isinstance(v, (int, float)) or v <= limite or edad is None or edad > EDAD_MAX_MIN or not c.get("patente"):
+        if str(c.get("grupo") or "").strip().upper() != GRUPO or not isinstance(v, (int, float)) or v <= limite or edad is None or edad > EDAD_MAX_MIN or not c.get("patente"):
             continue
         out.append({"patente": c["patente"], "chofer": c.get("chofer") or "", "vel": int(round(v)), "lugar": (u.get("lugar") or "").strip(), "f": str(u.get("f") or "")})
     return sorted(out, key=lambda e: -e["vel"])
