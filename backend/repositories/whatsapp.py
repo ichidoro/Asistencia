@@ -94,3 +94,6 @@ class WhatsappRepository:
 
     async def empleado(self, emp_id: int) -> Dict[str, Any] | None:
         return await self.db.fetch_one("SELECT nombre, apellido_paterno, apellido_materno FROM empleados WHERE id = ?", (emp_id,))
+
+    async def quitar_destino_de(self, aviso: str, destino: str) -> None:
+        await self.db.execute("DELETE FROM whatsapp_destinos WHERE aviso = ? AND destino = ?", (aviso, destino))

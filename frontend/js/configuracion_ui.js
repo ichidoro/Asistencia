@@ -821,7 +821,7 @@ function _pintarVistaPreviaBono(d) {
         + '<div class="small mb-2">' + d.reciben + (d.reciben === 1 ? ' persona lo recibe' : ' personas lo reciben') + (d.beneficio ? '' : ' · total <b>' + pesos(d.total) + '</b>')
         + (d.no_cobran ? ' · <span class="text-danger">' + d.no_cobran + ' no lo ' + (d.no_cobran === 1 ? 'cobra' : 'cobran') + '</span>' : '') + '</div>'
         + pisan
-        + (filas ? '<div style="max-height: 240px; overflow-y: auto;"><table class="table table-sm small mb-0"><thead><tr><th>Persona</th><th>Área</th><th class="text-center">Regla</th><th class="text-end">Monto</th><th>Motivo</th></tr></thead><tbody>'
+        + (filas ? '<div style="max-height: 240px; overflow-y: auto;"><table class="table table-sm small mb-0"><thead><tr>' + (esChat ? '<th>Recibe</th>' : '') + '<th>Persona</th><th>Área</th><th class="text-center">Regla</th><th class="text-end">Monto</th><th>Motivo</th></tr></thead><tbody>'
             + filas + '</tbody></table></div>' : '<div class="small text-muted">Con estas reglas no le corresponde a nadie.</div>')
         + '</div>';
 }
@@ -2770,7 +2770,7 @@ window.cargarMapaCodigo = async function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
     const esc = function (t) { return window.Ayuda.esc(t); };   // el escape común de ayudantes.js (regla del proyecto)
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
-    let timer = null, grupos = null, contactos = null, contactosEn = 0, empleados = [], opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
+    let timer = null, grupos = null, contactos = null, contactosEn = 0, opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
 
     async function api(metodo, ruta, cuerpo) {
         const r = await fetch('/api/whatsapp' + ruta, { method: metodo, headers: H(), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
@@ -2953,22 +2953,21 @@ window.cargarMapaCodigo = async function () {
                     + '<span class="text-muted" style="font-size:0.78rem;">(cada lista muestra solo lo que existe en lo que marque en la otra, con cuántas personas hay)</span></div>';
                 if (usaChats) {
                     h += '<div class="mt-3" style="font-size:0.9rem;"><b>Se envía a:</b> ';
-                    h += a.destinos.length ? a.destinos.map(function (d) {
+                    const chats = a.destinos.filter(function (d) { return d.destino.indexOf('emp:') !== 0; }), nPers = a.destinos.length - chats.length;
+                    h += (nPers ? '<span class="badge rounded-pill bg-primary me-1 py-2"><i class="bi bi-person-vcard-fill"></i> ' + nPers + (nPers === 1 ? ' persona' : ' personas') + ' (ver tabla)</span>' : '') + (chats.length ? chats.map(function (d) {
                         const esGrupo = d.destino.indexOf('@g.us') > 0, esPersona = d.destino.indexOf('emp:') === 0, enc = esPersona && (d.estado === 'ok' || d.estado === 'manual');
                         return '<span class="badge rounded-pill bg-light text-dark border me-1 py-2"><i class="bi ' + (esGrupo ? 'bi-people-fill text-success' : esPersona ? 'bi-person-vcard-fill text-primary' : 'bi-person-fill text-primary') + '"></i> ' + esc(d.etiqueta || d.destino)
                             + (esPersona ? ' <span class="' + (enc ? 'text-success' : 'text-danger') + '" style="font-weight:400;" title="' + esc(enc ? 'Su WhatsApp: ' + (d.contacto || '') : 'No se encontró su contacto en el teléfono: no recibirá el aviso') + '">' + (enc ? '· WhatsApp ✓' : '· sin contacto') + '</span>' : '')
                             + ' <a href="#" class="wa-quitar text-danger text-decoration-none ms-1" data-id="' + d.id + '" title="Quitar">✕</a></span>';
-                    }).join('') : '<span class="text-muted">ningún chat asignado</span>';
-                    h += '</div><div class="d-flex flex-wrap gap-2 mt-2 align-items-center"><span class="text-muted" style="font-size:0.85rem;"><i class="bi bi-person-vcard"></i> Persona de Asistencia:</span>'
-                        + '<input class="form-control wa-persona" list="wa-emps" placeholder="Buscar por nombre (su WhatsApp se busca en los contactos del teléfono)" style="max-width:420px;" autocomplete="off">'
-                        + '<button class="btn btn-outline-primary wa-add-persona">Asignar persona</button></div>'
-                        + '<div class="d-flex flex-wrap gap-2 mt-2 align-items-center"><span class="text-muted" style="font-size:0.85rem;">o un chat:</span>'
+                    }).join('') : (nPers ? '' : '<span class="text-muted">nadie asignado</span>'));
+                    h += '</div><div class="d-flex flex-wrap gap-2 mt-2 align-items-center">'
+                        + '<span class="text-muted" style="font-size:0.85rem;">Grupo de WhatsApp o chat (opcional):</span>'
                         + '<input class="form-control wa-buscar" placeholder="Buscar un contacto o grupo, o escribir un celular" style="max-width:360px;">'
                         + '<input class="form-control wa-eti" placeholder="Nombre (opcional)" style="max-width:170px;">'
                         + '<button class="btn btn-outline-primary wa-add">Asignar</button></div>';
                     if (contactos && !contactos.length && grupos && !grupos.length) h += '<div class="text-muted mt-1" style="font-size:0.8rem;">WhatsApp entrega los contactos al vincular y aún no llegó ninguno: puede escribir un celular, o cortar la conexión y vincular de nuevo.</div>';
                 }
-                if (!usaChats) h += '<div class="mt-3"><button class="btn btn-sm btn-outline-primary wa-personas"><i class="bi bi-people"></i> Revisar y asignar contacto por persona</button><div class="wa-personas-box mt-2"></div></div>';
+                h += '<div class="mt-3"><button class="btn btn-sm btn-outline-primary wa-personas"><i class="bi bi-people"></i> ' + (usaChats ? 'Elegir quién lo recibe y revisar su contacto' : 'Revisar y asignar contacto por persona') + '</button><div class="wa-personas-box mt-2"></div></div>';
                 h += '<div class="mt-3"><button class="btn btn-sm btn-outline-secondary me-2 wa-sim">Simular (no envía)</button>'
                     + '<button class="btn btn-sm btn-primary wa-env">Enviar ahora</button></div></div>';
                 return h;
@@ -2987,14 +2986,6 @@ window.cargarMapaCodigo = async function () {
             });
             const buscar = box.querySelector('.wa-buscar');
             if (buscar) selector(buscar);
-            const addP = box.querySelector('.wa-add-persona');
-            if (addP) addP.onclick = async function () {
-                const v = box.querySelector('.wa-persona').value.trim(), emp = empleados.find(function (x) { return etiquetaEmp(x) === v; });
-                if (!emp) { msg('Elija una persona de la lista.'); return; }
-                const r = await api('POST', '/avisos/' + aviso + '/personas/' + emp.id);
-                if (!r.ok) { msg(esc(r.j.detail || 'No se pudo asignar.')); return; }
-                msg('Persona asignada.'); cargarAvisos();
-            };
             const add = box.querySelector('.wa-add');
             if (add) add.onclick = async function () {
                 const texto = buscar.value.trim(), eti = box.querySelector('.wa-eti').value.trim();
@@ -3032,24 +3023,25 @@ window.cargarMapaCodigo = async function () {
         const previo = caja.querySelector('.wp-scroll');
         const scrollY = previo ? previo.scrollTop : 0, filtroPrev = caja.querySelector('.wp-estado') ? caja.querySelector('.wp-estado').value : '', textoPrev = caja.querySelector('.wp-buscar') ? caja.querySelector('.wp-buscar').value : '';
         if (!previo) caja.innerHTML = 'Cargando…';
-        const r = await api('GET', '/personas');
+        const avisoDe = caja.closest('[data-aviso]').getAttribute('data-aviso');
+        const r = await api('GET', '/personas?aviso=' + encodeURIComponent(avisoDe));
         if (!r.ok) { caja.innerHTML = esc(r.j.detail || 'No se pudo cargar.'); return; }
         const orden = { ninguno: 0, ambiguo: 1, ok: 2, manual: 3 };
         const lista = r.j.personas.slice().sort(function (a, b) { return (b.incluida - a.incluida) || orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre, 'es'); });
         const n = function (e) { return lista.filter(function (p) { return p.incluida && p.estado === e; }).length; };
-        const dentro = lista.filter(function (p) { return p.incluida; }).length;
+        const dentro = lista.filter(function (p) { return p.incluida; }).length, esChat = lista.length && lista[0].recibe !== undefined, reciben = lista.filter(function (p) { return p.recibe; }).length;
         caja.innerHTML = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">'
             + '<input class="form-control form-control-sm wp-buscar" placeholder="Buscar persona…" style="max-width:240px;">'
             + '<select class="form-select form-select-sm wp-estado" style="max-width:230px;">'
-            + '<option value="">Dentro del filtro (' + dentro + ')</option><option value="ninguno">Sin contacto (' + n('ninguno') + ')</option><option value="ambiguo">Ambiguo (' + n('ambiguo') + ')</option>'
+            + (esChat ? '<option value="recibe">Reciben el aviso (' + reciben + ')</option>' : '') + '<option value="">Dentro del filtro (' + dentro + ')</option><option value="ninguno">Sin contacto (' + n('ninguno') + ')</option><option value="ambiguo">Ambiguo (' + n('ambiguo') + ')</option>'
             + '<option value="ok">Por nombre (' + n('ok') + ')</option><option value="manual">Manual (' + n('manual') + ')</option><option value="fuera">Fuera del filtro (' + (lista.length - dentro) + ')</option></select>'
             + '<span class="text-muted" style="font-size:0.8rem;">Elija un contacto o escriba un celular y pulse Enter o Guardar.</span></div>'
             + '<div class="wp-scroll" style="max-height:62vh;overflow:auto;border:1px solid var(--bs-border-color,#e5e7eb);border-radius:10px;">'
             + '<table class="table table-sm align-middle mb-0" style="font-size:0.85rem;min-width:900px;"><thead style="position:sticky;top:0;background:var(--bs-tertiary-bg,#f8fafc);z-index:1;"><tr><th>Persona</th><th>Área</th><th>Cargo</th><th>Estado</th><th>Contacto / número</th><th style="width:330px;">Asignar a mano</th></tr></thead><tbody>'
             + lista.map(function (p) {
                 const cand = p.candidatos && p.candidatos.length ? '<div class="text-muted">¿' + esc(p.candidatos.join(' o ')) + '?</div>' : '';
-                return '<tr data-emp="' + p.emp_id + '" data-estado="' + (p.incluida ? p.estado : 'fuera') + '" data-nombre="' + esc(p.nombre.toLowerCase()) + '" style="' + (p.incluida ? '' : 'opacity:.45;') + '">'
-                    + '<td style="white-space:nowrap;">' + esc(p.nombre) + '</td><td style="white-space:nowrap;">' + esc(p.area || '—') + '</td><td style="white-space:nowrap;">' + esc(p.cargo || '—') + '</td>'
+                return '<tr data-emp="' + p.emp_id + '" data-recibe="' + (p.recibe ? 1 : 0) + '" data-estado="' + (p.incluida ? p.estado : 'fuera') + '" data-nombre="' + esc(p.nombre.toLowerCase()) + '" style="' + (p.incluida ? '' : 'opacity:.45;') + '">'
+                    + (esChat ? '<td><input type="checkbox" class="form-check-input wp-recibe"' + (p.recibe ? ' checked' : '') + '></td>' : '') + '<td style="white-space:nowrap;">' + esc(p.nombre) + '</td><td style="white-space:nowrap;">' + esc(p.area || '—') + '</td><td style="white-space:nowrap;">' + esc(p.cargo || '—') + '</td>'
                     + '<td><span class="badge ' + COL[p.estado] + '">' + ETIQ[p.estado] + '</span></td>'
                     + '<td style="white-space:nowrap;">' + (p.contacto ? '<i class="bi bi-person-fill text-primary"></i> ' + esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
                     + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" placeholder="Buscar contacto o celular" style="min-width:190px;">'
@@ -3061,11 +3053,11 @@ window.cargarMapaCodigo = async function () {
             const q = caja.querySelector('.wp-buscar').value.trim().toLowerCase(), e = caja.querySelector('.wp-estado').value;
             filas.forEach(function (tr) {
                 const est = tr.getAttribute('data-estado');
-                const okEstado = e ? est === e : est !== 'fuera';
+                const okEstado = e === 'recibe' ? tr.getAttribute('data-recibe') === '1' : e ? est === e : est !== 'fuera';
                 tr.style.display = okEstado && (!q || tr.getAttribute('data-nombre').indexOf(q) >= 0) ? '' : 'none';
             });
         };
-        caja.querySelector('.wp-buscar').value = textoPrev; caja.querySelector('.wp-estado').value = filtroPrev;
+        caja.querySelector('.wp-buscar').value = textoPrev; caja.querySelector('.wp-estado').value = previo ? filtroPrev : (esChat && reciben ? 'recibe' : '');
         caja.querySelector('.wp-buscar').oninput = filtrar; caja.querySelector('.wp-estado').onchange = filtrar; filtrar();
         caja.querySelector('.wp-scroll').scrollTop = scrollY;
         filas.forEach(function (tr) {
@@ -3081,18 +3073,18 @@ window.cargarMapaCodigo = async function () {
             };
             tr.querySelector('.wp-ok').onclick = guardar;
             inp.onkeydown = function (ev) { if (ev.key === 'Enter') { cerrarPop(); guardar(); } };
+            const rc = tr.querySelector('.wp-recibe');
+            if (rc) rc.onchange = async function () {
+                const g = await api(rc.checked ? 'POST' : 'DELETE', '/avisos/' + avisoDe + '/personas/' + emp);
+                if (!g.ok) { rc.checked = !rc.checked; msg(esc(g.j.detail || 'No se pudo cambiar.')); return; }
+                msg(rc.checked ? 'Recibirá el aviso.' : 'Ya no recibirá el aviso.'); cargarPersonas(caja);
+            };
             const no = tr.querySelector('.wp-no');
             if (no) no.onclick = async function () { await api('DELETE', '/personas/' + emp + '/destino'); cargarPersonas(caja); };
         });
     }
 
-    const etiquetaEmp = function (x) { return x.nombre + (x.cargo ? ' — ' + x.cargo : '') + (x.area ? ' (' + x.area + ')' : ''); };
-
     async function cargarAvisos() {
-        if (!empleados.length) { const e = await api('GET', '/empleados'); if (e.ok) empleados = e.j.empleados || []; }
-        let dl = document.getElementById('wa-emps');
-        if (!dl) { dl = document.createElement('datalist'); dl.id = 'wa-emps'; document.body.appendChild(dl); }
-        dl.innerHTML = empleados.map(function (x) { return '<option value="' + esc(etiquetaEmp(x)) + '"></option>'; }).join('');
         const [cfg, gr, co] = await Promise.all([api('GET', '/config'), grupos && grupos.length ? Promise.resolve(null) : api('GET', '/grupos'), contactos && contactos.length ? Promise.resolve(null) : api('GET', '/contactos')]);
         if (gr && gr.ok) grupos = gr.j.grupos || [];
         if (co && co.ok) contactos = co.j.contactos || [];

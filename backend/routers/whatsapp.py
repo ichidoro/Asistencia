@@ -65,6 +65,14 @@ def _aviso_o_404(aviso: str) -> dict:
     return whatsapp_resumen.AVISOS[aviso]
 
 
+async def _apagar_sin_chats(repo: Any) -> None:
+    """Un aviso a chats sin nadie asignado no tiene a quién enviar: se apaga solo."""
+    activos = await repo.avisos_activos()
+    for k, v in whatsapp_resumen.AVISOS.items():
+        if v["usa_chats"] and activos.get(k) and not await repo.destinos(k):
+            await repo.poner_activo(k, False)
+
+
 async def _revisar_velocidad(db: Database, repo: Any, destinos: list, simular: bool) -> dict:
     """Alerta de velocidad: jefatura (chats asignados) y el propio chofer (su contacto, igual que en el resumen personal)."""
     from backend.repositories.empleado import EmpleadoRepository
@@ -98,10 +106,13 @@ async def contactos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
 
 
 @router.get("/personas")
-async def personas(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
-    """Personas de Bolsa y a qué contacto llegaría su resumen (encontrado por nombre o fijado a mano)."""
+async def personas(aviso: str = "resumen_personal", db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    """Personas y a qué contacto llegaría el aviso (encontrado por nombre o fijado a mano). En un aviso a chats son todas las personas activas, con `recibe`."""
+    meta = _aviso_o_404(aviso)
     repo = await _repo(db)
-    filtro = (await repo.filtros("resumen_personal")).get("resumen_personal")
+    filtro = (await repo.filtros(aviso)).get(aviso)
+    if meta["usa_chats"]:
+        return {"personas": await whatsapp_resumen.listar_destinatarios(db, repo, aviso, filtro)}
     return {"personas": await whatsapp_resumen.listar_personas(AsistenciaService(AsistenciaRepository(db)), _hoy(), await repo.destinos_personas(), filtro)}
 
 
@@ -155,13 +166,6 @@ async def encender_aviso(aviso: str, datos: AvisoIn, db: Database = Depends(get_
     return {"ok": True}
 
 
-@router.get("/empleados")
-async def empleados(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
-    """Personas activas de Asistencia, para asignarles un aviso a chats (jefes)."""
-    filas = await (await _repo(db)).empleados_activos()
-    return {"empleados": [{"id": r["id"], "nombre": " ".join(str(r[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(r[k] or "").strip()), "cargo": r["cargo"] or "", "area": r["area"] or ""} for r in filas]}
-
-
 @router.post("/avisos/{aviso}/personas/{emp_id}")
 async def agregar_persona_destino(aviso: str, emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
     """Asigna a un aviso de chats una persona de Asistencia: su WhatsApp se resuelve al enviar, como en el resumen personal."""
@@ -173,6 +177,15 @@ async def agregar_persona_destino(aviso: str, emp_id: int, db: Database = Depend
         raise HTTPException(404, "Esa persona no existe.")
     nombre = " ".join(str(f[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(f[k] or "").strip())
     await repo.agregar_destino(aviso, whatsapp_resumen.PREFIJO_PERSONA + str(emp_id), nombre[:80])
+    return {"ok": True}
+
+
+@router.delete("/avisos/{aviso}/personas/{emp_id}")
+async def quitar_persona_destino(aviso: str, emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    _aviso_o_404(aviso)
+    repo = await _repo(db)
+    await repo.quitar_destino_de(aviso, whatsapp_resumen.PREFIJO_PERSONA + str(emp_id))
+    await _apagar_sin_chats(repo)
     return {"ok": True}
 
 
@@ -191,11 +204,7 @@ async def agregar_destino(aviso: str, datos: DestinoIn, db: Database = Depends(g
 async def quitar_destino(destino_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
     repo = await _repo(db)
     await repo.quitar_destino(destino_id)
-    # Un aviso a chats sin chats no tiene a quién enviar: se apaga solo.
-    activos = await repo.avisos_activos()
-    for k, v in whatsapp_resumen.AVISOS.items():
-        if v["usa_chats"] and activos.get(k) and not await repo.destinos(k):
-            await repo.poner_activo(k, False)
+    await _apagar_sin_chats(repo)
     return {"ok": True}
 
 

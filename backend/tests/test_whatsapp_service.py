@@ -201,3 +201,23 @@ def test_destino_persona_de_asistencia_se_resuelve_por_nombre_o_a_mano():
     r = asyncio.run(resolver_destinos_chat(DB(), filas[:1], {5: {"destino": "56999990000", "etiqueta": "x"}}, []))
     assert r[0]["jid"] == "56999990000" and r[0]["estado"] == "manual"
     assert asyncio.run(resolver_destinos_chat(DB(), filas[:1], {}, []))[0]["jid"] is None
+
+
+def test_listar_destinatarios_marca_quien_recibe_y_respeta_el_filtro(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+
+    class Repo:
+        async def destinos_personas(self): return {}
+        async def destinos(self, aviso): return [{"destino": "emp:2"}]
+        async def empleados_activos(self):
+            return [{"id": 1, "nombre": "Juan", "apellido_paterno": "Pérez", "apellido_materno": "", "cargo": "CHOFER", "area": "LOGÍSTICA TRADICIONAL"},
+                    {"id": 2, "nombre": "Daniel", "apellido_paterno": "Rojas", "apellido_materno": "", "cargo": "JEFE", "area": "LOGÍSTICA TRADICIONAL"},
+                    {"id": 3, "nombre": "Ana", "apellido_paterno": "Soto", "apellido_materno": "", "cargo": "ADMINISTRATIVO", "area": "FINANZAS"}]
+
+    async def contactos(): return [{"id": "56911112222@s.whatsapp.net", "nombre": "Daniel Rojas"}]
+    monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
+    r = asyncio.run(wr.listar_destinatarios(None, Repo(), "resumen_jefatura", {"areas": [], "cargos": ["CHOFER", "PEONETA", "JEFE"]}))
+    por = {x["emp_id"]: x for x in r}
+    assert por[2]["recibe"] and por[2]["estado"] == "ok" and por[2]["numero"] == "+56911112222" and not por[1]["recibe"] and por[1]["estado"] == "ninguno"
+    assert por[1]["incluida"] and por[2]["incluida"] and not por[3]["incluida"]

@@ -196,6 +196,22 @@ async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]
     return {"inicio": inicio, "fin": fin, "personas": personas}
 
 
+async def listar_destinatarios(db: Any, repo: Any, aviso: str, filtro: Dict[str, List[str]] | None = None) -> List[Dict[str, Any]]:
+    """Para un aviso a chats: todas las personas activas de Asistencia con el contacto que se les encontró y si ya lo reciben (`recibe`).
+    Misma forma que listar_personas, para usar la misma tabla en la pantalla."""
+    contactos, manuales = await whatsapp_service.contactos(), await repo.destinos_personas()
+    asignadas = {str(d["destino"]) for d in await repo.destinos(aviso)}
+    out = []
+    for f in await repo.empleados_activos():
+        nombre = " ".join(str(f[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(f[k] or "").strip())
+        estado, hallado = resolver_destino(f["nombre"] or "", f["apellido_paterno"] or "", f["apellido_materno"] or "", manuales.get(int(f["id"])), contactos)
+        con = estado in ("ok", "manual")
+        out.append({"emp_id": f["id"], "nombre": nombre, "area": f["area"] or "", "cargo": f["cargo"] or "", "incluida": pasa_filtro(f["area"], f["cargo"], filtro),
+                    "recibe": PREFIJO_PERSONA + str(f["id"]) in asignadas, "estado": estado, "contacto": hallado["nombre"] if con else None,
+                    "numero": _numero_de(hallado["id"]) if con else None, "candidatos": [x["nombre"] for x in hallado] if estado == "ambiguo" else []})
+    return out
+
+
 async def listar_personas(asistencia_service, hoy: str, manuales: Dict[int, Dict[str, Any]], filtro: Dict[str, List[str]] | None = None) -> List[Dict[str, Any]]:
     """Cada persona de Bolsa con el contacto que se le encontró (o su estado), para revisarlo y fijarlo a mano en la pantalla."""
     base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales, filtro)
