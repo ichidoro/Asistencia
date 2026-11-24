@@ -7,14 +7,14 @@ from pydantic import BaseModel
 
 from backend.core.config import settings
 from backend.core.database import Database, get_db
-from backend.core.security import RequirePermission, SecurityContext
+from backend.core.security import RequireAnyPermission, SecurityContext
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.whatsapp import WhatsappRepository
 from backend.services import alerta_velocidad, whatsapp_resumen, whatsapp_service
 from backend.services.asistencia_service import AsistenciaService
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
-PERMISO = "configuracion.seguridad"
+PERMISO = ["configuracion.whatsapp", "configuracion.seguridad"]  # basta con uno
 
 
 class Prueba(BaseModel):
@@ -81,12 +81,12 @@ async def _revisar_velocidad(db: Database, repo: Any, destinos: list, simular: b
 
 
 @router.get("/estado")
-async def estado(_: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def estado(_: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     return await whatsapp_service.estado()
 
 
 @router.post("/desconectar")
-async def desconectar(_: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def desconectar(_: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Corta la conexión: cierra la sesión del número y deja un QR nuevo para vincular otro (o el mismo)."""
     if not await whatsapp_service.desconectar():
         raise HTTPException(503, "No se pudo desconectar: la puerta de WhatsApp no respondió.")
@@ -94,19 +94,19 @@ async def desconectar(_: SecurityContext = Depends(RequirePermission(PERMISO))):
 
 
 @router.get("/grupos")
-async def grupos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def grupos(_: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Grupos de WhatsApp en los que está el número, para asignarles avisos."""
     return {"grupos": await whatsapp_service.grupos()}
 
 
 @router.get("/contactos")
-async def contactos(_: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def contactos(_: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Contactos agregados en el teléfono vinculado, para asignarles avisos."""
     return {"contactos": await whatsapp_service.contactos()}
 
 
 @router.get("/personas")
-async def personas(aviso: str = "resumen_personal", db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def personas(aviso: str = "resumen_personal", db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Personas y a qué contacto llegaría el aviso (encontrado por nombre o fijado a mano). En un aviso a chats son todas las personas activas, con `recibe`."""
     meta = _aviso_o_404(aviso)
     repo = await _repo(db)
@@ -117,7 +117,7 @@ async def personas(aviso: str = "resumen_personal", db: Database = Depends(get_d
 
 
 @router.put("/personas/{emp_id}/destino")
-async def fijar_persona(emp_id: int, datos: PersonaDestinoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def fijar_persona(emp_id: int, datos: PersonaDestinoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     destino = whatsapp_service.destino_valido(datos.destino)
     if not destino:
         raise HTTPException(400, "Destino inválido: elija un contacto o escriba un celular chileno (9 1234 5678).")
@@ -126,13 +126,13 @@ async def fijar_persona(emp_id: int, datos: PersonaDestinoIn, db: Database = Dep
 
 
 @router.delete("/personas/{emp_id}/destino")
-async def quitar_persona(emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def quitar_persona(emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     await (await _repo(db)).quitar_persona(emp_id)
     return {"ok": True}
 
 
 @router.get("/config")
-async def config(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def config(db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Cada aviso automático: si está encendido, a qué chats va y con qué filtro de área y cargo."""
     repo = await _repo(db)
     activos = await repo.avisos_activos()
@@ -149,7 +149,7 @@ async def config(db: Database = Depends(get_db), _: SecurityContext = Depends(Re
 
 
 @router.put("/avisos/{aviso}/filtros")
-async def fijar_filtros(aviso: str, datos: FiltrosIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def fijar_filtros(aviso: str, datos: FiltrosIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """A qué áreas y cargos se limita el aviso (vacío = todos)."""
     _aviso_o_404(aviso)
     await (await _repo(db)).fijar_filtros(aviso, datos.areas[:100], datos.cargos[:100])
@@ -157,7 +157,7 @@ async def fijar_filtros(aviso: str, datos: FiltrosIn, db: Database = Depends(get
 
 
 @router.put("/avisos/{aviso}")
-async def encender_aviso(aviso: str, datos: AvisoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def encender_aviso(aviso: str, datos: AvisoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     meta = _aviso_o_404(aviso)
     repo = await _repo(db)
     if datos.activo and meta["usa_chats"] and not await repo.destinos(aviso):
@@ -167,7 +167,7 @@ async def encender_aviso(aviso: str, datos: AvisoIn, db: Database = Depends(get_
 
 
 @router.post("/avisos/{aviso}/personas/{emp_id}")
-async def agregar_persona_destino(aviso: str, emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def agregar_persona_destino(aviso: str, emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Asigna a un aviso de chats una persona de Asistencia: su WhatsApp se resuelve al enviar, como en el resumen personal."""
     if not _aviso_o_404(aviso)["usa_chats"]:
         raise HTTPException(400, "Ese aviso va a cada persona, no a chats asignados.")
@@ -183,7 +183,7 @@ async def agregar_persona_destino(aviso: str, emp_id: int, db: Database = Depend
 
 
 @router.delete("/avisos/{aviso}/personas/{emp_id}")
-async def quitar_persona_destino(aviso: str, emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def quitar_persona_destino(aviso: str, emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     _aviso_o_404(aviso)
     repo = await _repo(db)
     await repo.quitar_destino_de(aviso, whatsapp_resumen.PREFIJO_PERSONA + str(emp_id))
@@ -192,7 +192,7 @@ async def quitar_persona_destino(aviso: str, emp_id: int, db: Database = Depends
 
 
 @router.post("/avisos/{aviso}/destinos")
-async def agregar_destino(aviso: str, datos: DestinoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def agregar_destino(aviso: str, datos: DestinoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     if not _aviso_o_404(aviso)["usa_chats"]:
         raise HTTPException(400, "Ese aviso va a cada persona, no a chats asignados.")
     destino = whatsapp_service.destino_valido(datos.destino)
@@ -203,7 +203,7 @@ async def agregar_destino(aviso: str, datos: DestinoIn, db: Database = Depends(g
 
 
 @router.delete("/destinos/{destino_id}")
-async def quitar_destino(destino_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def quitar_destino(destino_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     repo = await _repo(db)
     await repo.quitar_destino(destino_id)
     await _apagar_sin_chats(repo)
@@ -211,7 +211,7 @@ async def quitar_destino(destino_id: int, db: Database = Depends(get_db), _: Sec
 
 
 @router.post("/prueba")
-async def prueba(datos: Prueba, _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def prueba(datos: Prueba, _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Manda un mensaje de prueba al celular o grupo indicado (para comprobar el vínculo antes de usarlo con personas)."""
     if not whatsapp_service.destino_valido(datos.telefono):
         raise HTTPException(400, "Teléfono inválido: use un celular chileno (9 1234 5678).")
@@ -221,7 +221,7 @@ async def prueba(datos: Prueba, _: SecurityContext = Depends(RequirePermission(P
 
 
 @router.post("/resumen-semanal")
-async def resumen_semanal(datos: ResumenIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+async def resumen_semanal(datos: ResumenIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     """Simula (por defecto) o envía ahora un aviso. Para el aviso a chats usa los chats asignados."""
     meta = _aviso_o_404(datos.aviso)
     if not datos.simular and not whatsapp_service.activo():

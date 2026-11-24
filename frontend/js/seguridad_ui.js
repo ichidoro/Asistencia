@@ -76,6 +76,7 @@ const MAPA_UI_PERMISOS = {
     'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: 'Asistente de inicialización de BioAlba',   permissions: ['configuracion.wizard'] },
     'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de la base y modo (solo administrador)',        permissions: ['configuracion.sistema'] },
     'configuracion.flota':          { module: 'CONFIGURACIÓN', action: 'Pestaña Flota',     description: 'Gestionar vehículos de la flota (CRUD) de Aguacol', permissions: ['configuracion.flota'] },
+    'configuracion.whatsapp':       { module: 'CONFIGURACIÓN', action: 'WhatsApp',       description: 'Vincular WhatsApp, encender avisos, elegir destinatarios y enviar resúmenes', permissions: ['configuracion.whatsapp'] },
     'configuracion.editar':         { module: 'CONFIGURACIÓN', action: 'Áreas, Cargos y Períodos', description: 'Crear, editar y eliminar áreas, cargos y períodos de asistencia; catálogo de Portería', permissions: ['configuracion.editar'] },
 
     // ── MÓDULO 4 PRODUCTOS (4) ──

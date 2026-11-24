@@ -242,6 +242,7 @@ class SeguridadRepository:
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
                 ('configuracion.flota',          'Configuración',  'Pestaña Flota Aguacol → gestionar vehículos de la flota (CRUD)'),
                 ('configuracion.editar',         'Configuración',  'Crear, editar y eliminar áreas, cargos y períodos; catálogo de Portería'),
+                ('configuracion.whatsapp',       'Configuración',  'Pestaña WhatsApp → vincular el número, encender avisos, elegir destinatarios y enviar resúmenes'),
                 ('configuracion.reglas_marcaciones', 'Configuración', 'Pestaña Reglas de marcaciones → editar cómo se lee cada secuencia de marcas por tipo de horario'),
 
                 # ── 4 Productos (4 permisos granulares) ──
