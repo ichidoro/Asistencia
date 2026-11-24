@@ -185,3 +185,19 @@ def test_alerta_velocidad_calza_al_chofer_con_su_contacto():
     assert "no enviado (sin contacto en el teléfono)" in armar_mensaje(e)
     e.update(estado_chofer="ok", destino_chofer="x")
     assert "enviado a su WhatsApp" in armar_mensaje(e)
+
+
+def test_destino_persona_de_asistencia_se_resuelve_por_nombre_o_a_mano():
+    import asyncio
+    from backend.services.whatsapp_resumen import resolver_destinos_chat
+
+    class DB:
+        async def fetch_one(self, q, p=None):
+            return {"nombre": "Daniel", "apellido_paterno": "Rojas", "apellido_materno": "Mena"} if p == (5,) else None
+    filas = [{"id": 1, "destino": "emp:5", "etiqueta": "Daniel Rojas"}, {"id": 2, "destino": "120363025246125486@g.us", "etiqueta": "Grupo"}, {"id": 3, "destino": "emp:9", "etiqueta": "Fantasma"}]
+    contactos = [{"id": "56911112222@s.whatsapp.net", "nombre": "Daniel Rojas"}]
+    r = asyncio.run(resolver_destinos_chat(DB(), filas, {}, contactos))
+    assert [x["jid"] for x in r] == ["56911112222@s.whatsapp.net", "120363025246125486@g.us", None] and r[0]["estado"] == "ok" and r[2]["estado"] == "ninguno"
+    r = asyncio.run(resolver_destinos_chat(DB(), filas[:1], {5: {"destino": "56999990000", "etiqueta": "x"}}, []))
+    assert r[0]["jid"] == "56999990000" and r[0]["estado"] == "manual"
+    assert asyncio.run(resolver_destinos_chat(DB(), filas[:1], {}, []))[0]["jid"] is None

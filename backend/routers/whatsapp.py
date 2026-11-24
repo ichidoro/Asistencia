@@ -127,8 +127,12 @@ async def config(db: Database = Depends(get_db), _: SecurityContext = Depends(Re
     activos = await repo.avisos_activos()
     destinos = await repo.destinos()
     filtros = await repo.filtros()
+    estado = {}
+    if any(str(d["destino"]).startswith(whatsapp_resumen.PREFIJO_PERSONA) for d in destinos):
+        for x in await whatsapp_resumen.resolver_destinos_chat(db, [dict(d) for d in destinos], await repo.destinos_personas()):
+            estado[x["id"]] = {"estado": x["estado"], "contacto": x["contacto"]}
     return {"opciones": await repo.opciones_filtro(), "avisos": [
-        {"aviso": k, **v, "activo": activos.get(k, False), "destinos": [d for d in destinos if d["aviso"] == k], "filtros": filtros.get(k, {"areas": [], "cargos": []})}
+        {"aviso": k, **v, "activo": activos.get(k, False), "destinos": [{**d, **estado.get(d["id"], {})} for d in destinos if d["aviso"] == k], "filtros": filtros.get(k, {"areas": [], "cargos": []})}
         for k, v in whatsapp_resumen.AVISOS.items()
     ]}
 
@@ -148,6 +152,27 @@ async def encender_aviso(aviso: str, datos: AvisoIn, db: Database = Depends(get_
     if datos.activo and meta["usa_chats"] and not await repo.destinos(aviso):
         raise HTTPException(400, "Asigne al menos un chat antes de encender este aviso.")
     await repo.poner_activo(aviso, datos.activo)
+    return {"ok": True}
+
+
+@router.get("/empleados")
+async def empleados(db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    """Personas activas de Asistencia, para asignarles un aviso a chats (jefes)."""
+    filas = await (await _repo(db)).empleados_activos()
+    return {"empleados": [{"id": r["id"], "nombre": " ".join(str(r[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(r[k] or "").strip()), "cargo": r["cargo"] or "", "area": r["area"] or ""} for r in filas]}
+
+
+@router.post("/avisos/{aviso}/personas/{emp_id}")
+async def agregar_persona_destino(aviso: str, emp_id: int, db: Database = Depends(get_db), _: SecurityContext = Depends(RequirePermission(PERMISO))):
+    """Asigna a un aviso de chats una persona de Asistencia: su WhatsApp se resuelve al enviar, como en el resumen personal."""
+    if not _aviso_o_404(aviso)["usa_chats"]:
+        raise HTTPException(400, "Ese aviso va a cada persona, no a chats asignados.")
+    repo = await _repo(db)
+    f = await repo.empleado(emp_id)
+    if not f:
+        raise HTTPException(404, "Esa persona no existe.")
+    nombre = " ".join(str(f[k] or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(f[k] or "").strip())
+    await repo.agregar_destino(aviso, whatsapp_resumen.PREFIJO_PERSONA + str(emp_id), nombre[:80])
     return {"ok": True}
 
 
@@ -191,7 +216,7 @@ async def resumen_semanal(datos: ResumenIn, db: Database = Depends(get_db), _: S
     if not datos.simular and not whatsapp_service.activo():
         raise HTTPException(503, "WhatsApp está apagado (WHATSAPP_ENABLED / token).")
     repo = await _repo(db)
-    destinos = [d["destino"] for d in await repo.destinos(datos.aviso)] if meta["usa_chats"] else None
+    destinos = await whatsapp_resumen.destinos_chat(db, repo, datos.aviso) if meta["usa_chats"] else None
     if meta.get("tiempo_real"):
         return await _revisar_velocidad(db, repo, destinos or [], datos.simular)
     return await whatsapp_resumen.enviar_resumen(AsistenciaService(AsistenciaRepository(db)), _hoy(), datos.simular, datos.aviso, destinos, await repo.destinos_personas(),
@@ -218,4 +243,4 @@ async def alerta_velocidad_cron(datos: ResumenCron, db: Database = Depends(get_d
     repo = await _repo(db)
     if not (await repo.avisos_activos()).get("exceso_velocidad"):
         return {"activo": False}
-    return await _revisar_velocidad(db, repo, [d["destino"] for d in await repo.destinos("exceso_velocidad")], False)
+    return await _revisar_velocidad(db, repo, await whatsapp_resumen.destinos_chat(db, repo, "exceso_velocidad"), False)

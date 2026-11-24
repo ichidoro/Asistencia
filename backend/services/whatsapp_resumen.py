@@ -246,6 +246,37 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
     return res
 
 
+PREFIJO_PERSONA = "emp:"  # un destino «emp:123» es una persona de Asistencia: su WhatsApp se resuelve al enviar (contacto fijado a mano o hallado por nombre)
+
+
+async def resolver_destinos_chat(db: Any, filas: List[Dict[str, Any]], manuales: Dict[int, Dict[str, Any]] | None = None, contactos: List[Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
+    """Cada destino asignado a un aviso de chats → {id, etiqueta, jid, estado, contacto}. Un grupo o celular va tal cual; una persona de Asistencia
+    se busca entre los contactos del teléfono por su nombre (igual que el resumen personal), y si no se encuentra queda sin jid y no se envía."""
+    out = []
+    for r in filas:
+        d = str(r["destino"])
+        if not d.startswith(PREFIJO_PERSONA):
+            out.append({"id": r.get("id"), "etiqueta": r.get("etiqueta") or d, "jid": d, "estado": "directo", "contacto": None})
+            continue
+        emp_id = int(d[len(PREFIJO_PERSONA):])
+        f = await db.fetch_one("SELECT nombre, apellido_paterno, apellido_materno FROM empleados WHERE id = ?", (emp_id,))
+        if contactos is None:
+            contactos = await whatsapp_service.contactos()
+        if not f:
+            out.append({"id": r.get("id"), "etiqueta": r.get("etiqueta") or d, "jid": None, "estado": "ninguno", "contacto": None})
+            continue
+        estado, hallado = resolver_destino(f["nombre"] or "", f["apellido_paterno"] or "", f["apellido_materno"] or "", (manuales or {}).get(emp_id), contactos)
+        out.append({"id": r.get("id"), "etiqueta": r.get("etiqueta") or d, "jid": hallado["id"] if estado in ("ok", "manual") else None, "estado": estado,
+                    "contacto": hallado["nombre"] if estado in ("ok", "manual") else None})
+    return out
+
+
+async def destinos_chat(db: Any, repo: Any, aviso: str) -> List[str]:
+    """Los WhatsApp a los que realmente se envía un aviso de chats (personas ya resueltas; las que no tienen contacto se omiten)."""
+    filas = [dict(r) for r in await repo.destinos(aviso)]
+    return [x["jid"] for x in await resolver_destinos_chat(db, filas, await repo.destinos_personas()) if x["jid"]]
+
+
 async def enviar_automaticos(asistencia_service, repo, hoy: str) -> Dict[str, Any]:
     """Lo que dispara el cron: cada aviso encendido, a sus destinatarios."""
     activos = await repo.avisos_activos()
@@ -253,7 +284,7 @@ async def enviar_automaticos(asistencia_service, repo, hoy: str) -> Dict[str, An
     for aviso in AVISOS:
         if not activos.get(aviso) or AVISOS[aviso].get("tiempo_real"):
             continue
-        chats = [d["destino"] for d in await repo.destinos(aviso)] if AVISOS[aviso]["usa_chats"] else None
+        chats = await destinos_chat(asistencia_service.repository.db, repo, aviso) if AVISOS[aviso]["usa_chats"] else None
         out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats, manuales=await repo.destinos_personas(),
                                           filtro=(await repo.filtros(aviso)).get(aviso))
     return out

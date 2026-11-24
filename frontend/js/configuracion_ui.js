@@ -2770,7 +2770,7 @@ window.cargarMapaCodigo = async function () {
     const H = function () { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' }; };
     const esc = function (t) { return window.Ayuda.esc(t); };   // el escape común de ayudantes.js (regla del proyecto)
     const TXT = { conectado: 'Conectado', conectando: 'Conectando…', desconectado: 'Desconectado', sin_puerta: 'La puerta de WhatsApp no responde', apagado: 'Apagado (falta WHATSAPP_ENABLED y el token en el servidor)' };
-    let timer = null, grupos = null, contactos = null, contactosEn = 0, opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
+    let timer = null, grupos = null, contactos = null, contactosEn = 0, empleados = [], opciones = { areas: [], cargos: [], pares: [] }, selecciones = {};
 
     async function api(metodo, ruta, cuerpo) {
         const r = await fetch('/api/whatsapp' + ruta, { method: metodo, headers: H(), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
@@ -2954,11 +2954,15 @@ window.cargarMapaCodigo = async function () {
                 if (usaChats) {
                     h += '<div class="mt-3" style="font-size:0.9rem;"><b>Se envía a:</b> ';
                     h += a.destinos.length ? a.destinos.map(function (d) {
-                        const esGrupo = d.destino.indexOf('@g.us') > 0;
-                        return '<span class="badge rounded-pill bg-light text-dark border me-1 py-2"><i class="bi ' + (esGrupo ? 'bi-people-fill text-success' : 'bi-person-fill text-primary') + '"></i> ' + esc(d.etiqueta || d.destino)
+                        const esGrupo = d.destino.indexOf('@g.us') > 0, esPersona = d.destino.indexOf('emp:') === 0, enc = esPersona && (d.estado === 'ok' || d.estado === 'manual');
+                        return '<span class="badge rounded-pill bg-light text-dark border me-1 py-2"><i class="bi ' + (esGrupo ? 'bi-people-fill text-success' : esPersona ? 'bi-person-vcard-fill text-primary' : 'bi-person-fill text-primary') + '"></i> ' + esc(d.etiqueta || d.destino)
+                            + (esPersona ? ' <span class="' + (enc ? 'text-success' : 'text-danger') + '" style="font-weight:400;" title="' + esc(enc ? 'Su WhatsApp: ' + (d.contacto || '') : 'No se encontró su contacto en el teléfono: no recibirá el aviso') + '">' + (enc ? '· WhatsApp ✓' : '· sin contacto') + '</span>' : '')
                             + ' <a href="#" class="wa-quitar text-danger text-decoration-none ms-1" data-id="' + d.id + '" title="Quitar">✕</a></span>';
                     }).join('') : '<span class="text-muted">ningún chat asignado</span>';
-                    h += '</div><div class="d-flex flex-wrap gap-2 mt-2">'
+                    h += '</div><div class="d-flex flex-wrap gap-2 mt-2 align-items-center"><span class="text-muted" style="font-size:0.85rem;"><i class="bi bi-person-vcard"></i> Persona de Asistencia:</span>'
+                        + '<input class="form-control wa-persona" list="wa-emps" placeholder="Buscar por nombre (su WhatsApp se busca en los contactos del teléfono)" style="max-width:420px;" autocomplete="off">'
+                        + '<button class="btn btn-outline-primary wa-add-persona">Asignar persona</button></div>'
+                        + '<div class="d-flex flex-wrap gap-2 mt-2 align-items-center"><span class="text-muted" style="font-size:0.85rem;">o un chat:</span>'
                         + '<input class="form-control wa-buscar" placeholder="Buscar un contacto o grupo, o escribir un celular" style="max-width:360px;">'
                         + '<input class="form-control wa-eti" placeholder="Nombre (opcional)" style="max-width:170px;">'
                         + '<button class="btn btn-outline-primary wa-add">Asignar</button></div>';
@@ -2983,6 +2987,14 @@ window.cargarMapaCodigo = async function () {
             });
             const buscar = box.querySelector('.wa-buscar');
             if (buscar) selector(buscar);
+            const addP = box.querySelector('.wa-add-persona');
+            if (addP) addP.onclick = async function () {
+                const v = box.querySelector('.wa-persona').value.trim(), emp = empleados.find(function (x) { return etiquetaEmp(x) === v; });
+                if (!emp) { msg('Elija una persona de la lista.'); return; }
+                const r = await api('POST', '/avisos/' + aviso + '/personas/' + emp.id);
+                if (!r.ok) { msg(esc(r.j.detail || 'No se pudo asignar.')); return; }
+                msg('Persona asignada.'); cargarAvisos();
+            };
             const add = box.querySelector('.wa-add');
             if (add) add.onclick = async function () {
                 const texto = buscar.value.trim(), eti = box.querySelector('.wa-eti').value.trim();
@@ -3074,7 +3086,13 @@ window.cargarMapaCodigo = async function () {
         });
     }
 
+    const etiquetaEmp = function (x) { return x.nombre + (x.cargo ? ' — ' + x.cargo : '') + (x.area ? ' (' + x.area + ')' : ''); };
+
     async function cargarAvisos() {
+        if (!empleados.length) { const e = await api('GET', '/empleados'); if (e.ok) empleados = e.j.empleados || []; }
+        let dl = document.getElementById('wa-emps');
+        if (!dl) { dl = document.createElement('datalist'); dl.id = 'wa-emps'; document.body.appendChild(dl); }
+        dl.innerHTML = empleados.map(function (x) { return '<option value="' + esc(etiquetaEmp(x)) + '"></option>'; }).join('');
         const [cfg, gr, co] = await Promise.all([api('GET', '/config'), grupos && grupos.length ? Promise.resolve(null) : api('GET', '/grupos'), contactos && contactos.length ? Promise.resolve(null) : api('GET', '/contactos')]);
         if (gr && gr.ok) grupos = gr.j.grupos || [];
         if (co && co.ok) contactos = co.j.contactos || [];
