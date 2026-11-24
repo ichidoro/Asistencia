@@ -47,10 +47,10 @@ def test_envia_con_numero_normalizado_y_no_lanza_si_falla(monkeypatch):
 def test_mensaje_semanal_falta_y_cumplida():
     from backend.services.whatsapp_resumen import armar_mensaje
     m = armar_mensaje("HANS ELLIOT", 169 * 60 + 30, 180 * 60, "2026-10-26", "2026-11-25", "2026-11-23")
-    assert "Hola Hans" in m and "169:30 h de 180:00 h (94 %)" in m
-    assert "Le faltan 10:30 h" in m and "Quedan 2 día(s)" in m and "5:15 h por día" in m
+    assert "Estimado/a Hans" in m and "*169:30 h* de 180:00 h" in m and "*94 %*" in m and "▰▰▰▰▰▰▰▰▰▱" in m
+    assert "Pendiente: *10:30 h*" in m and "Plazo: 2 días" in m and "5:15 h por día" in m
     ok = armar_mensaje("Ana", 194 * 60 + 30, 180 * 60, "2026-10-26", "2026-11-25", "2026-11-25")
-    assert "Ya cumplió la meta: 14:30 h sobre lo exigido" in ok and "Le faltan" not in ok and "Quedan" not in ok
+    assert "Meta cumplida*, con 14:30 h sobre lo exigido" in ok and "Pendiente" not in ok and "Plazo" not in ok
 
 
 def test_destino_valido_acepta_grupo_o_celular():
@@ -80,9 +80,9 @@ def test_mensaje_jefatura_ordena_de_menor_a_mayor_avance():
         {"nombre": "Cami", "acum": 50 * 60, "meta": 180 * 60},
     ]
     m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-23")
-    assert "1 de 3 ya cumplieron la meta; 2 aún no." in m
+    assert "Meta cumplida: *1*" in m and "Pendientes: *2*" in m and "Avance promedio: *61 %*" in m
     assert m.index("Cami") < m.index("Ana") and "Beto" not in m
-    assert "Cami: 50:00 de 180:00 h (28 %), faltan 130:00 h" in m
+    assert "1. Cami · *28 %* · 50:00 de 180:00 h · faltan 130:00 h" in m
 
 
 def test_destino_valido_acepta_contacto_del_telefono():
@@ -135,3 +135,53 @@ def test_filtro_por_area_y_cargo_acepta_varios_y_exige_cada_tipo():
     assert pasa_filtro("Logística Tradicional", "Supervisor", f) is False       # cargo fuera
     assert pasa_filtro("Producción", "Operario", {"areas": [], "cargos": ["Operario"]}) is True  # solo cargo
     assert pasa_filtro("  Logística   Retail ", "Chofer", {"areas": ["logística retail"], "cargos": []}) is True  # espacios y mayúsculas
+
+
+def _camion(pat, v, edad=1, chofer="Juan Pérez", lugar="Ruta 5 Sur, Curicó", f="24-11-2026 10:32:10"):
+    return {"patente": pat, "chofer": chofer, "edadMin": edad, "ultimo": {"v": v, "lugar": lugar, "f": f}}
+
+
+def test_alerta_velocidad_detecta_solo_sobre_95_y_con_reporte_reciente():
+    from backend.services.alerta_velocidad import detectar
+    flota = [_camion("AA11", 95), _camion("BB22", 96.4), _camion("CC33", 120, edad=10), _camion("DD44", 101), {"patente": "EE55", "ultimo": None}]
+    assert [e["patente"] for e in detectar(flota)] == ["DD44", "BB22"]
+
+
+def test_alerta_velocidad_no_repite_dentro_de_15_min_y_olvida_al_que_baja():
+    from backend.services.alerta_velocidad import nuevos
+    mem = {}
+    e = [{"patente": "AA11"}]
+    assert nuevos(e, 1000, mem) == e
+    mem["AA11"] = 1000
+    assert nuevos(e, 1000 + 14 * 60, mem) == []
+    assert nuevos(e, 1000 + 15 * 60, mem) == e
+    assert nuevos([], 1000 + 20 * 60, mem) == [] and mem == {}
+
+
+def test_alerta_velocidad_mensaje():
+    from backend.services.alerta_velocidad import armar_mensaje, detectar
+    m = armar_mensaje(detectar([_camion("AA11", 102.6)])[0])
+    assert "*AA11*" in m and "Juan Pérez" in m and "*103 km/h* (límite 95 km/h)" in m and "10:32" in m and "Curicó" in m
+
+
+def test_el_aviso_en_vivo_no_entra_al_cron_semanal():
+    from backend.services.whatsapp_resumen import AVISOS
+    assert AVISOS["exceso_velocidad"]["tiempo_real"] and AVISOS["exceso_velocidad"]["usa_chats"]
+
+
+def test_alerta_velocidad_calza_al_chofer_con_su_contacto():
+    from backend.services.alerta_velocidad import armar_mensaje, armar_mensaje_chofer, contacto_del_chofer, detectar
+    choferes = [{"id": 7, "nombre": "Juan", "apellido_paterno": "Pérez", "apellido_materno": "Soto", "activo": 1, "nombre_completo": "Pérez Soto Juan"}]
+    contactos = [{"id": "56911112222@s.whatsapp.net", "nombre": "Juan Pérez"}]
+    est, c = contacto_del_chofer("Juan Pérez Soto", choferes, {}, contactos)
+    assert est == "ok" and c["id"] == "56911112222@s.whatsapp.net"
+    est, c = contacto_del_chofer("Juan Pérez Soto", choferes, {7: {"destino": "56999990000", "etiqueta": "Juan"}}, contactos)
+    assert est == "manual" and c["id"] == "56999990000"   # lo fijado a mano manda
+    assert contacto_del_chofer("Juan Pérez Soto", choferes, {}, [])[0] == "ninguno"
+    assert contacto_del_chofer("", choferes, {}, contactos)[0] == "sin_chofer"
+    e = detectar([_camion("AA11", 102.6)])[0]
+    assert "Estimado/a Juan" in armar_mensaje_chofer(e) and "*102 km/h*" not in armar_mensaje_chofer(e) and "*103 km/h*" in armar_mensaje_chofer(e)
+    e.update(estado_chofer="ninguno", destino_chofer=None)
+    assert "no enviado (sin contacto en el teléfono)" in armar_mensaje(e)
+    e.update(estado_chofer="ok", destino_chofer="x")
+    assert "enviado a su WhatsApp" in armar_mensaje(e)

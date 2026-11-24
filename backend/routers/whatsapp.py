@@ -1,3 +1,4 @@
+from typing import Any
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -9,7 +10,7 @@ from backend.core.database import Database, get_db
 from backend.core.security import RequirePermission, SecurityContext
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.whatsapp import WhatsappRepository
-from backend.services import whatsapp_resumen, whatsapp_service
+from backend.services import alerta_velocidad, whatsapp_resumen, whatsapp_service
 from backend.services.asistencia_service import AsistenciaService
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
@@ -62,6 +63,13 @@ def _aviso_o_404(aviso: str) -> dict:
     if aviso not in whatsapp_resumen.AVISOS:
         raise HTTPException(404, "Ese aviso no existe.")
     return whatsapp_resumen.AVISOS[aviso]
+
+
+async def _revisar_velocidad(db: Database, repo: Any, destinos: list, simular: bool) -> dict:
+    """Alerta de velocidad: jefatura (chats asignados) y el propio chofer (su contacto, igual que en el resumen personal)."""
+    from backend.repositories.empleado import EmpleadoRepository
+    choferes = [dict(r) for r in await EmpleadoRepository(db).get_choferes_logistica_tradicional()]
+    return await alerta_velocidad.revisar(destinos, simular, choferes, await repo.destinos_personas())
 
 
 @router.get("/estado")
@@ -184,6 +192,8 @@ async def resumen_semanal(datos: ResumenIn, db: Database = Depends(get_db), _: S
         raise HTTPException(503, "WhatsApp está apagado (WHATSAPP_ENABLED / token).")
     repo = await _repo(db)
     destinos = [d["destino"] for d in await repo.destinos(datos.aviso)] if meta["usa_chats"] else None
+    if meta.get("tiempo_real"):
+        return await _revisar_velocidad(db, repo, destinos or [], datos.simular)
     return await whatsapp_resumen.enviar_resumen(AsistenciaService(AsistenciaRepository(db)), _hoy(), datos.simular, datos.aviso, destinos, await repo.destinos_personas(),
                                                  (await repo.filtros(datos.aviso)).get(datos.aviso))
 
@@ -196,3 +206,16 @@ async def resumen_semanal_cron(datos: ResumenCron, db: Database = Depends(get_db
     if not whatsapp_service.activo():
         raise HTTPException(503, "WhatsApp está apagado (WHATSAPP_ENABLED / token).")
     return await whatsapp_resumen.enviar_automaticos(AsistenciaService(AsistenciaRepository(db)), await _repo(db), _hoy())
+
+
+@router.post("/alerta-velocidad/cron")
+async def alerta_velocidad_cron(datos: ResumenCron, db: Database = Depends(get_db)):
+    """Lo llama cron-alerta-velocidad.sh cada minuto; solo actúa si el aviso está encendido y tiene chats."""
+    if not datos.cron_secret or datos.cron_secret != settings.CRON_SECRET:
+        raise HTTPException(401, "Clave inválida.")
+    if not whatsapp_service.activo():
+        raise HTTPException(503, "WhatsApp está apagado (WHATSAPP_ENABLED / token).")
+    repo = await _repo(db)
+    if not (await repo.avisos_activos()).get("exceso_velocidad"):
+        return {"activo": False}
+    return await _revisar_velocidad(db, repo, [d["destino"] for d in await repo.destinos("exceso_velocidad")], False)

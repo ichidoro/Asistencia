@@ -28,6 +28,12 @@ AVISOS = {
         "descripcion": "A los chats que se asignen: quiénes van más atrás de la meta del período, ordenados de menor a mayor avance.",
         "usa_chats": True,
     },
+    "exceso_velocidad": {
+        "nombre": "Alerta de exceso de velocidad (en vivo)",
+        "descripcion": "A los chats que se asignen: apenas un camión de la Flota en vivo de Nexacol reporta más de 95 km/h, con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano o el que se encuentra por nombre en el teléfono, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
+        "usa_chats": True,
+        "tiempo_real": True,  # no va en el cron del lunes: lo dispara cron-alerta-velocidad.sh
+    },
 }
 
 
@@ -100,37 +106,67 @@ def _dm(iso: str) -> str:
     return f"{iso[8:10]}/{iso[5:7]}"
 
 
+def _barra(pct: float, largo: int = 10) -> str:
+    """Barra de avance de texto (WhatsApp no dibuja gráficos): ▰▰▰▰▰▰▰▰▱▱. Tope visual en 100 %."""
+    llenos = max(0, min(largo, round(min(pct, 100) / 100 * largo)))
+    return "▰" * llenos + "▱" * (largo - llenos)
+
+
+def _dias(n: int) -> str:
+    return f"{n} día" if n == 1 else f"{n} días"
+
+
 def armar_mensaje(nombre: str, acum_min: float, meta_min: float, inicio: str, fin: str, hoy: str) -> str:
     pct = round(acum_min / meta_min * 100) if meta_min > 0 else 0
     dias = max(0, (date.fromisoformat(fin) - date.fromisoformat(hoy)).days)
     partes = (nombre or "").split()
-    saludo = f"Hola {partes[0].capitalize()}" if partes else "Hola"
+    saludo = f"Estimado/a {partes[0].capitalize()}," if partes else "Estimado/a,"
     lineas = [
-        f"{saludo}, este es su resumen semanal de horas (período {_dm(inicio)} al {_dm(fin)}).",
-        f"• Lleva {_hhmm(acum_min)} h de {_hhmm(meta_min)} h ({pct} %).",
+        "*RESUMEN SEMANAL DE HORAS*",
+        f"Bolsa Flexible · Período {_dm(inicio)} al {_dm(fin)}",
+        "",
+        saludo,
+        "A continuación, el estado de su bolsa de horas:",
+        "",
+        f"{_barra(pct)}  *{pct} %*",
+        f"▪ Acumulado: *{_hhmm(acum_min)} h* de {_hhmm(meta_min)} h",
     ]
     if acum_min >= meta_min:
-        lineas.append(f"• Ya cumplió la meta: {_hhmm(acum_min - meta_min)} h sobre lo exigido.")
+        lineas.append(f"✅ *Meta cumplida*, con {_hhmm(acum_min - meta_min)} h sobre lo exigido.")
     else:
         falta = meta_min - acum_min
-        lineas.append(f"• Le faltan {_hhmm(falta)} h para la meta.")
+        lineas.append(f"▪ Pendiente: *{_hhmm(falta)} h*")
         if dias > 0:
-            lineas.append(f"• Quedan {dias} día(s) del período: unas {_hhmm(falta / dias)} h por día.")
-    lineas.append("Mensaje automático de Asistencia Aguacol. Ante dudas, consulte con su jefatura.")
+            lineas.append(f"▪ Plazo: {_dias(dias)} (promedio requerido: {_hhmm(falta / dias)} h por día)")
+    lineas += ["", "_Mensaje automático de Asistencia Aguacol. Ante dudas, consulte con su jefatura._"]
     return "\n".join(lineas)
 
 
 def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, hoy: str) -> str:
     """Consolidado: las personas que aún no llegan a la meta, de menor a mayor avance."""
     dias = max(0, (date.fromisoformat(fin) - date.fromisoformat(hoy)).days)
-    cumplen = [i for i in items if i["meta"] > 0 and i["acum"] >= i["meta"]]
-    atras = sorted((i for i in items if i["meta"] > 0 and i["acum"] < i["meta"]), key=lambda i: i["acum"] / i["meta"])
-    lineas = [f"Resumen semanal de horas de Bolsa (período {_dm(inicio)} al {_dm(fin)}, quedan {dias} día(s)).",
-              f"{len(cumplen)} de {len(items)} ya cumplieron la meta; {len(atras)} aún no."]
-    for i in atras[:MAX_LINEAS_JEFATURA]:
-        lineas.append(f"• {i['nombre']}: {_hhmm(i['acum'])} de {_hhmm(i['meta'])} h ({round(i['acum'] / i['meta'] * 100)} %), faltan {_hhmm(i['meta'] - i['acum'])} h")
-    if len(atras) > MAX_LINEAS_JEFATURA:
-        lineas.append(f"… y {len(atras) - MAX_LINEAS_JEFATURA} más.")
+    con_meta = [i for i in items if i["meta"] > 0]
+    cumplen = [i for i in con_meta if i["acum"] >= i["meta"]]
+    atras = sorted((i for i in con_meta if i["acum"] < i["meta"]), key=lambda i: i["acum"] / i["meta"])
+    prom = round(sum(min(i["acum"] / i["meta"], 1) for i in con_meta) / len(con_meta) * 100) if con_meta else 0
+    lineas = [
+        "*RESUMEN SEMANAL · BOLSA DE HORAS*",
+        f"Período {_dm(inicio)} al {_dm(fin)} · quedan {_dias(dias)}",
+        "",
+        f"▪ Personas en seguimiento: *{len(items)}*",
+        f"▪ Meta cumplida: *{len(cumplen)}*",
+        f"▪ Pendientes: *{len(atras)}*",
+        f"▪ Avance promedio: *{prom} %*  {_barra(prom)}",
+    ]
+    if atras:
+        lineas += ["", "*Pendientes, de menor a mayor avance*"]
+        for n, i in enumerate(atras[:MAX_LINEAS_JEFATURA], 1):
+            lineas.append(f"{n}. {i['nombre']} · *{round(i['acum'] / i['meta'] * 100)} %* · {_hhmm(i['acum'])} de {_hhmm(i['meta'])} h · faltan {_hhmm(i['meta'] - i['acum'])} h")
+        if len(atras) > MAX_LINEAS_JEFATURA:
+            lineas.append(f"… y {len(atras) - MAX_LINEAS_JEFATURA} más.")
+    else:
+        lineas += ["", "✅ Todas las personas cumplieron la meta."]
+    lineas += ["", "_Mensaje automático de Asistencia Aguacol._"]
     return "\n".join(lineas)
 
 
@@ -215,7 +251,7 @@ async def enviar_automaticos(asistencia_service, repo, hoy: str) -> Dict[str, An
     activos = await repo.avisos_activos()
     out: Dict[str, Any] = {}
     for aviso in AVISOS:
-        if not activos.get(aviso):
+        if not activos.get(aviso) or AVISOS[aviso].get("tiempo_real"):
             continue
         chats = [d["destino"] for d in await repo.destinos(aviso)] if AVISOS[aviso]["usa_chats"] else None
         out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats, manuales=await repo.destinos_personas(),
