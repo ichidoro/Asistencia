@@ -3061,6 +3061,8 @@ window.cargarMapaCodigo = async function () {
                 const hit = elegido(inp);
                 const g = await api('PUT', '/personas/' + emp + '/destino', { destino: hit ? hit.id : texto, etiqueta: hit ? hit.nombre : '' });
                 if (!g.ok) { msg(esc(g.j.detail || 'No se pudo guardar.')); return; }
+                // En un aviso a chats, fijar su contacto a mano es elegirlo como destinatario: queda marcado «Recibe» (si no, el aviso seguía sin destinatarios).
+                if (esChat && tr.getAttribute('data-recibe') !== '1') await api('POST', '/avisos/' + avisoDe + '/personas/' + emp);
                 msg('Guardado.'); cargarPersonas(caja);
             };
             tr.querySelector('.wp-ok').onclick = guardar;
