@@ -1,14 +1,14 @@
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from typing import List, Optional, Callable
 from loguru import logger
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 from backend.core.config import settings
 from backend.core.database import db
-from backend.repositories.seguridad import SeguridadRepository
+from backend.repositories.seguridad import SeguridadRepository, TOKEN_MINUTOS
 
 # URL donde el frontend debe enviar username/password para obtener el token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
@@ -78,8 +78,17 @@ class SecurityContext:
                 detail=f"No tiene acceso a {recurso} del área '{area}'"
             )
 
+def token_para_renovar(exp: object, ahora: float | None = None) -> bool:
+    """True cuando al token le queda menos de la mitad de su vida: se entrega uno nuevo para que la sesión activa no muera."""
+    if not isinstance(exp, (int, float)):
+        return False
+    ahora = datetime.now(timezone.utc).timestamp() if ahora is None else ahora
+    return exp - ahora < TOKEN_MINUTOS * 60 / 2
+
+
 async def get_current_user(
     request: Request,
+    response: Response,
     token: str = Depends(oauth2_scheme), 
     seguridad_repo: SeguridadRepository = Depends(get_seguridad_repo)
 ) -> SecurityContext:
@@ -152,6 +161,11 @@ async def get_current_user(
         permisos=permisos
     )
     
+    # Sesión deslizante: mientras la persona use el sistema (y siga activa en la base), se le entrega un token nuevo en el encabezado
+    # X-Nuevo-Token cuando al suyo le queda menos de la mitad de su vida. El frontend lo guarda; así una sesión en uso nunca vence.
+    if token_para_renovar(payload.get("exp")):
+        response.headers["X-Nuevo-Token"] = seguridad_repo.create_access_token({"sub": username})
+
     # Inyectar el contexto en el Request para los repositorios si fuera necesario
     request.state.user = context
     

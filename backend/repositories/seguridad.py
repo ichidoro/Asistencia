@@ -45,6 +45,9 @@ def detalle_cambio_rol(nombre: str, rol_id: int, antes_global: bool, despues_glo
     return f"Rol modificado: {nombre} ({rol_id}) — alcance: {alcance}; permisos: {permisos}"
 
 
+TOKEN_MINUTOS = 1440  # vida de cada token (24 h); se renueva solo mientras la sesión se usa (ver core.security.get_current_user)
+
+
 class SeguridadRepository:
     def __init__(self, db: Database):
         self.db = db
@@ -76,7 +79,7 @@ class SeguridadRepository:
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(minutes=1440)  # 24 horas por defecto
+            expire = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_MINUTOS)
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt

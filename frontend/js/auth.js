@@ -144,6 +144,23 @@ const AuthService = {
         }
     },
 
+    // El servidor entrega un token nuevo (X-Nuevo-Token) cuando al actual le queda poca vida: se guarda y la sesión no vence mientras se use.
+    guardarTokenRenovado: function (response) {
+        try {
+            const nuevo = response && response.headers && response.headers.get('X-Nuevo-Token');
+            if (nuevo) localStorage.setItem(this.TOKEN_KEY, nuevo);
+        } catch (e) { /* sin almacenamiento: la sesión sigue con el token que tenía */ }
+    },
+
+    // Con la pantalla abierta pero sin tocar nada, igual se renueva: cada 20 minutos y al volver a la pestaña (el equipo pudo dormirse).
+    mantenerSesionViva: function () {
+        const pagina = window.location.pathname;
+        if (pagina.endsWith('/login.html') || pagina === '/login') return;
+        const latir = () => { if (this.getToken() && !document.hidden) window.fetch('/api/auth/permissions/').catch(() => {}); };
+        setInterval(latir, 20 * 60 * 1000);
+        document.addEventListener('visibilitychange', latir);
+    },
+
     initInterceptor: function () {
         // Interceptar window.fetch globalmente para inyectar Token y escuchar 401
         const originalFetch = window.fetch;
@@ -169,6 +186,7 @@ const AuthService = {
 
             try {
                 const response = await originalFetch(resource, config);
+                AuthService.guardarTokenRenovado(response);
 
                 // Zero-Trust: Sesión Expirada Detection con 1 retry resiliente.
                 // Bajo carga pesada del servidor (batch sync), un 401 transitorio puede ocurrir.
@@ -176,6 +194,7 @@ const AuthService = {
                     // Retry silencioso: esperar 300ms y reintentar 1 vez
                     await new Promise(r => setTimeout(r, 300));
                     const retryResponse = await originalFetch(resource, config);
+                    AuthService.guardarTokenRenovado(retryResponse);
                     if (retryResponse.status === 401) {
                         console.warn("🔐 Muro de Seguridad: " + url + " devolvió 401 (confirmado). Deslogueando.");
                         AuthService.logout("Su sesión ha expirado o su cuenta ha sido desactivada.");
@@ -321,3 +340,4 @@ const AuthService = {
 
 // Auto-Iniciar Security Interceptor cuando se cargue el archivo
 AuthService.initInterceptor();
+AuthService.mantenerSesionViva();
