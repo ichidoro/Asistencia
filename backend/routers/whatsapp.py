@@ -28,6 +28,7 @@ class ResumenIn(BaseModel):
 
 class ResumenCron(BaseModel):
     cron_secret: str
+    franja: str = "manana"  # manana (08:00, lunes a viernes) | tarde (20:00, cada día: el servidor decide si toca viernes o cierre)
 
 
 class AvisoIn(BaseModel):
@@ -241,7 +242,7 @@ async def resumen_semanal_cron(datos: ResumenCron, db: Database = Depends(get_db
         raise HTTPException(401, "Clave inválida.")
     if not whatsapp_service.activo():
         raise HTTPException(503, "WhatsApp está apagado (WHATSAPP_ENABLED / token).")
-    return await whatsapp_resumen.enviar_automaticos(AsistenciaService(AsistenciaRepository(db)), await _repo(db), _hoy())
+    return await whatsapp_resumen.enviar_automaticos(AsistenciaService(AsistenciaRepository(db)), await _repo(db), _hoy(), datos.franja)
 
 
 @router.post("/alerta-velocidad/cron")

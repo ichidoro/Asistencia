@@ -286,3 +286,54 @@ def test_alerta_de_velocidad_tambien_va_a_la_jefatura_del_resumen():
             return {"exceso_velocidad": [{"destino": "emp:1"}], "resumen_jefatura": [{"destino": "emp:1"}, {"destino": "emp:2"}]}.get(aviso, [])
     assert [f["destino"] for f in asyncio.run(destinos_de(Repo(), "exceso_velocidad"))] == ["emp:1", "emp:2"]
     assert [f["destino"] for f in asyncio.run(destinos_de(Repo(), "resumen_jefatura"))] == ["emp:1", "emp:2"]
+
+
+def test_mensaje_de_cierre_dice_como_le_fue():
+    from backend.services.whatsapp_resumen import armar_mensaje_cierre
+    ok = armar_mensaje_cierre("JUAN PEREZ", 185 * 60, 180 * 60, "2026-10-26", "2026-11-25")
+    assert "CIERRE DEL PERÍODO" in ok and "Estimado/a Juan" in ok and "Meta cumplida" in ok and "5:00 h sobre lo exigido" in ok
+    mal = armar_mensaje_cierre("Ana", 170 * 60, 180 * 60, "2026-10-26", "2026-11-25")
+    assert "No alcanzó la meta: faltaron *10:00 h*" in mal and "94 %" in mal
+
+
+def test_resumen_personal_sale_viernes_y_dia_de_cierre_a_las_20(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+    from backend.services import cuadre_service
+
+    class Cuadre:
+        def __init__(self, _): pass
+        async def tramo_de(self, hoy): return "2026-10-26", "2026-11-25"
+    monkeypatch.setattr(cuadre_service, "CuadreService", Cuadre)
+    assert asyncio.run(wr.tipo_de_hoy(None, "2026-11-25")) == "cierre"       # miércoles, último día
+    assert asyncio.run(wr.tipo_de_hoy(None, "2026-11-20")) == "semanal"      # viernes
+    assert asyncio.run(wr.tipo_de_hoy(None, "2026-11-24")) is None           # martes cualquiera
+
+
+def test_cada_franja_envia_solo_sus_avisos(monkeypatch):
+    import asyncio
+    from backend.services import whatsapp_resumen as wr
+    llamados = []
+
+    class Repo:
+        async def avisos_activos(self): return {"resumen_personal": True, "resumen_jefatura": True}
+        async def destinos_personas(self): return {}
+        async def filtros(self, a): return {}
+        async def destinos(self, a): return []
+
+    async def enviar_resumen(svc, hoy, **k): llamados.append((k["aviso"], k["tipo"])); return {}
+
+    async def tipo_de_hoy(svc, hoy): return "cierre"
+
+    async def destinos_chat(db, repo, aviso): return []
+
+    class Svc:
+        class repository: db = None
+    monkeypatch.setattr(wr, "enviar_resumen", enviar_resumen)
+    monkeypatch.setattr(wr, "tipo_de_hoy", tipo_de_hoy)
+    monkeypatch.setattr(wr, "destinos_chat", destinos_chat)
+    asyncio.run(wr.enviar_automaticos(Svc(), Repo(), "2026-11-25", "manana"))
+    assert llamados == [("resumen_jefatura", "semanal")]
+    llamados.clear()
+    asyncio.run(wr.enviar_automaticos(Svc(), Repo(), "2026-11-25", "tarde"))
+    assert llamados == [("resumen_personal", "cierre")]

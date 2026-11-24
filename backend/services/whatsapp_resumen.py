@@ -16,15 +16,17 @@ from backend.services import whatsapp_service
 PAUSA_ENTRE_ENVIOS_SEG = 3  # no ráfagas: un número nuevo que dispara muchos mensajes seguidos arriesga bloqueo
 MAX_LINEAS_JEFATURA = 50    # el mensaje de WhatsApp se corta en 4000 caracteres
 
-# Catálogo de avisos automáticos (lunes a viernes 08:00). `usa_chats`: van a los chats asignados; si no, a cada persona.
+# Catálogo de avisos automáticos. `franja`: manana (lunes a viernes 08:00) o tarde (20:00: cada viernes y el día del cierre del período). `usa_chats`: van a los chats asignados; si no, a cada persona.
 AVISOS = {
     "resumen_personal": {
-        "nombre": "Resumen diario de horas a cada persona",
-        "descripcion": "A cada persona de Bolsa Flexible, en su propio WhatsApp: cuánto lleva de su meta de 180 h y cuánto le falta. Solo le llega a quien tenga un contacto asignado a mano (los números de la ficha no se usan).",
+        "nombre": "Resumen semanal a cada persona",
+        "descripcion": "A cada persona de Bolsa Flexible, en su propio WhatsApp, cada viernes a las 20:00: cuánto lleva de su meta de 180 h y cuánto le falta. El día del cierre del período, también a las 20:00, le avisa cómo le fue en el período. Solo le llega a quien tenga un contacto asignado a mano (los números de la ficha no se usan).",
         "usa_chats": False,
+        "franja": "tarde",
     },
     "resumen_jefatura": {
         "nombre": "Resumen diario de horas a jefatura",
+        "franja": "manana",
         "descripcion": "A las personas que se asignen (de cualquier área): todas las personas del filtro, de más a menos horas, con quiénes ya cumplieron la meta del período y a quiénes les falta.",
         "usa_chats": True,
     },
@@ -110,6 +112,30 @@ def armar_mensaje(nombre: str, acum_min: float, meta_min: float, inicio: str, fi
     return "\n".join(lineas)
 
 
+def armar_mensaje_cierre(nombre: str, acum_min: float, meta_min: float, inicio: str, fin: str) -> str:
+    """Lo que recibe cada persona el día que cierra el período: cómo le fue."""
+    pct = round(acum_min / meta_min * 100) if meta_min > 0 else 0
+    partes = (nombre or "").split()
+    lineas = [
+        "*CIERRE DEL PERÍODO · BOLSA DE HORAS*",
+        f"Período {_dm(inicio)} al {_dm(fin)}",
+        "",
+        f"Estimado/a {partes[0].capitalize()}," if partes else "Estimado/a,",
+        "Hoy cerró el período. Este fue su resultado:",
+        "",
+    ]
+    if meta_min > 0 and acum_min >= meta_min:
+        lineas += [f"{_barra(pct)}  *{pct} %*", f"▪ Horas del período: *{_hhmm(acum_min)} h* de {_hhmm(meta_min)} h",
+                   f"✅ *Meta cumplida*, con {_hhmm(acum_min - meta_min)} h sobre lo exigido."]
+    elif meta_min > 0:
+        lineas += [f"{_barra(pct)}  *{_pct_pendiente(acum_min, meta_min)} %*", f"▪ Horas del período: *{_hhmm(acum_min)} h* de {_hhmm(meta_min)} h",
+                   f"▪ No alcanzó la meta: faltaron *{_hhmm(meta_min - acum_min)} h*."]
+    else:
+        lineas.append(f"▪ Horas del período: *{_hhmm(acum_min)} h*")
+    lineas += ["", "_Mensaje automático de Asistencia Aguacol. Ante dudas, consulte con su jefatura._"]
+    return "\n".join(lineas)
+
+
 RITMO_ALTO_H = 10  # sobre estas horas diarias para llegar a la meta se marca el caso como difícil de alcanzar
 
 
@@ -187,6 +213,7 @@ async def construir(asistencia_service, hoy: str, contactos: List[Dict[str, Any]
             "telefono": hallado["id"] if con else None, "contacto": hallado["nombre"] if con else None,
             "candidatos": [x["nombre"] for x in hallado] if estado == "ambiguo" else [],
             "mensaje": armar_mensaje(c.get("nombre") or "", f["acumBolsa"], f["metaMin"], inicio, fin, hoy),
+            "mensaje_cierre": armar_mensaje_cierre(c.get("nombre") or "", f["acumBolsa"], f["metaMin"], inicio, fin),
         })
     return {"inicio": inicio, "fin": fin, "personas": personas}
 
@@ -219,8 +246,9 @@ async def listar_personas(asistencia_service, hoy: str, manuales: Dict[int, Dict
 
 async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, aviso: str = "resumen_personal",
                          destinos: List[str] | None = None, manuales: Dict[int, Dict[str, Any]] | None = None,
-                         filtro: Dict[str, List[str]] | None = None) -> Dict[str, Any]:
-    """simular=True no envía nada: devuelve a quién y qué se enviaría. `destinos` solo para el aviso a chats."""
+                         filtro: Dict[str, List[str]] | None = None, tipo: str = "semanal") -> Dict[str, Any]:
+    """simular=True no envía nada: devuelve a quién y qué se enviaría. `destinos` solo para el aviso a chats.
+    `tipo` (solo resumen personal): semanal | cierre (cómo le fue en el período que hoy termina)."""
     base = await construir(asistencia_service, hoy, await whatsapp_service.contactos(), manuales, filtro)
     personas = [p for p in base["personas"] if p["incluida"]]  # lo que queda fuera del filtro de área y cargo no se cuenta ni se envía
     if aviso == "resumen_jefatura":
@@ -246,22 +274,23 @@ async def enviar_resumen(asistencia_service, hoy: str, simular: bool = True, avi
         res.update(enviados=enviados, fallidos=fallidos)
         return res
 
+    clave = "mensaje_cierre" if tipo == "cierre" else "mensaje"
     con_tel = [i for i in personas if i["telefono"]]
     res = {"simulado": simular, "aviso": aviso, "personas": len(personas), "con_contacto": len(con_tel),
            "sin_contacto": [i["nombre"] for i in personas if i["estado"] == "ninguno"], "manuales": sum(1 for i in personas if i["estado"] == "manual"),
            "ambiguos": [f"{i['nombre']} (¿{' o '.join(i['candidatos'])}?)" for i in personas if i["estado"] == "ambiguo"]}
     if simular:
         res["coincidencias"] = [{"persona": i["nombre"], "contacto": i["contacto"], "numero": _numero_de(i["telefono"])} for i in con_tel]
-        res["vista_previa"] = [{"nombre": i["nombre"], "telefono": _numero_de(i["telefono"]), "mensaje": i["mensaje"]} for i in con_tel[:2]]
+        res["vista_previa"] = [{"nombre": i["nombre"], "telefono": _numero_de(i["telefono"]), "mensaje": i[clave]} for i in con_tel[:2]]
         return res
     enviados = fallidos = 0
     for i in con_tel:
-        if await whatsapp_service.enviar(i["telefono"], i["mensaje"]):
+        if await whatsapp_service.enviar(i["telefono"], i[clave]):
             enviados += 1
         else:
             fallidos += 1
         await asyncio.sleep(PAUSA_ENTRE_ENVIOS_SEG)
-    logger.info(f"WhatsApp resumen diario: {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin contacto")
+    logger.info(f"WhatsApp resumen personal ({tipo}): {enviados} enviados, {fallidos} fallidos, {len(personas) - len(con_tel)} sin contacto")
     res.update(enviados=enviados, fallidos=fallidos)
     return res
 
@@ -307,14 +336,29 @@ async def destinos_de(repo: Any, aviso: str) -> List[Any]:
     return filas
 
 
-async def enviar_automaticos(asistencia_service, repo, hoy: str) -> Dict[str, Any]:
-    """Lo que dispara el cron: cada aviso encendido, a sus destinatarios."""
+async def tipo_de_hoy(asistencia_service, hoy: str) -> str | None:
+    """Qué resumen personal toca hoy a las 20:00: «cierre» el último día del período, «semanal» cada viernes, si no nada."""
+    from backend.services.cuadre_service import CuadreService
+    _, fin = await CuadreService(asistencia_service).tramo_de(hoy)
+    if hoy == fin:
+        return "cierre"
+    return "semanal" if date.fromisoformat(hoy).weekday() == 4 else None
+
+
+async def enviar_automaticos(asistencia_service, repo, hoy: str, franja: str = "manana") -> Dict[str, Any]:
+    """Lo que dispara el cron de cada franja: los avisos encendidos de esa franja, a sus destinatarios."""
     activos = await repo.avisos_activos()
     out: Dict[str, Any] = {}
     for aviso in AVISOS:
-        if not activos.get(aviso) or AVISOS[aviso].get("tiempo_real"):
+        if not activos.get(aviso) or AVISOS[aviso].get("tiempo_real") or AVISOS[aviso].get("franja", "manana") != franja:
             continue
+        tipo = "semanal"
+        if aviso == "resumen_personal":
+            tipo = await tipo_de_hoy(asistencia_service, hoy)
+            if tipo is None:
+                out[aviso] = {"omitido": "hoy no es viernes ni cierre de período"}
+                continue
         chats = await destinos_chat(asistencia_service.repository.db, repo, aviso) if AVISOS[aviso]["usa_chats"] else None
         out[aviso] = await enviar_resumen(asistencia_service, hoy, simular=False, aviso=aviso, destinos=chats, manuales=await repo.destinos_personas(),
-                                          filtro=(await repo.filtros(aviso)).get(aviso))
+                                          filtro=(await repo.filtros(aviso)).get(aviso), tipo=tipo)
     return out
