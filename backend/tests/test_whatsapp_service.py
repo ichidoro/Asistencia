@@ -130,10 +130,10 @@ def _camion(pat, v, edad=1, chofer="Juan Pérez", lugar="Ruta 5 Sur, Curicó", f
     return {"patente": pat, "grupo": grupo, "chofer": chofer, "edadMin": edad, "ultimo": {"v": v, "lugar": lugar, "f": f}}
 
 
-def test_alerta_velocidad_detecta_solo_sobre_95_y_con_reporte_reciente():
+def test_alerta_velocidad_detecta_desde_95_y_con_reporte_reciente():
     from backend.services.alerta_velocidad import detectar
-    flota = [_camion("AA11", 95), _camion("BB22", 96.4), _camion("CC33", 120, edad=10), _camion("DD44", 101), {"patente": "EE55", "ultimo": None}]
-    assert [e["patente"] for e in detectar(flota)] == ["DD44", "BB22"]
+    flota = [_camion("AA11", 95), _camion("BB22", 96.4), _camion("CC33", 120, edad=10), _camion("DD44", 101), _camion("FF66", 94), {"patente": "EE55", "ultimo": None}]
+    assert [e["patente"] for e in detectar(flota)] == ["DD44", "BB22", "AA11"]
 
 
 def test_alerta_velocidad_no_repite_dentro_de_15_min_y_olvida_al_que_baja():
@@ -150,7 +150,7 @@ def test_alerta_velocidad_no_repite_dentro_de_15_min_y_olvida_al_que_baja():
 def test_alerta_velocidad_mensaje():
     from backend.services.alerta_velocidad import armar_mensaje, detectar
     m = armar_mensaje(detectar([_camion("AA11", 102.6)])[0])
-    assert "*AA11*" in m and "Juan Pérez" in m and "*103 km/h* (límite 95 km/h)" in m and "10:32" in m and "Curicó" in m
+    assert "*AA11*" in m and "Juan Pérez" in m and "*103 km/h* (límite 90 km/h)" in m and "10:32" in m and "Curicó" in m
 
 
 def test_el_aviso_en_vivo_no_entra_al_cron_semanal():
