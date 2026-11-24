@@ -38,45 +38,12 @@ AVISOS = {
 }
 
 
-_SIN_VALOR = {"de", "del", "la", "las", "los", "y", "e"}
-
-
-def _tokens(texto: object) -> set:
-    """Palabras del nombre en minúsculas y sin tildes, sin conectores («de», «del»…)."""
-    t = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode().lower()
-    return {w for w in re.split(r"[^a-z0-9]+", t) if len(w) > 1 and w not in _SIN_VALOR}
-
-
-def buscar_contacto(nombre: str, paterno: str, materno: str, contactos: List[Dict[str, Any]]) -> tuple:
-    """Encuentra a la persona entre los contactos del teléfono por su nombre.
-
-    Un contacto sirve si trae el primer nombre Y el apellido paterno (en cualquier orden: «Hans Valenzuela», «Valenzuela Hans»).
-    Si varios sirven, gana el que además trae el segundo nombre o el apellido materno; si aun así empatan, es ambiguo y no se envía.
-    Devuelve ("ok", contacto) | ("ambiguo", [contactos]) | ("ninguno", None).
-    """
-    nombres = [w for w in re.split(r"\s+", str(nombre or "").strip()) if w]
-    primero = _tokens(nombres[0]) if nombres else set()
-    resto = _tokens(" ".join(nombres[1:])) | _tokens(materno)
-    pat = _tokens(paterno)
-    if not primero or not pat:
-        return "ninguno", None
-    candidatos = []
-    for c in contactos:
-        ct = _tokens(c.get("nombre"))
-        if primero <= ct and pat <= ct:
-            candidatos.append((len(resto & ct), c))
-    if not candidatos:
-        return "ninguno", None
-    mejor = max(p for p, _ in candidatos)
-    ganadores = [c for p, c in candidatos if p == mejor]
-    return ("ok", ganadores[0]) if len(ganadores) == 1 else ("ambiguo", ganadores)
-
-
 def resolver_destino(nombre: str, paterno: str, materno: str, manual: Dict[str, Any] | None, contactos: List[Dict[str, Any]]) -> tuple:
-    """Lo elegido a mano manda; si no hay, se busca por nombre. Devuelve (estado, contacto) con estado manual | ok | ambiguo | ninguno."""
+    """Solo vale el contacto que se fijó a mano para la persona: nunca se asigna uno por coincidencia de nombre.
+    Devuelve (estado, contacto) con estado manual | ninguno. Los tres avisos pasan por aquí."""
     if manual and manual.get("destino"):
         return "manual", {"id": manual["destino"], "nombre": manual.get("etiqueta") or manual["destino"]}
-    return buscar_contacto(nombre, paterno, materno, contactos)
+    return "ninguno", None
 
 
 def _norm(t: object) -> str:

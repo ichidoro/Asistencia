@@ -99,31 +99,11 @@ def test_destino_valido_acepta_contacto_del_telefono():
     assert wa.destino_valido("abc@s.whatsapp.net") is None
 
 
-def test_buscar_contacto_por_nombre_en_cualquier_orden():
-    from backend.services.whatsapp_resumen import buscar_contacto
-    cs = [{"id": "1@s.whatsapp.net", "nombre": "Hans Valenzuela"}, {"id": "2@s.whatsapp.net", "nombre": "María José Pérez"}, {"id": "3@s.whatsapp.net", "nombre": "Pedro"}]
-    assert buscar_contacto("HANS ELLIOT", "VALENZUELA", "VARGAS", cs)[1]["id"] == "1@s.whatsapp.net"
-    assert buscar_contacto("Maria Jose", "Perez", "", cs)[0] == "ok"          # sin tildes y con segundo nombre
-    assert buscar_contacto("Pedro", "Soto", "", cs) == ("ninguno", None)       # solo el primer nombre no alcanza
-    assert buscar_contacto("Hans", "", "", cs) == ("ninguno", None)            # sin apellido no se arriesga
-    assert buscar_contacto("Hans", "Vargas", "", cs) == ("ninguno", None)      # el apellido debe estar
-
-
-def test_buscar_contacto_desempata_o_marca_ambiguo():
-    from backend.services.whatsapp_resumen import buscar_contacto
-    cs = [{"id": "1@s.whatsapp.net", "nombre": "Juan Soto"}, {"id": "2@s.whatsapp.net", "nombre": "Juan Pablo Soto"}]
-    # el contacto que además trae el segundo nombre gana
-    assert buscar_contacto("JUAN PABLO", "SOTO", "RIOS", cs)[1]["id"] == "2@s.whatsapp.net"
-    # sin nada más para decidir hay dos posibles: no se elige
-    estado, lista = buscar_contacto("JUAN", "SOTO", "", [{"id": "1@s.whatsapp.net", "nombre": "Juan Soto"}, {"id": "9@s.whatsapp.net", "nombre": "Soto Juan"}])
-    assert estado == "ambiguo" and len(lista) == 2
-
-
-def test_lo_fijado_a_mano_manda_sobre_la_busqueda_por_nombre():
+def test_solo_vale_lo_fijado_a_mano_nunca_el_nombre():
     from backend.services.whatsapp_resumen import resolver_destino
     cs = [{"id": "1@s.whatsapp.net", "nombre": "Daniel Soto"}]
-    # sin nada manual se busca por nombre
-    assert resolver_destino("Daniel", "Soto", "", None, cs)[0] == "ok"
+    # aunque el nombre calce con un contacto, sin asignación manual no se asigna nada
+    assert resolver_destino("Daniel", "Soto", "", None, cs) == ("ninguno", None)
     # con asignación manual manda ella, aunque haya un contacto que calce
     est, c = resolver_destino("Daniel", "Soto", "", {"destino": "56911112222", "etiqueta": "Daniel Aguacol"}, cs)
     assert est == "manual" and c == {"id": "56911112222", "nombre": "Daniel Aguacol"}
@@ -182,7 +162,7 @@ def test_alerta_velocidad_calza_al_chofer_con_su_contacto():
     choferes = [{"id": 7, "nombre": "Juan", "apellido_paterno": "Pérez", "apellido_materno": "Soto", "activo": 1, "nombre_completo": "Pérez Soto Juan"}]
     contactos = [{"id": "56911112222@s.whatsapp.net", "nombre": "Juan Pérez"}]
     est, c = contacto_del_chofer("Juan Pérez Soto", choferes, {}, contactos)
-    assert est == "ok" and c["id"] == "56911112222@s.whatsapp.net"
+    assert est == "ninguno" and c is None   # el nombre calza con un contacto, pero no se asigna solo
     est, c = contacto_del_chofer("Juan Pérez Soto", choferes, {7: {"destino": "56999990000", "etiqueta": "Juan"}}, contactos)
     assert est == "manual" and c["id"] == "56999990000"   # lo fijado a mano manda
     assert contacto_del_chofer("Juan Pérez Soto", choferes, {}, [])[0] == "ninguno"
@@ -205,7 +185,7 @@ def test_destino_persona_de_asistencia_se_resuelve_por_nombre_o_a_mano():
     filas = [{"id": 1, "destino": "emp:5", "etiqueta": "Daniel Rojas"}, {"id": 2, "destino": "120363025246125486@g.us", "etiqueta": "Grupo"}, {"id": 3, "destino": "emp:9", "etiqueta": "Fantasma"}]
     contactos = [{"id": "56911112222@s.whatsapp.net", "nombre": "Daniel Rojas"}]
     r = asyncio.run(resolver_destinos_chat(DB(), filas, {}, contactos))
-    assert [x["jid"] for x in r] == ["56911112222@s.whatsapp.net", "120363025246125486@g.us", None] and r[0]["estado"] == "ok" and r[2]["estado"] == "ninguno"
+    assert [x["jid"] for x in r] == [None, "120363025246125486@g.us", None] and r[0]["estado"] == "ninguno" and r[2]["estado"] == "ninguno"
     r = asyncio.run(resolver_destinos_chat(DB(), filas[:1], {5: {"destino": "56999990000", "etiqueta": "x"}}, []))
     assert r[0]["jid"] == "56999990000" and r[0]["estado"] == "manual"
     assert asyncio.run(resolver_destinos_chat(DB(), filas[:1], {}, []))[0]["jid"] is None
@@ -216,7 +196,7 @@ def test_listar_destinatarios_marca_quien_recibe_y_respeta_el_filtro(monkeypatch
     from backend.services import whatsapp_resumen as wr
 
     class Repo:
-        async def destinos_personas(self): return {}
+        async def destinos_personas(self): return {2: {"destino": "56911112222@s.whatsapp.net", "etiqueta": "Daniel Rojas"}}
         async def destinos(self, aviso): return [{"destino": "emp:2"}]
         async def empleados_activos(self, solo_art22=False):
             return [{"id": 1, "nombre": "Juan", "apellido_paterno": "Pérez", "apellido_materno": "", "cargo": "CHOFER", "area": "LOGÍSTICA TRADICIONAL"},
@@ -227,7 +207,7 @@ def test_listar_destinatarios_marca_quien_recibe_y_respeta_el_filtro(monkeypatch
     monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
     r = asyncio.run(wr.listar_destinatarios(None, Repo(), "resumen_jefatura", {"areas": [], "cargos": ["CHOFER", "PEONETA", "JEFE"]}))
     por = {x["emp_id"]: x for x in r}
-    assert por[2]["recibe"] and por[2]["estado"] == "ok" and por[2]["numero"] == "+56911112222" and not por[1]["recibe"] and por[1]["estado"] == "norecibe" and por[1]["contacto"] is None
+    assert por[2]["recibe"] and por[2]["estado"] == "manual" and por[2]["numero"] == "+56911112222" and not por[1]["recibe"] and por[1]["estado"] == "norecibe" and por[1]["contacto"] is None
     assert por[1]["incluida"] and por[2]["incluida"] and not por[3]["incluida"]
 
 

@@ -2993,8 +2993,8 @@ window.cargarMapaCodigo = async function () {
                     return msg(tv);
                 }
                 let t = '<b>' + j.personas + '</b> personas en Bolsa (dentro del filtro). ';
-                t += j.chats != null ? 'Reciben el aviso: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> con contacto asignado o encontrado.';
-                if ((j.sin_contacto || []).length) t += '<div class="text-muted">Sin contacto con su nombre (no se les envía): ' + esc(j.sin_contacto.join(', ')) + '</div>';
+                t += j.chats != null ? 'Reciben el aviso: <b>' + j.chats + '</b>.' : '<b>' + j.con_contacto + '</b> con contacto asignado a mano.';
+                if ((j.sin_contacto || []).length) t += '<div class="text-muted">Sin contacto asignado (no se les envía): ' + esc(j.sin_contacto.join(', ')) + '</div>';
                 if ((j.ambiguos || []).length) t += '<div class="text-muted">Con más de un contacto posible (no se les envía): ' + esc(j.ambiguos.join('; ')) + '</div>';
                 if (simular && (j.coincidencias || []).length) t += '<details class="mt-2"><summary>Revisar a quién llegaría (' + j.coincidencias.length + ')</summary><table class="table table-sm mt-1" style="font-size:0.8rem;"><thead><tr><th>Persona</th><th>Contacto</th><th>Número</th></tr></thead><tbody>' + j.coincidencias.map(function (x) { return '<tr><td>' + esc(x.persona) + '</td><td>' + esc(x.contacto) + '</td><td>' + esc(x.numero) + '</td></tr>'; }).join('') + '</tbody></table></details>';
                 if (simular) t += (j.vista_previa || []).slice(0, 2).map(function (v) { return '<pre class="mt-2 p-2 bg-light border rounded" style="white-space:pre-wrap;">' + esc(v.nombre) + ' → ' + esc(v.telefono || 'sin celular') + '\n\n' + esc(v.mensaje) + '</pre>'; }).join('');
@@ -3009,7 +3009,7 @@ window.cargarMapaCodigo = async function () {
     }
 
     // ── Contacto por persona: ver a quién llega cada resumen y fijarlo a mano ──
-    const ETIQ = { manual: 'Manual', ok: 'Por nombre', ambiguo: 'Ambiguo', ninguno: 'Sin contacto', norecibe: 'No recibe' };
+    const ETIQ = { manual: 'Manual', ninguno: 'Sin contacto', norecibe: 'No recibe' };
     const COL = { manual: 'bg-primary', ok: 'bg-success', ambiguo: 'bg-warning text-dark', ninguno: 'bg-danger', norecibe: 'bg-secondary' };
     async function cargarPersonas(caja) {
         const previo = caja.querySelector('.wp-scroll');
@@ -3025,8 +3025,8 @@ window.cargarMapaCodigo = async function () {
         caja.innerHTML = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">'
             + '<input class="form-control form-control-sm wp-buscar" placeholder="Buscar persona…" style="max-width:240px;">'
             + '<select class="form-select form-select-sm wp-estado" style="max-width:230px;">'
-            + (esChat ? '<option value="recibe">Reciben el aviso (' + reciben + ')</option>' : '') + '<option value="">Dentro del filtro (' + dentro + ')</option><option value="ninguno">Sin contacto (' + n('ninguno') + ')</option><option value="ambiguo">Ambiguo (' + n('ambiguo') + ')</option>'
-            + '<option value="ok">Por nombre (' + n('ok') + ')</option><option value="manual">Manual (' + n('manual') + ')</option><option value="fuera">Fuera del filtro (' + (lista.length - dentro) + ')</option></select>'
+            + (esChat ? '<option value="recibe">Reciben el aviso (' + reciben + ')</option>' : '') + '<option value="">Dentro del filtro (' + dentro + ')</option><option value="ninguno">Sin contacto (' + n('ninguno') + ')</option>'
+            + '<option value="manual">Manual (' + n('manual') + ')</option><option value="fuera">Fuera del filtro (' + (lista.length - dentro) + ')</option></select>'
             + '<span class="text-muted" style="font-size:0.8rem;">Elija un contacto o escriba un celular y pulse Enter o Guardar.</span></div>'
             + '<div class="wp-scroll" style="max-height:62vh;overflow:auto;border:1px solid var(--bs-border-color,#e5e7eb);border-radius:10px;">'
             + '<table class="table table-sm align-middle mb-0" style="font-size:0.85rem;min-width:900px;"><thead style="position:sticky;top:0;background:var(--bs-tertiary-bg,#f8fafc);z-index:1;"><tr>' + (esChat ? '<th style="white-space:nowrap;">Recibe el aviso</th>' : '') + '<th>Persona</th><th>Área</th><th>Cargo</th><th>Estado</th><th>Contacto / número</th><th style="width:330px;">Asignar a mano</th></tr></thead><tbody>'
@@ -3038,7 +3038,7 @@ window.cargarMapaCodigo = async function () {
                     + '<td style="white-space:nowrap;">' + (p.contacto ? '<i class="bi bi-person-fill text-primary"></i> ' + esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
                     + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" placeholder="Buscar contacto o celular" style="min-width:190px;">'
                     + '<button class="btn btn-sm btn-outline-primary wp-ok" style="white-space:nowrap;">Guardar</button>'
-                    + (p.estado === 'manual' ? '<button class="btn btn-sm btn-outline-danger wp-no" title="Volver a buscar por nombre">✕</button>' : '') + '</div></td></tr>';
+                    + (p.estado === 'manual' ? '<button class="btn btn-sm btn-outline-danger wp-no" title="Quitar el contacto asignado">✕</button>' : '') + '</div></td></tr>';
             }).join('') + '</tbody></table></div>';
         const filas = caja.querySelectorAll('tr[data-emp]');
         const filtrar = function () {
