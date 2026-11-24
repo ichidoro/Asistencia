@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-24T02:02:27+00:00",
- "publicado": "2026-11-24T02:02:28+00:00",
- "commit": "ac67d73",
+ "armado": "2026-11-24T02:09:31+00:00",
+ "publicado": "2026-11-24T02:09:31+00:00",
+ "commit": "705685a",
  "archivos_leidos": 313,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -244,7 +244,7 @@
   "frontend/js/asistencia.js": "5c951cbc88a8c209ef6fd943def78ab0",
   "frontend/js/auth.js": "b421b2b0a0478566c6071728f050c052",
   "frontend/js/ayudantes.js": "f03741aab6896925f055bc7f642150da",
-  "frontend/js/bono_semanal_ui.js": "74b784d204958aae95936b6c73d6aa83",
+  "frontend/js/bono_semanal_ui.js": "7bdee04d2c01402a6767f788e7ce8b74",
   "frontend/js/buscador.js": "cba00608ea5c3110e7f1f50c4b1a9a82",
   "frontend/js/calendario_ui.js": "36286236151c0d177a9880d6b524d074",
   "frontend/js/chartjs-plugin-datalabels.min.js": "f3adb031ff6977be4c66edb0ffb61d76",

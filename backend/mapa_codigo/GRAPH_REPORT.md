@@ -1,7 +1,7 @@
 # Graph Report - Asistencia  (2026-11-23)
 
 ## Corpus Check
-- 308 files · ~580,833 words
+- 308 files · ~580,776 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 64 file(s) not represented in the graph (top: .css 33, .woff2 14, (none) 6)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ac67d73b`
+- Built from commit: `705685a6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1187,7 +1187,7 @@ Cohesion: 0.24
 Nodes (13): abrirPop(), api(), cargarAvisos(), cargarPersonas(), cerrarPop(), disponibles(), enlazarMulti(), itemsMulti() (+5 more)
 
 ## Knowledge Gaps
-- **33 isolated node(s):** `services/reglas_marcas_corridas.py (ensayar_regla)`, `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado`, `Destinatarios del correo del informe de cierre por cargar` (+28 more)
+- **33 isolated node(s):** `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado`, `Destinatarios del correo del informe de cierre por cargar`, `Fuentes Barlow TTF para el informe de cierre PDF` (+28 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2157 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **67 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -1198,7 +1198,7 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.090) - this node is a cross-community bridge._
 - **Are the 292 inferred relationships involving `SecurityContext` (e.g. with `exportar_excel()` and `get_empleados_art22()`) actually correct?**
   _`SecurityContext` has 292 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `services/reglas_marcas_corridas.py (ensayar_regla)`, `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend` to the rest of the system?**
+- **What connects `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado` to the rest of the system?**
   _33 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Recomendaciones #1 a #9 ordenadas por ganancia/costo` be split into smaller, more focused modules?**
   _Cohesion score 0.13970588235294118 - nodes in this community are weakly interconnected._

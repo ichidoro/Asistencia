@@ -83,10 +83,30 @@
         const cod = (r.dias || {})[fecha];
         const editable = puedeEditar();
         const boton = (clase, texto, tit) => '<span class="bs-dia ' + clase + (editable ? ' bs-click' : '') + '" title="' + esc(tit) + '">' + texto + '</span>';
-        // La sigla de la justificación del día se ve siempre, para no marcar por error un día que no trabajó (dueño, 23-11-2026)
-        const sigla = (r.justif || {})[fecha];
-        // La etiqueta de estado de siempre (la de la vista Conceptos); la sigla sola solo si esa etiqueta no viene
-        const contJ = () => { const n = typeof normal === 'function' ? normal() : ''; return n || (sigla ? esc(sigla) : ''); };
+        // Los estados del día (justificado, inasistencia, libre, feriado…) se ven IGUAL que en el resto de las vistas de la
+        // grilla: la misma pastilla de la vista Conceptos, sin marco ni estilo propio (dueño, 23-11-2026). Si el día no tiene
+        // registro pero sí justificación, se dibuja la pastilla de ese estado, también la de siempre.
+        const estadoNormal = () => {
+            const n = typeof normal === 'function' ? normal() : '';
+            if (n) return n;
+            const sigla = (r.justif || {})[fecha];
+            if (!sigla || typeof window._analiticaCellBadge !== 'function') return '';
+            const e = Object.entries(window._estadosAsistencia || {}).find(([, x]) => String(x.short_label || '').toUpperCase() === String(sigla).toUpperCase());
+            return e ? window._analiticaCellBadge({ estado: e[0] }) : '';
+        };
+        const ncs = (r.notas_credito || []).filter(n => n.fecha === fecha);
+        const marcaNc = () => {
+            if (!ncs.length) return '';
+            // Cuántas notas de crédito tiene el día, con su número y razón al pasar el mouse
+            const tit = ncs.map(n => (n.numero ? 'NC ' + n.numero : 'NC sin número') + ' · ' + (n.razon || '') + (n.descuenta && n.monto ? ' · descuenta ' + pesos(n.monto) : '')
+                + (n.rol === 'peoneta' ? ' (del chofer con que iba)' : '')).join(' | ');
+            return '<span class="bs-ncn" title="' + esc(tit) + '">NC' + (ncs.length > 1 ? '×' + ncs.length : '') + '</span>';
+        };
+        if (!['cumple', 'ok', 'nc', 'pendiente'].includes(cod)) {
+            if (cod === 'fuera') return '<span class="bs-na" title="Sin turno ese día">·</span>';
+            const est = estadoNormal();
+            return ncs.length ? '<div class="bs-cel">' + est + marcaNc() + '</div>' : est;
+        }
         let html;
         // En blanco: el Fill Rate se gana; solo se ve lo que cambia la semana (dueño, 23-11-2026)
         if (cod === 'cumple') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para cambiar' : ''));
@@ -94,23 +114,8 @@
         else if (cod === 'nc') {
             const p = (r.perdidos || []).find(x => x.fecha === fecha);
             html = boton('bs-x', 'N/C', (p ? p.causa : 'No cumple') + (editable ? ' · clic para cambiar' : ''));
-        } else if (cod === 'pendiente') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Día por llegar' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
-        else if (cod === 'pierde' || cod === 'proporcion') {
-            const p = (r.perdidos || []).find(x => x.fecha === fecha);
-            html = '<span class="bs-just ' + (cod === 'pierde' ? 'bs-x' : 'bs-pr') + '" title="' + esc(cod === 'pierde' ? 'Hace perder la semana: ' + (p ? p.causa : '') : 'Descuenta en proporción') + '">'
-                + contJ() + '</span>';
-        } else if (cod === 'justificado') html = '<span class="bs-just bs-okj" title="Justificado: cuenta como cumplido · no puede tener nota de crédito">' + contJ() + '</span>';
-        else if (cod === 'libre') html = '<span class="bs-libre">' + (typeof normal === 'function' ? normal() : '') + '</span>';
-        else if (cod === 'fuera') html = '<span class="bs-na" title="Sin turno ese día">·</span>';
-        else html = '<span class="bs-na" title="Esta semana termina en el período siguiente y se evalúa ahí">' + (typeof normal === 'function' ? normal() : '') + '</span>';
-        // Cuántas notas de crédito tiene el día, con su número y razón al pasar el mouse
-        const ncs = (r.notas_credito || []).filter(n => n.fecha === fecha);
-        if (ncs.length) {
-            const tit = ncs.map(n => (n.numero ? 'NC ' + n.numero : 'NC sin número') + ' · ' + (n.razon || '') + (n.descuenta && n.monto ? ' · descuenta ' + pesos(n.monto) : '')
-                + (n.rol === 'peoneta' ? ' (del chofer con que iba)' : '')).join(' | ');
-            html += '<span class="bs-ncn" title="' + esc(tit) + '">NC' + (ncs.length > 1 ? '×' + ncs.length : '') + '</span>';
-        }
-        return '<div class="bs-cel">' + html + '</div>';
+        } else html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Día por llegar' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
+        return '<div class="bs-cel">' + html + marcaNc() + '</div>';
     };
 
     // Columna «Total semana», después de cada domingo: el resultado de la semana que termina ese día
@@ -126,8 +131,7 @@
             + '<span>En blanco: cumple (sin marcar)</span>'
             + '<span><span class="bs-dia bs-ok">✓</span> marcado «Cumple»</span>'
             + '<span><span class="bs-dia bs-x">N/C</span> no cumple: pierde la semana</span>'
-            + '<span><span class="bs-just bs-okj">DEOP</span> justificado que cuenta como cumplido</span>'
-            + '<span><span class="bs-just bs-pr">DEOP</span> justificado en proporción</span>'
+            + '<span>Días justificados, libres y feriados: con su estado de siempre (al pasar el mouse dice si cuenta como cumplido, en proporción o hace perder la semana)</span>'
             + '<span><span class="bs-ncn">NC</span> tiene nota de crédito (×2: dos o más)</span>'
             + '<span>«Total semana»: el resultado de cada semana</span>'
             + (puedeEditar() ? '<span class="text-muted">Clic en un día: «Cumple» o «No cumple»</span>' : '');
