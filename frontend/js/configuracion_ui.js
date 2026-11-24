@@ -821,7 +821,7 @@ function _pintarVistaPreviaBono(d) {
         + '<div class="small mb-2">' + d.reciben + (d.reciben === 1 ? ' persona lo recibe' : ' personas lo reciben') + (d.beneficio ? '' : ' · total <b>' + pesos(d.total) + '</b>')
         + (d.no_cobran ? ' · <span class="text-danger">' + d.no_cobran + ' no lo ' + (d.no_cobran === 1 ? 'cobra' : 'cobran') + '</span>' : '') + '</div>'
         + pisan
-        + (filas ? '<div style="max-height: 240px; overflow-y: auto;"><table class="table table-sm small mb-0"><thead><tr>' + (esChat ? '<th>Recibe</th>' : '') + '<th>Persona</th><th>Área</th><th class="text-center">Regla</th><th class="text-end">Monto</th><th>Motivo</th></tr></thead><tbody>'
+        + (filas ? '<div style="max-height: 240px; overflow-y: auto;"><table class="table table-sm small mb-0"><thead><tr><th>Persona</th><th>Área</th><th class="text-center">Regla</th><th class="text-end">Monto</th><th>Motivo</th></tr></thead><tbody>'
             + filas + '</tbody></table></div>' : '<div class="small text-muted">Con estas reglas no le corresponde a nadie.</div>')
         + '</div>';
 }
@@ -3029,11 +3029,11 @@ window.cargarMapaCodigo = async function () {
             + '<option value="ok">Por nombre (' + n('ok') + ')</option><option value="manual">Manual (' + n('manual') + ')</option><option value="fuera">Fuera del filtro (' + (lista.length - dentro) + ')</option></select>'
             + '<span class="text-muted" style="font-size:0.8rem;">Elija un contacto o escriba un celular y pulse Enter o Guardar.</span></div>'
             + '<div class="wp-scroll" style="max-height:62vh;overflow:auto;border:1px solid var(--bs-border-color,#e5e7eb);border-radius:10px;">'
-            + '<table class="table table-sm align-middle mb-0" style="font-size:0.85rem;min-width:900px;"><thead style="position:sticky;top:0;background:var(--bs-tertiary-bg,#f8fafc);z-index:1;"><tr><th>Persona</th><th>Área</th><th>Cargo</th><th>Estado</th><th>Contacto / número</th><th style="width:330px;">Asignar a mano</th></tr></thead><tbody>'
+            + '<table class="table table-sm align-middle mb-0" style="font-size:0.85rem;min-width:900px;"><thead style="position:sticky;top:0;background:var(--bs-tertiary-bg,#f8fafc);z-index:1;"><tr>' + (esChat ? '<th style="white-space:nowrap;">Recibe el aviso</th>' : '') + '<th>Persona</th><th>Área</th><th>Cargo</th><th>Estado</th><th>Contacto / número</th><th style="width:330px;">Asignar a mano</th></tr></thead><tbody>'
             + lista.map(function (p) {
                 const cand = p.candidatos && p.candidatos.length ? '<div class="text-muted">¿' + esc(p.candidatos.join(' o ')) + '?</div>' : '';
                 return '<tr data-emp="' + p.emp_id + '" data-recibe="' + (p.recibe ? 1 : 0) + '" data-estado="' + (p.incluida ? p.estado : 'fuera') + '" data-nombre="' + esc(p.nombre.toLowerCase()) + '" style="' + (p.incluida ? '' : 'opacity:.45;') + '">'
-                    + (esChat ? '<td><input type="checkbox" class="form-check-input wp-recibe"' + (p.recibe ? ' checked' : '') + '></td>' : '') + '<td style="white-space:nowrap;">' + esc(p.nombre) + '</td><td style="white-space:nowrap;">' + esc(p.area || '—') + '</td><td style="white-space:nowrap;">' + esc(p.cargo || '—') + '</td>'
+                    + (esChat ? '<td><input type="checkbox" class="form-check-input wp-recibe" style="width:1.3rem;height:1.3rem;border:2px solid #1b2f8f;cursor:pointer;" title="Marcar para que reciba este aviso"' + (p.recibe ? ' checked' : '') + '></td>' : '') + '<td style="white-space:nowrap;">' + esc(p.nombre) + '</td><td style="white-space:nowrap;">' + esc(p.area || '—') + '</td><td style="white-space:nowrap;">' + esc(p.cargo || '—') + '</td>'
                     + '<td><span class="badge ' + COL[p.estado] + '">' + ETIQ[p.estado] + '</span></td>'
                     + '<td style="white-space:nowrap;">' + (p.contacto ? '<i class="bi bi-person-fill text-primary"></i> ' + esc(p.contacto) + '<div class="text-muted">' + esc(p.numero) + '</div>' : '<span class="text-muted">—</span>') + cand + '</td>'
                     + '<td><div class="d-flex gap-1"><input class="form-control form-control-sm wp-in" placeholder="Buscar contacto o celular" style="min-width:190px;">'
