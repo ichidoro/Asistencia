@@ -146,3 +146,26 @@ def test_las_notas_sin_numero_se_cuentan_y_no_se_listan():
 
 def test_sin_bono_semanal_no_hay_hoja():
     assert hoja_fill_rate({"personas": [{"emp_id": 1, "rut": "1", "nombre": "X", "bonos_det": {}}]}) == []
+
+
+# ── Semana que empieza en el período y termina en el siguiente (dueño, 23-11-2026) ──
+
+from backend.services.bono_semanal import domingo_de, semana_siguiente, semanas_del_periodo  # noqa: E402
+
+
+def test_la_semana_del_23_al_29_de_noviembre_es_la_que_sigue():
+    lunes, domingo = semana_siguiente("2026-10-26", "2026-11-25")
+    assert (lunes.isoformat(), domingo.isoformat()) == ("2026-11-23", "2026-11-29")
+    # noviembre no la paga; diciembre sí, completa
+    assert all(d.isoformat() <= "2026-11-22" for _, d in semanas_del_periodo("2026-10-26", "2026-11-25"))
+    assert semanas_del_periodo("2026-11-26", "2026-12-25")[0][0].isoformat() == "2026-11-23"
+
+
+def test_si_el_periodo_termina_en_domingo_no_hay_semana_que_siga():
+    assert semana_siguiente("2026-10-26", "2026-11-22") is None
+
+
+def test_el_bloqueo_lo_decide_el_domingo_de_la_semana():
+    assert domingo_de("2026-11-24") == "2026-11-29"
+    assert domingo_de("2026-11-29") == "2026-11-29"
+    assert domingo_de("2026-11-16") == "2026-11-22"

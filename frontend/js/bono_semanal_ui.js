@@ -40,12 +40,23 @@
         return r && r.semanal && r.aplica !== false ? r : null;
     }
 
-    function puedeEditar() {
+    // ¿El día es de la semana que sigue? (empieza en este período y se paga en el siguiente, donde cae su domingo)
+    function deSemanaSiguiente(r, fecha) {
+        const s = r && r.semana_siguiente;
+        return !!(s && fecha >= s.desde && fecha <= s.hasta);
+    }
+
+    // Con fecha de la semana que sigue, el cierre de este período no la bloquea: la bloquea el cierre del período que paga
+    // esa semana (lo revisa el servidor al guardar)
+    function puedeEditar(r, fecha) {
         const d = datos();
-        const cerrado = !!(d && d.periodo && d.periodo.cerrado);
+        const cerrado = !!(d && d.periodo && d.periodo.cerrado) && !(fecha && deSemanaSiguiente(r, fecha));
         const permiso = typeof AuthService !== 'undefined' && AuthService.hasPermission ? AuthService.hasPermission('marcaciones.editar') : false;
         return permiso && !cerrado;
     }
+
+    // Las notas de crédito del día: las de las semanas de este período y las de la semana que sigue
+    const notasDelDia = (r, fecha) => (r.notas_credito || []).concat(r.notas_siguiente || []).filter(n => n.fecha === fecha);
 
     // ¿Hay alguien en la grilla con el bono semanal? (para mostrar el botón de la vista)
     window.mxBsHay = function (respData) {
@@ -81,8 +92,11 @@
         const r = evalDe(emp);
         if (!r) return '<span class="bs-na">·</span>';
         const cod = (r.dias || {})[fecha];
-        const editable = puedeEditar();
-        const boton = (clase, texto, tit) => '<span class="bs-dia ' + clase + (editable ? ' bs-click' : '') + '" title="' + esc(tit) + '">' + texto + '</span>';
+        const editable = puedeEditar(r, fecha);
+        // En la semana que sigue, el aviso al pasar el mouse dice dónde se evalúa y se paga
+        const sig = deSemanaSiguiente(r, fecha) ? ' · semana del ' + ddmm(r.semana_siguiente.desde) + ' al ' + ddmm(r.semana_siguiente.hasta)
+            + ': se evalúa y se paga en el período siguiente, donde cae su domingo' : '';
+        const boton = (clase, texto, tit) => '<span class="bs-dia ' + clase + (editable ? ' bs-click' : '') + '" title="' + esc(tit + sig) + '">' + texto + '</span>';
         // Los estados del día (justificado, inasistencia, libre, feriado…) se ven IGUAL que en el resto de las vistas de la
         // grilla: la misma pastilla de la vista Conceptos, sin marco ni estilo propio (dueño, 23-11-2026). Si el día no tiene
         // registro pero sí justificación, se dibuja la pastilla de ese estado, también la de siempre.
@@ -94,7 +108,7 @@
             const e = Object.entries(window._estadosAsistencia || {}).find(([, x]) => String(x.short_label || '').toUpperCase() === String(sigla).toUpperCase());
             return e ? window._analiticaCellBadge({ estado: e[0] }) : '';
         };
-        const ncs = (r.notas_credito || []).filter(n => n.fecha === fecha);
+        const ncs = notasDelDia(r, fecha);
         const marcaNc = () => {
             if (!ncs.length) return '';
             // Cuántas notas de crédito tiene el día, con su número y razón al pasar el mouse
@@ -110,11 +124,11 @@
         let html;
         // En blanco: el Fill Rate se gana; solo se ve lo que cambia la semana (dueño, 23-11-2026)
         if (cod === 'cumple') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para cambiar' : ''));
-        else if (cod === 'ok') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Cumple' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
+        else if (cod === 'ok') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Cumple' + (editable ? ' · clic para cambiar' : '') + sig) + '"></span>';
         else if (cod === 'nc') {
             const p = (r.perdidos || []).find(x => x.fecha === fecha);
             html = boton('bs-x', 'N/C', (p ? p.causa : 'No cumple') + (editable ? ' · clic para cambiar' : ''));
-        } else html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Día por llegar' + (editable ? ' · clic para cambiar' : '')) + '"></span>';
+        } else html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Día por llegar' + (editable ? ' · clic para cambiar' : '') + sig) + '"></span>';
         return '<div class="bs-cel">' + html + marcaNc() + '</div>';
     };
 
@@ -134,6 +148,7 @@
             + '<span>Días justificados, libres y feriados: con su estado de siempre (al pasar el mouse dice si cuenta como cumplido, en proporción o hace perder la semana)</span>'
             + '<span><span class="bs-ncn">NC</span> tiene nota de crédito (×2: dos o más)</span>'
             + '<span>«Total semana»: el resultado de cada semana</span>'
+            + '<span>Una semana que termina en el período siguiente se marca aquí y se evalúa y paga allá, donde cae su domingo</span>'
             + (puedeEditar() ? '<span class="text-muted">Clic en un día: «Cumple» o «No cumple»</span>' : '');
     };
 
@@ -176,10 +191,10 @@
                         : 'Este día no se evalúa en este período.');
             return;
         }
-        if (!puedeEditar()) { if (window.Avisos) window.Avisos.info('Período cerrado o sin permiso para cambiarlo.'); return; }
+        if (!puedeEditar(r, fecha)) { if (window.Avisos) window.Avisos.info('Período cerrado o sin permiso para cambiarlo.'); return; }
         const quien = emp.nombre_completo || emp.nombre || '';
         const previa = (r.marcas || {})[fecha] || {};
-        const notasPrevias = (r.notas_credito || []).filter(n => n.fecha === fecha && n.rol === 'chofer');
+        const notasPrevias = notasDelDia(r, fecha).filter(n => n.rol === 'chofer');
         const todas = await razones();
         const usadas = new Set(notasPrevias.map(n => n.razon));
         const lista = todas.filter(x => x.activa || usadas.has(x.nombre));

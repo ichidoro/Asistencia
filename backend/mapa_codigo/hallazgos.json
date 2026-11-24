@@ -136,7 +136,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1620,
+  "total": 1622,
   "top": [
    {
     "funcion": "sync_marcaciones",

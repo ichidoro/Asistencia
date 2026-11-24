@@ -32,6 +32,25 @@ def semanas_del_periodo(fecha_inicio: str, fecha_fin: str) -> List[tuple]:
     return out
 
 
+def semana_siguiente(fecha_inicio: str, fecha_fin: str) -> Optional[tuple]:
+    """La semana (lunes, domingo) que empieza dentro del período pero termina después (dueño, 23-11-2026: del 23 al 29 de
+    noviembre, con el período cerrando el 25). Se evalúa y se paga en el período siguiente, donde cae su domingo; aquí
+    solo se marcan sus días. None si el período termina en domingo."""
+    ff = date.fromisoformat(fecha_fin[:10])
+    if ff.weekday() == 6:
+        return None
+    lunes = ff - timedelta(days=ff.weekday())
+    if lunes < date.fromisoformat(fecha_inicio[:10]):
+        return None
+    return (lunes, lunes + timedelta(days=6))
+
+
+def domingo_de(fecha: str) -> str:
+    """El domingo de la semana de esa fecha: el período donde cae es el que paga la semana."""
+    d = date.fromisoformat(fecha[:10])
+    return (d + timedelta(days=6 - d.weekday())).isoformat()
+
+
 def _dm(iso: str) -> str:
     return f"{iso[8:10]}-{iso[5:7]}"
 
@@ -207,11 +226,14 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
             r["bono_id"] = bono["id"]
         return res
     desde, hasta = semanas[0][0].isoformat(), semanas[-1][1].isoformat()
+    # Los datos llegan hasta el domingo de la semana que sigue, para poder marcar sus días dentro de este período
+    sig = semana_siguiente(fecha_inicio, fecha_fin)
+    hasta_datos = sig[1].isoformat() if sig and sig[1].isoformat() > hasta else hasta
     ids = [e["id"] for e, _ in candidatos]
     ph = ",".join("?" * len(ids))
     filas = await db.fetch_all(
         f"SELECT empleado_id, fecha, estado, horas_teoricas FROM asistencias WHERE empleado_id IN ({ph}) "
-        "AND fecha BETWEEN ? AND ?", (*ids, desde, hasta))
+        "AND fecha BETWEEN ? AND ?", (*ids, desde, hasta_datos))
     dias_emp: Dict[int, Dict[str, Dict]] = {}
     for r in filas:
         dias_emp.setdefault(int(r["empleado_id"]), {})[str(r["fecha"])[:10]] = dict(r)
@@ -219,21 +241,21 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
         f"SELECT j.empleado_id, j.fecha_inicio, j.fecha_fin, j.tipo_id, jt.nombre AS tipo_nombre, jt.nomenclatura "
         f"FROM justificaciones j "
         f"JOIN justificacion_tipos jt ON jt.id = j.tipo_id WHERE j.empleado_id IN ({ph}) AND j.fecha_inicio <= ? "
-        "AND j.fecha_fin >= ?", (*ids, hasta, desde))
+        "AND j.fecha_fin >= ?", (*ids, hasta_datos, desde))
     just_emp: Dict[int, Dict[str, Dict]] = {}
     for j in just:
         d0 = date.fromisoformat(str(j["fecha_inicio"])[:10])
         d1 = date.fromisoformat(str(j["fecha_fin"])[:10])
         d = max(d0, date.fromisoformat(desde))
-        while d <= min(d1, date.fromisoformat(hasta)):
+        while d <= min(d1, date.fromisoformat(hasta_datos)):
             just_emp.setdefault(int(j["empleado_id"]), {})[d.isoformat()] = dict(j)
             d += timedelta(days=1)
     feriados = {str(r["fecha"])[:10] for r in await db.fetch_all(
-        "SELECT fecha FROM feriados WHERE fecha BETWEEN ? AND ?", (desde, hasta))}
+        "SELECT fecha FROM feriados WHERE fecha BETWEEN ? AND ?", (desde, hasta_datos))}
     nc_emp: Dict[int, Dict[str, Optional[str]]] = {}
     cumple_emp: Dict[int, Set[str]] = {}
     marcas_emp: Dict[int, Dict[str, Dict[str, Any]]] = {}
-    for m in await ConfiguracionRepository(db).get_dias_no_cumple([bono["id"]], desde, hasta):
+    for m in await ConfiguracionRepository(db).get_dias_no_cumple([bono["id"]], desde, hasta_datos):
         # Lo marcado de cada día, para que la ventana de la grilla lo muestre al abrirla
         marcas_emp.setdefault(int(m["empleado_id"]), {})[str(m["fecha"])[:10]] = {
             "marca": m.get("marca") or "no_cumple", "comentario": m.get("comentario"), "tiene_nc": bool(m.get("tiene_nc")),
@@ -245,7 +267,9 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
             detalle = "; ".join(x for x in ((f"nota de crédito por {m['razon_nc_nombre']}" if m.get("tiene_nc") and m.get("razon_nc_nombre") else None),
                                            m.get("comentario")) if x) or None
             nc_emp.setdefault(int(m["empleado_id"]), {})[str(m["fecha"])[:10]] = detalle
-    notas = await ConfiguracionRepository(db).get_notas_credito([bono["id"]], desde, hasta)
+    notas_todas = await ConfiguracionRepository(db).get_notas_credito([bono["id"]], desde, hasta_datos)
+    notas = [n for n in notas_todas if str(n["fecha"])[:10] <= hasta]
+    notas_sig = [n for n in notas_todas if str(n["fecha"])[:10] > hasta]
     from backend.services.bolsa_prorrateo import salida_decidida
     for e, regla in candidatos:
         salida = salida_decidida(e.get("fecha_salida"), e.get("activo"), e.get("decision_vencimiento"))
@@ -254,6 +278,19 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
             nc_emp.get(e["id"], {}), feriados, e.get("turno_dias") or {},
             e.get("tipo_programacion") in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA"),
             (e.get("inicio_turno") or None), (str(salida)[:10] if salida else None), hoy)
+        # La semana que sigue (empieza aquí y termina en el período siguiente): sus días de este período se ven y se
+        # marcan como cualquier otro, pero la semana se evalúa y se paga allá, donde cae su domingo (dueño, 23-11-2026)
+        if sig:
+            ev_sig = evaluar_persona(
+                bono, float(regla.get("monto") or 0), [sig], dias_emp.get(e["id"], {}), just_emp.get(e["id"], {}),
+                nc_emp.get(e["id"], {}), feriados, e.get("turno_dias") or {},
+                e.get("tipo_programacion") in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA"),
+                (e.get("inicio_turno") or None), (str(salida)[:10] if salida else None), hoy)
+            for f, c in (ev_sig.get("dias") or {}).items():
+                if f <= fecha_fin[:10] and f not in res[e["id"]].setdefault("dias", {}):
+                    res[e["id"]]["dias"][f] = c
+            res[e["id"]]["semana_siguiente"] = {"desde": sig[0].isoformat(), "hasta": sig[1].isoformat()}
+            res[e["id"]]["notas_siguiente"] = notas_de(e["id"], notas_sig, {})
         # Días marcados «Cumple»: no cambian el cálculo (un día sin marca ya cumple), pero la celda lo muestra
         for f in cumple_emp.get(e["id"], ()):
             if res[e["id"]].get("dias", {}).get(f) in ("ok", "pendiente"):
@@ -261,7 +298,7 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
         res[e["id"]]["marcas"] = marcas_emp.get(e["id"], {})
         # La justificación de cada día, para que la celda la muestre y no se marque por error (dueño, 23-11-2026)
         res[e["id"]]["justif"] = {f: (j.get("nomenclatura") or j.get("tipo_nombre") or "") for f, j in just_emp.get(e["id"], {}).items()}
-        notas_e = notas_de(e["id"], notas, marcas_emp.get(e["id"], {}))
+        notas_e = notas_de(e["id"], notas, {f: m for f, m in marcas_emp.get(e["id"], {}).items() if f <= hasta})
         res[e["id"]]["notas_credito"] = notas_e
         # El valor de los productos se descuenta solo a quien registró la nota (el chofer; dueño, 23-11-2026)
         res[e["id"]]["descuento_productos"] = int(round(sum(n["monto"] for n in notas_e if n["rol"] == "chofer" and n["descuenta"])))

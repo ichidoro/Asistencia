@@ -108,9 +108,12 @@ async def marcar_no_cumple(
         raise HTTPException(status_code=400, detail="El bono no existe o no es un bono semanal en uso.")
     personas = [req.empleado_id] + [p for p in dict.fromkeys(req.peonetas_ids) if p != req.empleado_id]
     turnos = set(bono.get("turnos_ids") or [])   # vacío: todos los horarios
+    # Lo bloquea el cierre del período que paga la semana, donde cae su domingo (dueño, 23-11-2026: del 23 al 25 de
+    # noviembre son de la semana que se paga en diciembre; cerrar noviembre no los bloquea)
+    from backend.services.bono_semanal import domingo_de
     for pid in personas:
-        if await AsistenciaRepository(db).check_fecha_cerrada(fecha, pid):
-            raise HTTPException(status_code=403, detail="Ese día está en un período cerrado: no se puede cambiar.")
+        if await AsistenciaRepository(db).check_fecha_cerrada(domingo_de(fecha), pid):
+            raise HTTPException(status_code=403, detail="La semana de ese día se paga en un período cerrado: no se puede cambiar.")
         asignaciones = await TurnoRepository(db).get_asignaciones_entre(pid, fecha, fecha)
         if not asignaciones or (turnos and not any(a["turno_id"] in turnos for a in asignaciones)):
             raise HTTPException(status_code=400, detail="Ese día " + ("la persona" if pid == req.empleado_id else "un peoneta elegido")
