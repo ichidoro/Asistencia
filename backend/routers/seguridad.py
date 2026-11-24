@@ -111,6 +111,20 @@ async def delete_rol(
     return {"message": "Rol eliminado exitosamente"}
 
 
+async def _validar_permisos_extra(repo, current_user, permisos):
+    """Los ids deben existir y, salvo administrador, solo se puede dar lo que uno mismo tiene."""
+    permisos = sorted(set(permisos or []))
+    validos = {p["id"] for p in await repo.get_all_permisos()}
+    desconocidos = [p for p in permisos if p not in validos]
+    if desconocidos:
+        raise HTTPException(status_code=400, detail=f"Permiso inexistente: {desconocidos[0]}")
+    if not (current_user.is_superuser or current_user.alcance_global):
+        for p in permisos:
+            if p not in current_user.permisos:
+                raise HTTPException(status_code=403, detail=f"No puede asignar un permiso que usted no tiene: {p}")
+    return permisos
+
+
 @router.get("/usuarios/")
 async def get_usuarios(
     repo: SeguridadRepository = Depends(get_repo),
@@ -118,7 +132,9 @@ async def get_usuarios(
 ):
     """Listar todos los usuarios del sistema"""
     usuarios = await repo.get_all_usuarios()
+    extras = await repo.get_permisos_extra_todos()
     for user in usuarios:
+        user["permisos_extra"] = sorted(extras.get(user["id"], []))
         try:
             user["areas"] = json.loads(user.get("areas_json", "[]"))
         except Exception as e:
@@ -144,8 +160,11 @@ async def create_usuario(
             for area in user.areas:
                 if area not in (current_user.areas or []):
                     raise HTTPException(status_code=403, detail=f"No tiene permisos para asignar el área: {area}")
+    extras = await _validar_permisos_extra(repo, current_user, user.permisos_extra)
     try:
         user_id = await repo.create_user(user)
+        if extras:
+            await repo.set_permisos_extra(user_id, extras)
         await repo.log_auditoria(
             current_user.user_id, current_user.username, "CREATE", "SEGURIDAD", 
             f"Usuario creado: {user.username} (Rol ID: {user.rol_id})"
@@ -185,9 +204,21 @@ async def update_usuario(
     if user_id == 9 and current_user.user_id != 9:
         raise HTTPException(status_code=403, detail="Solo el admin original puede auto-modificarse")
         
+    detalle = f"Usuario modificado: ID {user_id}"
+    if user.permisos_extra is not None:
+        nuevos = await _validar_permisos_extra(repo, current_user, user.permisos_extra)
+        antes = set(await repo.get_permisos_extra(user_id))
+        mas, menos = sorted(set(nuevos) - antes), sorted(antes - set(nuevos))
+        # un no-admin no puede quitar extras que no puede dar
+        if not (current_user.is_superuser or current_user.alcance_global):
+            for p in menos:
+                if p not in current_user.permisos:
+                    raise HTTPException(status_code=403, detail=f"No puede quitar un permiso que usted no tiene: {p}")
+        await repo.set_permisos_extra(user_id, nuevos)
+        if mas or menos:
+            detalle += f"; permisos extra +{mas} -{menos}"
     await repo.update_user(user_id, user)
     await repo.log_auditoria(
-        current_user.user_id, current_user.username, "UPDATE", "SEGURIDAD", 
-        f"Usuario modificado: ID {user_id}"
+        current_user.user_id, current_user.username, "UPDATE", "SEGURIDAD", detalle
     )
     return {"message": "Usuario modificado exitosamente"}

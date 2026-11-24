@@ -138,6 +138,18 @@ class SeguridadRepository:
                 )
             """)
 
+        # 4b. Permisos extra por cuenta (se suman a los del rol)
+        if not await self.db.table_exists("usuario_permisos"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS usuario_permisos (
+                    usuario_id INTEGER NOT NULL,
+                    permiso_id TEXT NOT NULL,
+                    PRIMARY KEY (usuario_id, permiso_id),
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE,
+                    FOREIGN KEY (permiso_id) REFERENCES permisos (id) ON DELETE CASCADE
+                )
+            """)
+
         # 5. Tabla Logs Auditoría
         if not await self.db.table_exists("logs_auditoria"):
             await self.db.execute("""
@@ -384,6 +396,29 @@ class SeguridadRepository:
         query = "SELECT permiso_id FROM rol_permisos WHERE rol_id = ?"
         rows = await self.db.fetch_all(query, (rol_id,))
         return [r['permiso_id'] for r in rows]
+
+    async def get_permisos_extra(self, user_id: int) -> List[str]:
+        rows = await self.db.fetch_all("SELECT permiso_id FROM usuario_permisos WHERE usuario_id = ?", (user_id,))
+        return [r['permiso_id'] for r in rows]
+
+    async def get_permissions_for_user(self, user_id: int, rol_id: int) -> List[str]:
+        """Permisos del rol + los extra asignados a la cuenta."""
+        base = await self.get_permissions_for_role(rol_id)
+        extra = await self.get_permisos_extra(user_id)
+        return sorted(set(base) | set(extra))
+
+    async def get_permisos_extra_todos(self) -> Dict[int, List[str]]:
+        rows = await self.db.fetch_all("SELECT usuario_id, permiso_id FROM usuario_permisos")
+        out: Dict[int, List[str]] = {}
+        for r in rows:
+            out.setdefault(r['usuario_id'], []).append(r['permiso_id'])
+        return out
+
+    async def set_permisos_extra(self, user_id: int, permisos: List[str]):
+        ops = [("DELETE FROM usuario_permisos WHERE usuario_id = ?", (user_id,))]
+        for p in sorted(set(permisos or [])):
+            ops.append(("INSERT INTO usuario_permisos (usuario_id, permiso_id) VALUES (?, ?)", (user_id, p)))
+        await self.db.execute_batch(ops)
 
     # --- Gestión Avanzada (Dashboard y Consola) ---
     async def get_all_roles(self) -> List[Dict]:

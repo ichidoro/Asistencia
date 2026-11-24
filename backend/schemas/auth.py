@@ -35,6 +35,7 @@ class UsuarioBase(BaseModel):
     activo: bool = True
     rol_id: int
     areas: Optional[List[str]] = Field(default_factory=list, description="Lista de áreas a las que tiene acceso. Si rol.alcance_global es True, esto se ignora.")
+    permisos_extra: Optional[List[str]] = Field(default_factory=list, description="Permisos que se suman a los de su rol, solo para esta cuenta.")
 
 class UsuarioCreate(UsuarioBase):
     password: str
@@ -45,6 +46,7 @@ class UsuarioUpdate(BaseModel):
     activo: Optional[bool] = None
     rol_id: Optional[int] = None
     areas: Optional[List[str]] = None
+    permisos_extra: Optional[List[str]] = None  # None = no tocar; lista = reemplaza los extras de la cuenta
     password: Optional[str] = None # Si se envía, se cambia
 
 class UsuarioResponse(UsuarioBase):

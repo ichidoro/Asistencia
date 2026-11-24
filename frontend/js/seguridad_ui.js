@@ -307,6 +307,7 @@ async function loadUsuarios() {
                 + F.campo('Correo', '<span>' + F.esc(u.email || 'Sin correo') + '</span>')
                 + F.campo('Rol', '<span>' + F.esc(String(u.rol_nombre || '').toUpperCase()) + (u.is_superuser ? ' · administrador total' : '') + '</span>')
                 + F.campo('Áreas que ve', '<span>' + F.esc(areas) + '</span>')
+                + F.campo('Permisos adicionales', '<span>' + F.esc((u.permisos_extra && u.permisos_extra.length) ? u.permisos_extra.map(p => (MAPA_UI_PERMISOS[p] ? MAPA_UI_PERMISOS[p].module + ' · ' + MAPA_UI_PERMISOS[p].action : p)).join(', ') : 'Ninguno (solo los de su rol)') + '</span>')
                 + F.campo('Acceso', '<span>' + (u.activo ? 'Puede entrar' : 'Bloqueado') + '</span>')
                 + F.campo('Último ingreso', '<span class="num">' + F.esc(u.ultimo_acceso ? window.formatFechaDDMMYYYY(u.ultimo_acceso) : 'Nunca') + '</span>')
                 + F.pie(raizInmutable ? '<span class="fcB-et"><p>El usuario principal no se puede cambiar.</p></span>' : '',
@@ -349,6 +350,7 @@ function poblarModalUsuario(areasUsuario) {
             `<option value="${r.id}" data-global="${r.alcance_global ? 1 : 0}">${escHtml(r.nombre)}${r.alcance_global ? ' (alcance global)' : ''}</option>`).join('');
         if (!selRol.dataset.listo) {
             selRol.addEventListener('change', actualizarAlcanceAreasUsuario);
+            selRol.addEventListener('change', () => pintarPermisosExtra(Array.from(document.querySelectorAll('.extra-check:checked:not(:disabled)')).map(c => c.value)));
             selRol.dataset.listo = '1';
         }
     }
@@ -385,6 +387,27 @@ function actualizarAlcanceAreasUsuario() {
     }
 }
 
+// Permisos extra de la cuenta: los del rol salen marcados y bloqueados; los demás se pueden sumar.
+function pintarPermisosExtra(extras) {
+    const cont = document.getElementById('user-extra-lista');
+    if (!cont) return;
+    const sel = new Set(extras || []);
+    const rol = cacheSeguridad.roles.find(r => String(r.id) === document.getElementById('user-rol').value);
+    const delRol = new Set((rol && rol.permisos) || []);
+    const mods = rlPorModulo();
+    cont.innerHTML = Object.keys(mods).map(m => `
+        <div class="mb-2"><div class="vn-lbl">${escHtml((RL_MODULOS[m] || {}).label || m)}</div><div class="vn-chips">`
+        + mods[m].map(id => `
+            <label class="area-pill" title="${escHtml(MAPA_UI_PERMISOS[id].description)}">
+                <input class="area-check extra-check" type="checkbox" value="${escHtml(id)}" ${delRol.has(id) ? 'checked disabled' : (sel.has(id) ? 'checked' : '')}>
+                <span class="area-pill-box"><span class="area-pill-tick" aria-hidden="true"><i class="bi bi-check-lg"></i></span><span>${escHtml(MAPA_UI_PERMISOS[id].action)}${delRol.has(id) ? ' <em class="area-pill-extra">(del rol)</em>' : ''}</span></span>
+            </label>`).join('')
+        + '</div></div>').join('');
+    const n = Array.from(cont.querySelectorAll('.extra-check:checked:not(:disabled)')).length;
+    const et = document.getElementById('user-extra-cuenta');
+    if (et) et.textContent = n ? `(${n})` : '';
+}
+
 window.marcarAreasUsuario = function (marcar) {
     document.querySelectorAll('.area-check').forEach(ck => { ck.checked = !!marcar; });
 };
@@ -402,6 +425,7 @@ window.openUserModal = async function () {
 
     if (!(await prepararModalUsuario([]))) return;
     actualizarAlcanceAreasUsuario();
+    pintarPermisosExtra([]);
     if (modalUserInstance) modalUserInstance.show();
 }
 
@@ -427,6 +451,7 @@ window.editUsuario = async function (id) {
     document.getElementById('user-rol').value = String(user.rol_id);
     document.querySelectorAll('.area-check').forEach(ck => { ck.checked = userAreas.includes(ck.value); });
     actualizarAlcanceAreasUsuario();
+    pintarPermisosExtra(user.permisos_extra || []);
 
     if (modalUserInstance) modalUserInstance.show();
 }
@@ -455,7 +480,8 @@ window.saveUsuario = async function () {
         email: document.getElementById('user-email').value,
         rol_id: rolId,
         activo: document.getElementById('user-activo').value === "1",
-        areas: areasSelected
+        areas: areasSelected,
+        permisos_extra: Array.from(document.querySelectorAll('.extra-check:checked:not(:disabled)')).map(c => c.value)
     };
 
     const password = document.getElementById('user-password').value;

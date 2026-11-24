@@ -134,7 +134,7 @@ async def get_current_user(
         raise credentials_exception
 
     # Recuperamos los permisos actuales
-    permisos = await seguridad_repo.get_permissions_for_role(user_db["rol_id"])
+    permisos = await seguridad_repo.get_permissions_for_user(user_db["id"], user_db["rol_id"])
     
     try:
         areas = json.loads(user_db.get("areas_json", "[]"))
