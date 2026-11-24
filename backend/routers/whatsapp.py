@@ -69,7 +69,7 @@ async def _apagar_sin_chats(repo: Any) -> None:
     """Un aviso a chats sin nadie asignado no tiene a quién enviar: se apaga solo."""
     activos = await repo.avisos_activos()
     for k, v in whatsapp_resumen.AVISOS.items():
-        if v["usa_chats"] and activos.get(k) and not await repo.destinos(k):
+        if v["usa_chats"] and activos.get(k) and not await whatsapp_resumen.destinos_de(repo, k):
             await repo.poner_activo(k, False)
 
 
@@ -160,7 +160,7 @@ async def fijar_filtros(aviso: str, datos: FiltrosIn, db: Database = Depends(get
 async def encender_aviso(aviso: str, datos: AvisoIn, db: Database = Depends(get_db), _: SecurityContext = Depends(RequireAnyPermission(PERMISO))):
     meta = _aviso_o_404(aviso)
     repo = await _repo(db)
-    if datos.activo and meta["usa_chats"] and not await repo.destinos(aviso):
+    if datos.activo and meta["usa_chats"] and not await whatsapp_resumen.destinos_de(repo, aviso):
         raise HTTPException(400, "Antes de encenderlo, abra «Revisar y asignar contacto por persona» y marque con «Recibe» a quien lo recibirá.")
     await repo.poner_activo(aviso, datos.activo)
     return {"ok": True}

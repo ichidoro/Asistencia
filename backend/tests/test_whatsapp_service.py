@@ -275,3 +275,14 @@ def test_mensaje_jefatura_separa_choferes_y_peonetas():
     ]
     m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-23")
     assert m.index("*Choferes* (2") < m.index("Ch Tres") < m.index("Ch Dos") < m.index("*Peonetas* (1") < m.index("Pe Uno")
+
+
+def test_alerta_de_velocidad_tambien_va_a_la_jefatura_del_resumen():
+    import asyncio
+    from backend.services.whatsapp_resumen import destinos_de
+
+    class Repo:
+        async def destinos(self, aviso):
+            return {"exceso_velocidad": [{"destino": "emp:1"}], "resumen_jefatura": [{"destino": "emp:1"}, {"destino": "emp:2"}]}.get(aviso, [])
+    assert [f["destino"] for f in asyncio.run(destinos_de(Repo(), "exceso_velocidad"))] == ["emp:1", "emp:2"]
+    assert [f["destino"] for f in asyncio.run(destinos_de(Repo(), "resumen_jefatura"))] == ["emp:1", "emp:2"]

@@ -30,8 +30,9 @@ AVISOS = {
     },
     "exceso_velocidad": {
         "nombre": "Alerta de exceso de velocidad (en vivo)",
-        "descripcion": "A los chats que se asignen: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta una velocidad sobre el límite de 90 km/h (se avisa desde que el medidor marca 95), con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
+        "descripcion": "A los chats que se asignen y también a la jefatura ya configurada en el resumen a jefatura: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta una velocidad sobre el límite de 90 km/h (se avisa desde que el medidor marca 95), con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
         "usa_chats": True,
+        "tambien_a": "resumen_jefatura",  # además de sus propios chats, le llega a la jefatura ya configurada en el resumen a jefatura
         "tiempo_real": True,  # no va en el cron de las 08:00: lo dispara cron-alerta-velocidad.sh
     },
 }
@@ -292,8 +293,18 @@ async def resolver_destinos_chat(db: Any, filas: List[Dict[str, Any]], manuales:
 
 async def destinos_chat(db: Any, repo: Any, aviso: str) -> List[str]:
     """Los WhatsApp a los que realmente se envía un aviso de chats (personas ya resueltas; las que no tienen contacto se omiten)."""
-    filas = [dict(r) for r in await repo.destinos(aviso)]
-    return [x["jid"] for x in await resolver_destinos_chat(db, filas, await repo.destinos_personas()) if x["jid"]]
+    filas = [dict(r) for r in await destinos_de(repo, aviso)]
+    return list(dict.fromkeys(x["jid"] for x in await resolver_destinos_chat(db, filas, await repo.destinos_personas()) if x["jid"]))
+
+
+async def destinos_de(repo: Any, aviso: str) -> List[Any]:
+    """Destinos asignados al aviso más los del aviso del que también depende (`tambien_a`), sin repetir."""
+    filas = list(await repo.destinos(aviso))
+    otro = AVISOS.get(aviso, {}).get("tambien_a")
+    if otro:
+        vistos = {str(f["destino"]) for f in filas}
+        filas += [f for f in await repo.destinos(otro) if str(f["destino"]) not in vistos]
+    return filas
 
 
 async def enviar_automaticos(asistencia_service, repo, hoy: str) -> Dict[str, Any]:
