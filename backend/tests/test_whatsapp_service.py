@@ -90,7 +90,7 @@ def test_mensaje_jefatura_nombres_sin_gritar_y_nunca_100_pendiente():
     from backend.services.whatsapp_resumen import armar_mensaje_jefatura
     items = [{"nombre": "SILVA BRIONES JAVIER", "acum": 179 * 60 + 45, "meta": 180 * 60}, {"nombre": "SIN META", "acum": 0, "meta": 0}]
     m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-25")
-    assert "Silva Briones Javier* · 179:45 h (99 %)" in m and "100 %" not in m.split("Detalle por persona*")[1]
+    assert "Silva Briones Javier* · 179:45 h (99 %)" in m and "100 %" not in m.split("alcanzable")[1]
     assert "hoy es el último día" in m and "Sin meta definida: 1" in m and "🟡" in m
 
 
@@ -264,3 +264,14 @@ def test_resumen_a_jefatura_vacio_no_se_envia(monkeypatch):
     monkeypatch.setattr(wr.whatsapp_service, "contactos", contactos)
     r = asyncio.run(wr.enviar_resumen(None, "2026-11-24", simular=False, aviso="resumen_jefatura", destinos=["120@g.us"], filtro={"areas": ["X"], "cargos": []}))
     assert r["personas"] == 0 and "filtro" in r["motivo"] and enviados == []
+
+
+def test_mensaje_jefatura_separa_choferes_y_peonetas():
+    from backend.services.whatsapp_resumen import armar_mensaje_jefatura
+    items = [
+        {"nombre": "Pe Uno", "cargo": "PEONETA", "acum": 170 * 60, "meta": 180 * 60},
+        {"nombre": "Ch Dos", "cargo": "CHOFER", "acum": 100 * 60, "meta": 180 * 60},
+        {"nombre": "Ch Tres", "cargo": "Chofer", "acum": 185 * 60, "meta": 180 * 60},
+    ]
+    m = armar_mensaje_jefatura(items, "2026-10-26", "2026-11-25", "2026-11-23")
+    assert m.index("*Choferes* (2") < m.index("Ch Tres") < m.index("Ch Dos") < m.index("*Peonetas* (1") < m.index("Pe Uno")

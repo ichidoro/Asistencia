@@ -143,18 +143,26 @@ def armar_mensaje_jefatura(items: List[Dict[str, Any]], inicio: str, fin: str, h
         lineas.append(f"▪ Sin meta definida: {sin_meta}")
     if con_meta:
         d = max(dias, 1)
-        lineas += ["", "*Detalle por persona* (de más a menos horas)", f"✅ meta cumplida · 🟡 alcanzable · 🔴 requiere más de {RITMO_ALTO_H} h diarias", ""]
-        todos = sorted(con_meta, key=lambda i: i["acum"], reverse=True)
-        for i in todos[:MAX_LINEAS_JEFATURA]:
-            nombre = _nombre_propio(i["nombre"])
-            if i["acum"] >= i["meta"]:
-                lineas.append(f"✅ *{nombre}* · {_hhmm(i['acum'])} h (+{_hhmm(i['acum'] - i['meta'])})")
-            else:
-                falta = i["meta"] - i["acum"]
-                marca = "🔴" if falta / d > RITMO_ALTO_H * 60 else "🟡"
-                lineas.append(f"{marca} *{nombre}* · {_hhmm(i['acum'])} h ({_pct_pendiente(i['acum'], i['meta'])} %) · faltan *{_hhmm(falta)} h*" + (f" (≈ {_hhmm(falta / d)} h/día)" if dias > 1 else ""))
-        if len(todos) > MAX_LINEAS_JEFATURA:
-            lineas.append(f"… y {len(todos) - MAX_LINEAS_JEFATURA} más.")
+        lineas += ["", f"✅ meta cumplida · 🟡 alcanzable · 🔴 requiere más de {RITMO_ALTO_H} h diarias"]
+        # Un bloque por cargo (choferes primero, luego peonetas, luego el resto), cada uno de más a menos horas.
+        grupos: Dict[str, List[Dict[str, Any]]] = {}
+        for i in con_meta:
+            grupos.setdefault(_norm(i.get("cargo")), []).append(i)
+        orden = [c for c in ("CHOFER", "PEONETA") if c in grupos] + sorted(c for c in grupos if c not in ("CHOFER", "PEONETA"))
+        for cargo in orden:
+            todos = sorted(grupos[cargo], key=lambda i: i["acum"], reverse=True)
+            titulo = {"CHOFER": "Choferes", "PEONETA": "Peonetas"}.get(cargo, _nombre_propio(cargo) if cargo else "Detalle por persona")
+            lineas += ["", f"*{titulo}* ({len(todos)}, de más a menos horas)"]
+            for i in todos[:MAX_LINEAS_JEFATURA]:
+                nombre = _nombre_propio(i["nombre"])
+                if i["acum"] >= i["meta"]:
+                    lineas.append(f"✅ *{nombre}* · {_hhmm(i['acum'])} h (+{_hhmm(i['acum'] - i['meta'])})")
+                else:
+                    falta = i["meta"] - i["acum"]
+                    marca = "🔴" if falta / d > RITMO_ALTO_H * 60 else "🟡"
+                    lineas.append(f"{marca} *{nombre}* · {_hhmm(i['acum'])} h ({_pct_pendiente(i['acum'], i['meta'])} %) · faltan *{_hhmm(falta)} h*" + (f" (≈ {_hhmm(falta / d)} h/día)" if dias > 1 else ""))
+            if len(todos) > MAX_LINEAS_JEFATURA:
+                lineas.append(f"… y {len(todos) - MAX_LINEAS_JEFATURA} más.")
     lineas += ["", "_Mensaje automático de Asistencia Aguacol._"]
     return "\n".join(lineas)
 
