@@ -287,3 +287,7 @@ td.bs-sem-td .bs-sem { font-size: 11px; padding: 1px 6px; }
 .bs-vacio { display: block; min-width: 34px; min-height: 18px; }
 /* Fill Rate: el día tiene nota de crédito (×2: dos o más; el detalle al pasar el mouse) */
 .bs-ncn { border-radius: 5px; padding: 0 4px; background: #eef1fb; color: #1b2f8f; font: 600 9.5px/1.5 'Barlow', system-ui, sans-serif; white-space: nowrap; }
+.bs-ncn.bs-ok { background: #e7f6ee; color: #146c43; }
+.bs-ncn.bs-x { background: #fdecee; color: #b4232f; }
+/* «?»: día trabajado que falta evaluar (dueño, 23-11-2026) */
+.bs-dia.bs-sin { background: #eef1f7; color: #4a5468; }

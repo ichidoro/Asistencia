@@ -24,10 +24,12 @@ def _dias(desde, hasta, estado="OK"):
     return out
 
 
-def _evaluar(dias=None, justif=None, no_cumple=None, desde=None, hasta=None, hoy="2026-11-30", monto=40000):
+def _evaluar(dias=None, justif=None, no_cumple=None, desde=None, hasta=None, hoy="2026-11-30", monto=40000, cumple=None):
+    """Por defecto cada día trabajado está marcado «Cumple» (desde el 23-11-2026 un día sin marca queda sin evaluar)."""
     sem = semanas_del_periodo(FI, FF)
-    return evaluar_persona(BONO, monto, sem, dias if dias is not None else _dias("2026-10-26", "2026-11-22"),
-                           justif or {}, no_cumple or {}, set(), TURNO, False, desde, hasta, hoy)
+    dias = dias if dias is not None else _dias("2026-10-26", "2026-11-22")
+    cumple = set(dias) if cumple is None else cumple
+    return evaluar_persona(BONO, monto, sem, dias, justif or {}, no_cumple or {}, set(), TURNO, False, desde, hasta, hoy, cumple)
 
 
 def test_semanas_que_terminan_en_el_periodo():
@@ -128,6 +130,32 @@ def test_justificacion_que_cuenta_como_cumplida_no_descuenta():
     bono = dict(BONO, efectos={DEOP: "asistido", LICC: "pierde"})
     r = evaluar_persona(bono, 40000, semanas_del_periodo(FI, FF), _dias("2026-10-26", "2026-11-22"),
                         {"2026-11-04": {"tipo_id": DEOP, "tipo_nombre": "Descanso Operativo"}}, {}, set(), TURNO, False,
-                        None, None, "2026-11-30")
+                        None, None, "2026-11-30", set(_dias("2026-10-26", "2026-11-22")))
     assert r["semanas"][1]["estado"] == "obtiene" and r["semanas"][1]["monto"] == 40000
     assert r["dias"]["2026-11-04"] == "justificado"
+
+
+# ── Cada día trabajado se evalúa: sin marca queda «sin evaluar» (dueño, 23-11-2026) ──
+
+def test_un_dia_sin_marcar_deja_la_semana_por_evaluar_en_cero():
+    todos = set(_dias("2026-10-26", "2026-11-22"))
+    r = _evaluar(cumple=todos - {"2026-11-10", "2026-11-11"})
+    s3 = r["semanas"][2]
+    assert r["dias"]["2026-11-10"] == "sin_evaluar"
+    assert s3["estado"] == "por_evaluar" and s3["monto"] == 0 and s3["faltan"] == ["2026-11-10", "2026-11-11"]
+    assert s3["monto_posible"] == 40000                     # si se marcan «Cumple», se paga
+    assert r["monto"] == 120000 and r["sin_evaluar"] == ["2026-11-10", "2026-11-11"]
+    assert "2 días sin evaluar" in r["motivo"]
+
+
+def test_libres_feriados_y_justificados_no_se_evaluan():
+    j = {"2026-11-04": {"tipo_id": DEOP, "tipo_nombre": "Descanso Operativo"}}
+    todos = set(_dias("2026-10-26", "2026-11-22")) - {"2026-11-04"}
+    r = _evaluar(justif=j, cumple=todos)
+    assert r["sin_evaluar"] == [] and r["dias"]["2026-11-04"] == "proporcion"
+
+
+def test_un_no_cumple_pierde_la_semana_aunque_falten_dias():
+    todos = set(_dias("2026-10-26", "2026-11-22"))
+    r = _evaluar(no_cumple={"2026-11-09": None}, cumple=todos - {"2026-11-09", "2026-11-10"})
+    assert r["semanas"][2]["estado"] == "pierde" and r["sin_evaluar"] == ["2026-11-10"]

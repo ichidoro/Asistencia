@@ -464,6 +464,23 @@ class CierreService:
             "ultimo_fin_estimado": ultimo_fin_estimado,
         }
 
+    async def fill_rate_sin_evaluar(self, fecha_inicio: str, fecha_fin: str, area: str) -> List[Dict[str, Any]]:
+        """Por persona, los días trabajados que nadie marcó «Cumple» o «No cumple» en un bono semanal (Fill Rate), en las
+        semanas que paga este período. Los días de la semana que termina en el período siguiente se evalúan allá."""
+        if not await self.db.fetch_one("SELECT 1 FROM bonos WHERE activo = 1 AND periodicidad = 'semanal' LIMIT 1"):
+            return []
+        from backend.repositories.asistencia import AsistenciaRepository
+        from backend.services.asistencia_service import AsistenciaService
+        from backend.services.report_service import ReportService
+        datos = await ReportService(AsistenciaService(AsistenciaRepository(self.db))).datos_periodo(fecha_inicio, fecha_fin, area)
+        out = []
+        for f in datos.get("filas") or []:
+            for nombre, r in (f.get("bonos") or {}).items():
+                if isinstance(r, dict) and r.get("semanal") and r.get("aplica") is not False and r.get("sin_evaluar"):
+                    out.append({"empleado_id": f["emp_id"], "nombre_completo": f.get("nombre"), "bono": nombre,
+                                "fechas": list(r["sin_evaluar"])})
+        return out
+
     async def evaluar_cierre(self, fecha_inicio: str, fecha_fin: str, area: str):
         """
         Evaluación pre-cierre con 4 niveles de semáforo (tela de araña):
@@ -533,6 +550,10 @@ class CierreService:
         """
         feriados_periodo = await self.db.fetch_all(query_feriados, (fecha_inicio, fecha_fin))
 
+        # ── HARD STOP 6: días del Fill Rate sin evaluar (dueño, 23-11-2026) ──
+        # Cada día trabajado se marca «Cumple» o «No cumple»: sin marcar no se puede cerrar
+        fill_rate = await self.fill_rate_sin_evaluar(fecha_inicio, fecha_fin, area)
+
         # Determinar si puede cerrar
         puede_cerrar = (
             len(he_pendientes) == 0
@@ -540,6 +561,7 @@ class CierreService:
             and len(en_curso) == 0
             and len(por_revisar) == 0
             and len(je_por_validar) == 0
+            and len(fill_rate) == 0
         )
 
         return {
@@ -548,6 +570,8 @@ class CierreService:
             "detalle_por_revisar": por_revisar,
             "je_por_validar": len(je_por_validar),
             "detalle_je": [dict(r) for r in je_por_validar],
+            "fill_rate_sin_evaluar": sum(len(x["fechas"]) for x in fill_rate),
+            "detalle_fill_rate": fill_rate,
             # Hard Stops
             "he_pendientes": len(he_pendientes),
             "detalle_he": [dict(r) for r in he_pendientes],
@@ -590,6 +614,11 @@ class CierreService:
             raise ValueError(
                 f"No se puede cerrar el periodo. Hay {evaluacion['dias_por_revisar']} días por revisar "
                 f"(Reglas de marcaciones): corrija sus marcas o confírmelos en «Marcaciones del día» antes de cerrar."
+            )
+        if evaluacion.get("fill_rate_sin_evaluar", 0) > 0:
+            raise ValueError(
+                f"No se puede cerrar el periodo. Hay {evaluacion['fill_rate_sin_evaluar']} días del Fill Rate sin evaluar: "
+                f"márquelos «Cumple» o «No cumple» en la vista Fill Rate de la grilla antes de cerrar."
             )
         if evaluacion.get("je_por_validar", 0) > 0:
             raise ValueError(

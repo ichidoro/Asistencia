@@ -5282,11 +5282,27 @@ function renderWizardStep(step) {
                         </li>`;
                     }).join('')}</ul>
                 </div>` : '';
-        if ((porRevisar > 0 || jeN > 0) && !(ev.anomalias > 0)) {
+        // Días del Fill Rate sin evaluar (dueño, 23-11-2026): cada día trabajado se marca «Cumple» o «No cumple»; sin marcar
+        // no se puede cerrar. «Evaluar» abre la ventana del día (vista Fill Rate de la grilla).
+        const frN = ev.fill_rate_sin_evaluar || 0;
+        const frHtml = frN > 0 ? `
+                <h5 class="text-danger fw-bold mt-3"><i class="bi bi-truck"></i> Días del Fill Rate sin evaluar</h5>
+                <p class="mb-2">Hay <strong>${frN} ${frN === 1 ? 'día' : 'días'}</strong> trabajados sin marcar «Cumple» o «No cumple». Márquelos en la vista Fill Rate de la grilla antes de cerrar.</p>
+                <div class="border rounded-3 shadow-sm bg-white mb-3" style="max-height:220px; overflow-y:auto;">
+                    <ul class="list-unstyled mb-0">${(ev.detalle_fill_rate || []).map(x => `
+                        <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom">
+                            <div class="small"><span class="fw-bold">${window.escHtml ? window.escHtml(x.nombre_completo || '') : (x.nombre_completo || '')}</span>
+                                <span class="mx-2 text-muted">|</span>${x.fechas.map(f => window.formatFechaDDMMYYYY(f)).join(', ')}</div>
+                            ${typeof window.mxBsMarcar === 'function' ? `<button class="btn btn-sm btn-outline-primary fw-bold py-1 px-3" onclick="window.mxBsMarcar(${Number(x.empleado_id)}, '${x.fechas[0]}')">
+                                <i class="bi bi-check2-square me-1"></i> Evaluar</button>` : ''}
+                        </li>`).join('')}</ul>
+                </div>` : '';
+        if ((porRevisar > 0 || jeN > 0 || frN > 0) && !(ev.anomalias > 0)) {
             content.innerHTML = `
-                <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: ${porRevisar > 0 ? 'Días por revisar' : 'Jornadas especiales por validar'}</h4>
+                <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: ${porRevisar > 0 ? 'Días por revisar' : jeN > 0 ? 'Jornadas especiales por validar' : 'Días del Fill Rate sin evaluar'}</h4>
                 ${porRevisarHtml}
                 ${jeHtml}
+                ${frHtml}
             `;
             btnNext.style.display = 'none';
         } else if (ev.anomalias > 0) {
@@ -5322,6 +5338,7 @@ function renderWizardStep(step) {
                 </div>
                 ${porRevisarHtml}
                 ${jeHtml}
+                ${frHtml}
             `;
             btnNext.style.display = 'none';
         } else {

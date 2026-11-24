@@ -72,7 +72,7 @@
 
     const SEM = {
         obtiene: ['bs-ok', ''], proporcional: ['bs-pr', ''], pierde: ['bs-x', ''], en_curso: ['bs-curso', '$0 · en curso'],
-        sin_turno: ['bs-nada', 'sin turno']
+        por_evaluar: ['bs-curso', ''], sin_turno: ['bs-nada', 'sin turno']
     };
 
     function chipSemana(r, fecha) {
@@ -83,8 +83,12 @@
             + (s.estado === 'pierde' ? 'no se paga (' + (s.perdidos || []).map(p => ddmm(p.fecha) + ' ' + p.causa).join('; ') + ')'
                 : s.estado === 'proporcional' ? pesos(s.monto) + ' de ' + pesos(s.monto_completo) + ' (' + s.dias_proporcion + ' de ' + s.dias_turno + ' días en proporción)'
                     : s.estado === 'en_curso' ? 'en curso: parte en $0; si cumple hasta el domingo, ' + pesos(s.monto_posible != null ? s.monto_posible : s.monto_completo)
-                        : s.estado === 'sin_turno' ? 'sin días de turno' : pesos(s.monto));
-        return '<span class="bs-sem ' + c[0] + '" title="' + esc(tit) + '">' + esc(c[1] || pesos(s.monto)) + '</span>';
+                        : s.estado === 'por_evaluar' ? 'queda en $0 hasta evaluar ' + (s.faltan || []).map(ddmm).join(', ') + '; si todos cumplen, ' + pesos(s.monto_posible)
+                            : s.estado === 'sin_turno' ? 'sin días de turno' : pesos(s.monto));
+        // Mientras falten días por evaluar, la semana dice cuántos (dueño, 23-11-2026)
+        const nf = (s.faltan || []).length;
+        const texto = s.estado === 'por_evaluar' ? 'Faltan ' + nf + (nf === 1 ? ' día' : ' días') : (c[1] || pesos(s.monto));
+        return '<span class="bs-sem ' + c[0] + '" title="' + esc(tit) + '">' + esc(texto) + '</span>';
     }
 
     // Contenido de la celda de un día en la vista Fill Rate. normal(): lo que mostraría la vista Conceptos.
@@ -114,21 +118,23 @@
             // Cuántas notas de crédito tiene el día, con su número y razón al pasar el mouse
             const tit = ncs.map(n => (n.numero ? 'NC ' + n.numero : 'NC sin número') + ' · ' + (n.razon || '') + (n.descuenta && n.monto ? ' · descuenta ' + pesos(n.monto) : '')
                 + (n.rol === 'peoneta' ? ' (del chofer con que iba)' : '')).join(' | ');
-            return '<span class="bs-ncn" title="' + esc(tit) + '">NC' + (ncs.length > 1 ? '×' + ncs.length : '') + '</span>';
+            // «1 NC», «2 NC»… del color del día: rojo si no cumple, verde si cumple (dueño, 23-11-2026)
+            const color = cod === 'nc' ? ' bs-x' : (cod === 'cumple' || cod === 'ok') ? ' bs-ok' : (ncs.some(n => n.culpa) ? ' bs-x' : ' bs-ok');
+            return '<span class="bs-ncn' + color + '" title="' + esc(tit) + '">' + ncs.length + ' NC</span>';
         };
-        if (!['cumple', 'ok', 'nc', 'pendiente'].includes(cod)) {
+        if (!['cumple', 'ok', 'nc', 'pendiente', 'sin_evaluar'].includes(cod)) {
             if (cod === 'fuera') return '<span class="bs-na" title="Sin turno ese día">·</span>';
             const est = estadoNormal();
             return ncs.length ? '<div class="bs-cel">' + est + marcaNc() + '</div>' : est;
         }
         let html;
-        // En blanco: el Fill Rate se gana; solo se ve lo que cambia la semana (dueño, 23-11-2026)
-        if (cod === 'cumple') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para cambiar' : ''));
-        else if (cod === 'ok') html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Cumple' + (editable ? ' · clic para cambiar' : '') + sig) + '"></span>';
+        // Cada día trabajado se marca: ✓ cumple, ✗ no cumple, «?» falta evaluar (dueño, 23-11-2026)
+        if (cod === 'cumple' || cod === 'ok') html = boton('bs-ok', '✓', 'Cumple' + (editable ? ' · clic para cambiar' : ''));
         else if (cod === 'nc') {
             const p = (r.perdidos || []).find(x => x.fecha === fecha);
-            html = boton('bs-x', 'N/C', (p ? p.causa : 'No cumple') + (editable ? ' · clic para cambiar' : ''));
-        } else html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Día por llegar' + (editable ? ' · clic para cambiar' : '') + sig) + '"></span>';
+            html = boton('bs-x', '✗', (p ? p.causa : 'No cumple') + (editable ? ' · clic para cambiar' : ''));
+        } else if (cod === 'sin_evaluar') html = boton('bs-sin', '?', 'Falta evaluar: marque «Cumple» o «No cumple»' + (editable ? ' · clic para evaluar' : ''));
+        else html = '<span class="bs-vacio' + (editable ? ' bs-click' : '') + '" title="' + esc('Día por llegar' + (editable ? ' · clic para cambiar' : '') + sig) + '"></span>';
         return '<div class="bs-cel">' + html + marcaNc() + '</div>';
     };
 
@@ -142,11 +148,11 @@
     window.mxBsLeyenda = function () {
         const b = bonoSemanal();
         return '<span class="bs-ley"><b>' + esc(b ? b.nombre : 'Fill Rate') + '</b> · semana de lunes a domingo:</span>'
-            + '<span>En blanco: cumple (sin marcar)</span>'
-            + '<span><span class="bs-dia bs-ok">✓</span> marcado «Cumple»</span>'
-            + '<span><span class="bs-dia bs-x">N/C</span> no cumple: pierde la semana</span>'
+            + '<span><span class="bs-dia bs-ok">✓</span> cumple</span>'
+            + '<span><span class="bs-dia bs-x">✗</span> no cumple: pierde la semana</span>'
+            + '<span><span class="bs-dia bs-sin">?</span> falta evaluar: no se puede cerrar el período</span>'
             + '<span>Días justificados, libres y feriados: con su estado de siempre (al pasar el mouse dice si cuenta como cumplido, en proporción o hace perder la semana)</span>'
-            + '<span><span class="bs-ncn">NC</span> tiene nota de crédito (×2: dos o más)</span>'
+            + '<span><span class="bs-ncn bs-ok">1 NC</span><span class="bs-ncn bs-x" style="margin-left:4px">2 NC</span> cuántas notas de crédito tiene el día, del color del día</span>'
             + '<span>«Total semana»: el resultado de cada semana</span>'
             + '<span>Una semana que termina en el período siguiente se marca aquí y se evalúa y paga allá, donde cae su domingo</span>'
             + (puedeEditar() ? '<span class="text-muted">Clic en un día: «Cumple» o «No cumple»</span>' : '');
@@ -184,7 +190,7 @@
         if (!r) return;
         const cod = (r.dias || {})[fecha];
         const sigla = (r.justif || {})[fecha];
-        if (!['ok', 'nc', 'pendiente', 'cumple'].includes(cod)) {
+        if (!['ok', 'nc', 'pendiente', 'cumple', 'sin_evaluar'].includes(cod)) {
             if (window.Avisos) window.Avisos.info(cod === 'libre' ? 'Día libre o feriado: no se evalúa.'
                 : sigla ? 'Ese día tiene «' + sigla + '»: no trabajó, así que no se evalúa ni puede tener nota de crédito.'
                     : cod === 'justificado' || cod === 'proporcion' || cod === 'pierde' ? 'Día justificado o con inasistencia: lo decide la configuración del bono.'
@@ -229,7 +235,7 @@
         const html = '<div class="av-quien">' + esc(b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha) + (yaMarcado ? ' · editar evaluación' : '')) + '</div>'
             + '<div class="av-tx">' + (yaMarcado ? 'Hoy está marcado <b>«' + (previa.marca === 'cumple' ? 'Cumple' : 'No cumple') + '»</b>' + (previa.usuario ? ' por ' + esc(previa.usuario) : '')
                 + (notasPrevias.length ? ', con ' + (notasPrevias.length === 1 ? '1 nota de crédito' : notasPrevias.length + ' notas de crédito') : '') + '. Cambie lo que necesite y guarde, o elimine la marca.'
-                : 'Si un día no cumple, la semana no se paga.') + '</div>'
+                : 'Marque «Cumple» o «No cumple». Si un día no cumple, la semana no se paga.') + '</div>'
             + '<div class="av-campos">'
             + '<div class="bs-notas-wrap"><span class="bs-notas-tit">Notas de crédito del día</span>'
             + '<div id="bs-notas">' + notasPrevias.map(filaNota).join('') + '</div>'

@@ -700,6 +700,11 @@ def hoja_fill_rate(inf: Dict[str, Any]) -> List[Dict[str, Any]]:
                     nota = f'{s["dias_turno"] - s.get("dias_proporcion", 0)} de {s["dias_turno"]} días'
                 elif s['estado'] == 'en_curso':
                     texto, nota = '$0', 'En curso'
+                elif s['estado'] == 'por_evaluar':
+                    # Días trabajados sin marcar «Cumple» o «No cumple»: el preinforme la muestra pendiente; el cierre no se
+                    # puede hacer así (dueño, 23-11-2026)
+                    nf = len(s.get('faltan') or [])
+                    texto, nota = 'Pendiente', f'Faltan {nf} {"día" if nf == 1 else "días"}'
                 elif s['estado'] == 'sin_turno':
                     texto, nota = '—', 'Sin turno'
                 else:

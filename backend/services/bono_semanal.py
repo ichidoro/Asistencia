@@ -58,20 +58,24 @@ def _dm(iso: str) -> str:
 def evaluar_persona(bono: Dict[str, Any], monto_semana: float, semanas: List[tuple], dias: Dict[str, Dict[str, Any]],
                     justif_por_dia: Dict[str, Dict[str, Any]], no_cumple: Dict[str, Optional[str]], feriados: Set[str],
                     turno_dias: Dict[Any, Any], es_bolsa: bool, desde: Optional[str], hasta: Optional[str],
-                    hoy: str) -> Dict[str, Any]:
+                    hoy: str, cumple: Optional[Set[str]] = None) -> Dict[str, Any]:
     """El resultado del bono semanal de una persona en sus semanas del período.
 
     dias: {fecha: fila de asistencia (estado, horas_teoricas)}; justif_por_dia: {fecha: justificación (tipo_id,
-    tipo_nombre)}; no_cumple: {fecha: comentario} de los días marcados en la grilla; desde/hasta: su vigencia (inicio del
-    turno y baja), o None."""
+    tipo_nombre)}; no_cumple: {fecha: comentario} de los días marcados «No cumple»; cumple: los días marcados «Cumple»;
+    desde/hasta: su vigencia (inicio del turno y baja), o None.
+
+    Un día que se trabajó y nadie marcó queda «sin evaluar» (dueño, 23-11-2026): no cuenta como cumplido; su semana
+    queda en $0 hasta que se marquen todos y el cierre no se puede hacer con días sin evaluar."""
+    cumple = cumple or set()
     efectos = bono.get("efectos") or {}
     efecto_inas = bono.get("efecto_inasistencia")
-    out_semanas, perdidos, codigos = [], [], {}
+    out_semanas, perdidos, codigos, sin_evaluar = [], [], {}, []
     total = 0.0
     for lunes, domingo in semanas:
         fechas = [(lunes + timedelta(days=i)).isoformat() for i in range(7)]
         vigentes = [f for f in fechas if (not desde or f >= desde) and (not hasta or f <= hasta)]
-        laborables, proporcion, pierde = 0, 0, []
+        laborables, proporcion, pierde, faltan = 0, 0, [], []
         en_curso = False
         for f in fechas:
             if f not in vigentes:
@@ -133,7 +137,12 @@ def evaluar_persona(bono: Dict[str, Any], monto_semana: float, semanas: List[tup
                     codigos[f] = "pierde"
                     pierde.append({"fecha": f, "causa": "Falta configurar el efecto de la inasistencia sin justificar en este bono"})
                 continue
-            codigos[f] = "ok"
+            if f in cumple:
+                codigos[f] = "ok"
+            else:
+                codigos[f] = "sin_evaluar"
+                faltan.append(f)
+        sin_evaluar += faltan
         factor_vig = len(vigentes) / 7
         if pierde:
             monto, estado_sem = 0.0, "pierde"
@@ -142,16 +151,17 @@ def evaluar_persona(bono: Dict[str, Any], monto_semana: float, semanas: List[tup
             monto, estado_sem = 0.0, "sin_turno"
         else:
             monto = monto_semana * factor_vig * (laborables - proporcion) / laborables
-            estado_sem = "en_curso" if en_curso else ("obtiene" if round(monto) == round(monto_semana) else "proporcional")
+            estado_sem = ("en_curso" if en_curso else "por_evaluar" if faltan
+                          else ("obtiene" if round(monto) == round(monto_semana) else "proporcional"))
         posible = int(round(monto))
         # Una semana que no ha terminado parte en $0: recién al cerrar su domingo se sabe si se ganó (dueño, 23-11-2026)
-        if estado_sem == "en_curso":
+        if estado_sem in ("en_curso", "por_evaluar"):
             monto = 0
         monto = int(round(monto))
         total += monto
         out_semanas.append({"desde": lunes.isoformat(), "hasta": domingo.isoformat(), "estado": estado_sem,
                             "monto": monto, "monto_posible": posible, "monto_completo": int(round(monto_semana)), "dias_turno": laborables,
-                            "dias_proporcion": proporcion, "perdidos": pierde})
+                            "dias_proporcion": proporcion, "perdidos": pierde, "faltan": faltan})
     completo = int(round(monto_semana)) * len(semanas)
     perdidas = [s for s in out_semanas if s["estado"] == "pierde"]
     en_curso = [s for s in out_semanas if s["estado"] == "en_curso"]
@@ -169,9 +179,11 @@ def evaluar_persona(bono: Dict[str, Any], monto_semana: float, semanas: List[tup
         motivo = f"Semanal: {len(semanas)} semanas"
     if en_curso:
         motivo += f" ({len(en_curso)} en curso: se sabe al cerrar su domingo)"
+    if sin_evaluar:
+        motivo += f" · {len(sin_evaluar)} {'día' if len(sin_evaluar) == 1 else 'días'} sin evaluar"
     return {"aplica": True, "califica": total > 0, "monto": int(round(total)), "monto_completo": completo,
             "proporcional": bool(en_parte) or (0 < total < completo), "semanal": True, "semanas": out_semanas,
-            "dias": codigos, "perdidos": perdidos, "motivo": motivo}
+            "dias": codigos, "perdidos": perdidos, "motivo": motivo, "sin_evaluar": sin_evaluar}
 
 
 def notas_de(emp_id: int, notas: List[Dict[str, Any]], marcas: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -277,7 +289,7 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
             bono, float(regla.get("monto") or 0), semanas, dias_emp.get(e["id"], {}), just_emp.get(e["id"], {}),
             nc_emp.get(e["id"], {}), feriados, e.get("turno_dias") or {},
             e.get("tipo_programacion") in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA"),
-            (e.get("inicio_turno") or None), (str(salida)[:10] if salida else None), hoy)
+            (e.get("inicio_turno") or None), (str(salida)[:10] if salida else None), hoy, cumple_emp.get(e["id"], set()))
         # La semana que sigue (empieza aquí y termina en el período siguiente): sus días de este período se ven y se
         # marcan como cualquier otro, pero la semana se evalúa y se paga allá, donde cae su domingo (dueño, 23-11-2026)
         if sig:
@@ -285,7 +297,7 @@ async def evaluar_bono_semanal(db, bono_service, bono: Dict[str, Any], empleados
                 bono, float(regla.get("monto") or 0), [sig], dias_emp.get(e["id"], {}), just_emp.get(e["id"], {}),
                 nc_emp.get(e["id"], {}), feriados, e.get("turno_dias") or {},
                 e.get("tipo_programacion") in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA"),
-                (e.get("inicio_turno") or None), (str(salida)[:10] if salida else None), hoy)
+                (e.get("inicio_turno") or None), (str(salida)[:10] if salida else None), hoy, cumple_emp.get(e["id"], set()))
             for f, c in (ev_sig.get("dias") or {}).items():
                 if f <= fecha_fin[:10] and f not in res[e["id"]].setdefault("dias", {}):
                     res[e["id"]]["dias"][f] = c

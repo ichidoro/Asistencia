@@ -169,3 +169,12 @@ def test_el_bloqueo_lo_decide_el_domingo_de_la_semana():
     assert domingo_de("2026-11-24") == "2026-11-29"
     assert domingo_de("2026-11-29") == "2026-11-29"
     assert domingo_de("2026-11-16") == "2026-11-22"
+
+
+
+def test_la_hoja_muestra_pendiente_la_semana_con_dias_sin_evaluar():
+    sem = {"desde": "2026-11-16", "hasta": "2026-11-22", "estado": "por_evaluar", "monto": 0, "monto_completo": 40000,
+           "perdidos": [], "dias_turno": 5, "faltan": ["2026-11-20", "2026-11-21"]}
+    h = hoja_fill_rate({"personas": [_persona(10, "C.E.S.R.", "CHOFER", [sem], [], 0, 0)]})[0]
+    c = h["filas"][0]["celdas"]["2026-11-16"]
+    assert c["texto"] == "Pendiente" and c["nota"] == "Faltan 2 días"

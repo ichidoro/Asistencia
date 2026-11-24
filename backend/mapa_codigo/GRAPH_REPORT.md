@@ -1,17 +1,17 @@
 # Graph Report - Asistencia  (2026-11-23)
 
 ## Corpus Check
-- 308 files · ~581,647 words
+- 308 files · ~582,736 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 64 file(s) not represented in the graph (top: .css 33, .woff2 14, (none) 6)
 
 ## Summary
-- 6119 nodes · 14293 edges · 299 communities (220 shown, 79 thin omitted)
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 1926 edges (avg confidence: 0.9)
+- 6126 nodes · 14314 edges · 288 communities (213 shown, 75 thin omitted)
+- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 1927 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ec1be162`
+- Built from commit: `6242b95d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -20,18 +20,18 @@
 - Articulo22Repository
 - m180RevisionPintar
 - ConfiguracionRepository
-- repositories/turno.py
-- empleados.py
+- TurnoRepository
+- SecurityContext
 - DashboardApp.jsx
 - render_pdf
 - sql_compat.py
 - configuracion_ui.js
 - main
-- SyncService
+- .sync_marcaciones
 - test_reglas_salida.py
 - 3. Lo que propongo, por etapas
-- test_reabrir_un_periodo.py
-- BonoCreate
+- Etapa 4: consultas SQL a su lugar
+- ConfiguracionService
 - test_reloj_gana_y_marcas_futuras.py
 - routers/whatsapp.py
 - test_libreta_en_orden.py
@@ -48,8 +48,8 @@
 - seguridad_ui + index
 - cuadre_ui
 - test_marcas_dia_cruce_medianoche.py
-- Any
-- EmpleadoService
+- test_mapa_codigo.py
+- QuantumMatrixEngine
 - whatsapp_resumen.py
 - test_compensar_inasistencia.py
 - test_reglas_motor + quantum_matrix_engine
@@ -62,7 +62,7 @@
 - test_cuadre_al_validar_jornada.py
 - typing
 - ReportService
-- SecurityContext
+- AsistenciaService
 - recalculo_service.py
 - BioAlbaScraper
 - test_reglas_guardia
@@ -70,7 +70,7 @@
 - cumpleanos_ui.js
 - config_ficha
 - Reglas de marcaciones configurables (tabla reglas_marcas)
-- separar_informes
+- Any
 - sync_wizard + index
 - Any
 - test_bonos_por_periodo.py
@@ -79,42 +79,43 @@
 - VisitasRepository
 - test_efecto_justificaciones_en_bonos.py
 - test_perdonazo_guiado + cuadre_service
+- finish_startup
 - CuadreRepository
 - json
 - test_ciclo_sin_horas_fijas
-- Database
+- routers/seguridad.py
 - EmpleadoRepository
 - test_marcas_manuales_turno_noche.py
 - test_cuadre_politica + cuadre_service
-- JustificacionTipoCreate
+- _Repo
 - test_salidas_seguidas_ultima
 - contratos_ui + alerts_ui
 - marcaciones_manuales
 - pytest
-- gps_nexacol.py
+- _get
 - ui_dialogs
 - manual_choferes_180h
 - ficha_persona.js
 - buscador
-- json
-- asistencia_periodo.py
+- arana_consultas.py
+- MultiBlockTensorSolver
 - CambioLaborService
 - test_bono_semanal_fill_rate.py
 - whatsapp_service.py
 - quantum_matrix_engine.py
-- services/__init__.py
+- test_dos_entradas_y_salida.py
 - VisitasRepository
 - marcaciones_manuales
 - marcar_presencia
 - marcaciones_manuales
 - test_periodo_anterior.py
-- HoraExtraRepository
-- ._dict_to_empleado
+- CuadreRepository
+- sync_monitor.py
 - test_sin_horario_no_se_anota
 - jspdf.plugin.autotable.min
 - reglas_marcas_corridas.py
 - FlotaRepository
-- EmpleadoService
+- BOLSA_FLEXIBLE (tipo de horario)
 - save_libreta_180h
 - test_marca_suelta_y_feriado_nocturno + quantum_matrix_engine
 - static_minify + static_files
@@ -122,8 +123,8 @@
 - informe_cierre_pdf.py
 - hallazgos_codigo.py
 - test_regla3_cual_pausa.py
-- TurnoCreate
-- .get_matrix_data_with_projections
+- routers/productos_4.py
+- fast_json.py
 - compensar_inasistencia + llaves_ui
 - marcaciones_ui
 - velocidades_choferes
@@ -138,7 +139,7 @@
 - test_dashboard_indicadores.py
 - test_revision_conserva_he.py
 - DEPLOY_DOCKER_POSTGRES
-- _BaseFalsa
+- GeminiVisionService
 - para_coordinar
 - Any
 - SeguridadRepository
@@ -147,7 +148,7 @@
 - _Repo
 - velocidades_ui.js
 - test_esperas_y_minimo_he
-- _repo
+- _servicio
 - acceso_olas
 - comunas_geo
 - openModalBono
@@ -155,14 +156,14 @@
 - deshacer_porteria.py
 - manifest
 - test_cargos_de_la_lista_en_bonos.py
-- pasos_por_direccion
+- gps_nexacol.py
 - TurnoRepository
-- ConfiguracionService
+- routers/configuracion.py
 - inicio_continuo
-- validar_regla
+- reglas_marcas_def.py
 - calendario_ui + index
 - test_bono_por_cargo_de_cada_dia.py
-- velocidades_choferes.py
+- bono_semanal.py
 - separar_informes
 - _rellena_un_hueco
 - schemas/porteria.py
@@ -174,33 +175,33 @@
 - PorteriaRepository
 - test_bono_productos_4.py
 - asignaciones_ui.js
-- EntregaUbicacionesRepository
-- registrar_movimiento
-- test_libreta_por_horario.py
+- create_pagador
+- login_for_access_token
+- reasignar_turno_acompanante_180h
 - CatalogCache
-- AsistenciaService
+- CalendarioService
 - test_bonos_montos_en_informe.py
 - test_permiso_marcas_per
 - marcaciones_ui
 - GoogleDriveService
 - deshacer_porteria.py
 - main.py
-- CalendarioRepository
+- RequireAnyPermission
 - reincorporacion_ui + index
 - compensaciones_he_panel
 - test_en_curso_varias_marcas.py
 - login
 - test_visor_turnos_asignados.py
-- listar_empleados
+- .init_tables
 - visible
 - test_dashboard_pendientes.py
 - routers/sync.py
 - alerts_ui.js
 - test_cierre_paso3_cuadre.py
-- routers/porteria.py
+- huella_calculo.py
 - test_tolerancias_turno.py
 - BonoService
-- test_orden_bonos_b6.py
+- bono.py
 - test_jornadas_extra_en_informe.py
 - CLAUDE + PLAN_PENDIENTE
 - marcaciones_ui
@@ -208,17 +209,17 @@
 - test_guardian_valores_fijos.py
 - test_dashboard_detalle.py
 - asistencia_marcas.py
-- update_ubicacion
+- update_rol
 - revisar_sql.py
 - test_huella_y_en_curso_vencido.py
-- create_catalogo_hallazgo
+- deshacer_registro
 - a11y_dialogs
 - restore-test
-- update_justificacion
+- corregir_borradores_duplicados.py
 - telegram_porteria.py
 - initConfiguracionUI
 - auth.js
-- marcar_no_cumple
+- reproceso_masivo_async
 - _TiempoPeticionMiddleware
 - backup-postgres
 - cron-sync
@@ -232,66 +233,57 @@
 - startup_ui.js
 - visitas_ui.js
 - sw.js
-- AsignacionCreate
-- generar_informes_cierre
-- get_libreta_180h
-- export_asistencia_excel
-- bono_semanal_ui.js
-- test_procesar_dia_con_force_deja_fuera_los_dias_cerrados
+- destino_valido
+- test_mas2_a_horas_extra.py
+- get_libreta_foto
+- ._run
+- test_roles_auditoria.py
+- _solo_super
 - update_assignment_date
 - AsistenciaService
-- buscar_empleados
+- test_bolsa_avance.py
+- delete_rol
 - WhatsappRepository
 - update_catalogo_hallazgo
 - test_vista_previa_bono.py
 - test_modo_oscuro_casillas.py
-- test_cierre_jornadas_por_validar.py
+- hoja_fill_rate
 - saveTipoJustificacion
-- EmpleadoCreate
-- CargoRepository
-- test_procesar_dia_omite_a_quien_ya_tiene_el_dia_y_dice_cuantos_calculo
+- entorno
+- .sync_empleados
+- events.py
 - test_cuadre_reparte_dias_libres.py
 - environment
 - test_historial_cierres_periodo.py
 - test_dashboard_se_actualiza.py
-- numerar_sin_numero
+- ciclo_para_marca_sola
 - test_ayudantes_unicos.py
-- agregar_marcaciones_masivas
 - StartupManager
 - test_nombres_definidos.py
 - test_telegram_espera_el_plazo_y_no_avisa_una_marca_deshecha
-- .get_bioalba_areas
+- update_justificacion
 - NotificationService
 - os
 - delete_libreta_180h
-- asistencia_libreta.py
+- ocr_libreta_180h_upload
+- Marca manual no puede ser futura (_marca_en_el_futuro)
 - services
 - options
 - wa
 - _DbSoloLee
-- contactos
-- test_el_arranque_pasa_a_quien_ya_tiene_el_dia_calculado_y_no_usa_force
-- delete_turno
 - _analizar_dia
 - db
-- test_borradores_duplicados.py
 - test_envia_con_numero_normalizado_y_no_lanza_si_falla
 - Propuesta para dias de 3 marcas (propuesta_tres_marcas)
 - healthcheck
-- post_reprocesar_periodo_empleado
-- visible
-- test_excel_por_rango_recibe_la_matriz_del_periodo
-- get_empleado_service
-- test_alternada_mide_la_colacion_cuando_la_vuelta_se_marco_como_salida
-- test_informe_cabe_en_la_hoja.py
+- asyncio
 - cargarPersonas
-- test_el_motor_lee_el_orden_guardado_y_descarta_las_que_no_se_usan
 - cron-resumen-whatsapp.sh
 
 ## God Nodes (most connected - your core abstractions)
 1. `SecurityContext` - 328 edges
-2. `AsistenciaRepository` - 181 edges
-3. `AsistenciaService` - 175 edges
+2. `AsistenciaRepository` - 182 edges
+3. `AsistenciaService` - 176 edges
 4. `ConfiguracionRepository` - 150 edges
 5. `EmpleadoRepository` - 147 edges
 6. `ConfiguracionService` - 114 edges
@@ -321,70 +313,62 @@
 - **Simulador de la regleta de 96 cuartos de hora** — frontend_manual_choferes_180h_inicializarsimulador, frontend_manual_choferes_180h_seleccionarherramienta, frontend_manual_choferes_180h_alternarslot, frontend_manual_choferes_180h_actualizarvisuales, frontend_manual_choferes_180h_auditarreglas, frontend_manual_choferes_180h_cargarescenario, frontend_manual_choferes_180h_limpiarsimulador [EXTRACTED 1.00]
 - **Reglas sobre marcas manuales (fecha de salida, reloj gana, no futuras, quitar)** — backend_docs_reglas_asistencia_salida_manual_turno_noche, backend_docs_reglas_asistencia_reloj_gana_manual, backend_docs_reglas_asistencia_marca_manual_futura, backend_docs_reglas_asistencia_quitar_marca_manual [INFERRED 0.85]
 
-## Communities (299 total, 79 thin omitted)
+## Communities (288 total, 75 thin omitted)
 
 ### Community 0 - "Recomendaciones #1 a #9 ordenadas por ganancia/costo"
-Cohesion: 0.16
-Nodes (11): Reglas maestras de asistencia (documento canonico), graphify-out: mapa del codigo, Aguacol Asistencia (contexto del proyecto), Auditoria de la estructura del codigo con graphify (7-11-2026), Capas al reves (repositorio/esquema que depende de un servicio), 36 funciones que nadie llama (candidatas a borrarse), Lo que el grafo no ve (URLs, onclick, llamadas dinamicas), Sin bucles de imports en el backend (+3 more)
+Cohesion: 0.14
+Nodes (14): Ensayo con dias reales (collect_only, REGLAS_MARCAS_ENSAYO), QuantumMatrixEngine (motor de calculo), Reglas maestras de asistencia (documento canonico), services/reglas_marcas_corridas.py (ensayar_regla), graphify-out: mapa del codigo, Aguacol Asistencia (contexto del proyecto), Auditoria de la estructura del codigo con graphify (7-11-2026), Capas al reves (repositorio/esquema que depende de un servicio) (+6 more)
 
 ### Community 2 - "m180RevisionPintar"
 Cohesion: 0.21
 Nodes (14): m180GpsAjustarEtiquetas(), m180GpsComparar(), m180GpsEsc(), m180GpsEsShell(), m180GpsHora(), m180GpsPintar(), m180GpsSeg(), m180GpsTabla() (+6 more)
 
 ### Community 3 - "ConfiguracionRepository"
-Cohesion: 0.04
-Nodes (4): ConfiguracionRepository, seed_estados_asistencia(), _sigla_efectiva(), update_estado_asistencia()
+Cohesion: 0.03
+Nodes (14): ConfiguracionRepository, acompanantes_del_dia(), marcar_no_cumple(), get_periodo_rrhh_activo(), seed_estados_asistencia(), _sigla_efectiva(), update_estado_asistencia(), _base() (+6 more)
 
-### Community 4 - "repositories/turno.py"
-Cohesion: 0.20
-Nodes (11): AsignacionBulk, AsignacionUpdateDate, PlantillaCreate, PlantillaResponse, Config, TurnoBase, TurnoDiaCreate, TurnoDiaResponse (+3 more)
+### Community 4 - "TurnoRepository"
+Cohesion: 0.08
+Nodes (26): TurnoRepository, get_turno_service(), asignar_turno(), bulk_assign_turnos(), create_turno(), delete_turno(), _exigir_colacion(), get_turno_service() (+18 more)
 
-### Community 5 - "empleados.py"
-Cohesion: 0.10
-Nodes (21): BajaRequest, CambioLaborRequest, confirmar_cambio_area(), obtener_historial_cargos(), procesar_vencimiento(), registrar_baja_empleado(), registrar_periodo_anterior(), reincorporar_empleado() (+13 more)
+### Community 5 - "SecurityContext"
+Cohesion: 0.03
+Nodes (59): SecurityContext, get_intercambios(), diagnostic_no_shift(), get_asistencia_calendar(), get_asistencia_matrix(), get_asistencia_stats(), get_auditoria_bloqueo(), get_empleado_service() (+51 more)
 
 ### Community 6 - "DashboardApp.jsx"
 Cohesion: 0.06
 Nodes (63): dependencies, react@^18.3.1, react-dom@^18.3.1, devDependencies, @types/react@^18.3.3, @types/react-dom@^18.3.0, vite@^5.3.1, @vitejs/plugin-react@^4.3.1 (+55 more)
 
 ### Community 7 - "render_pdf"
-Cohesion: 0.15
-Nodes (16): bajas_de(), cierre_completo(), detalle_bonos(), _dm(), _f(), hoja_fill_rate(), leyenda(), pesos() (+8 more)
+Cohesion: 0.13
+Nodes (18): bajas_de(), _check_flowable(), __init__(), _dm(), _f(), hms(), horas_txt(), leyenda() (+10 more)
 
 ### Community 8 - "sql_compat.py"
-Cohesion: 0.17
-Nodes (14): _find_call(), _lit(), _literal_spans(), _rewrite_dates(), _rewrite_insert_or(), _rewrite_minmax(), _split_args(), split_statements() (+6 more)
+Cohesion: 0.16
+Nodes (15): _split_cached(), _find_call(), _lit(), _literal_spans(), _rewrite_dates(), _rewrite_insert_or(), _rewrite_minmax(), _split_args() (+7 more)
 
 ### Community 9 - "configuracion_ui.js"
 Cohesion: 0.08
 Nodes (18): addBonoReglaRow(), bonosList, catalogoCargosBono, COLOR_OPTIONS, correoFichaB(), EFECTOS_BONO, EFECTOS_INASISTENCIA, _escAttr() (+10 more)
 
 ### Community 10 - "main"
-Cohesion: 0.05
-Nodes (62): Etapa 2: un solo ayudante por tarea (**hecha**), updateBulkSortIcons(), AVATAR_GRADIENTS, _batch, btnCancelModal, btnCloseModal, btnNext, btnNuevoEmpleado (+54 more)
-
-### Community 11 - "SyncService"
-Cohesion: 0.07
-Nodes (17): post_asignacion_individual(), _reprocesar_bg(), post_batch_sync(), _batch_bg(), sincronizar_desde_reportes(), ejecutar_sync_asistencia(), ejecutar_sync_empleados(), sincronizar_asistencia_stream() (+9 more)
+Cohesion: 0.06
+Nodes (59): AVATAR_GRADIENTS, _batch, btnCancelModal, btnCloseModal, btnNext, btnNuevoEmpleado, btnPrev, btnSync (+51 more)
 
 ### Community 12 - "test_reglas_salida.py"
-Cohesion: 0.06
-Nodes (36): no_calcula(), opciones_efectivas(), orden_propuesto(), propuesta_cinco_marcas(), secuencias_alcanzables(), tiene_salida(), validar_orden(), validar_regla() (+28 more)
+Cohesion: 0.05
+Nodes (37): orden_propuesto(), _BaseFalsa, _bien_marcada(), _camino_propio(), _coherente_sin_salida(), _js(), _marcas(), _motor() (+29 more)
 
 ### Community 13 - "3. Lo que propongo, por etapas"
 Cohesion: 0.08
 Nodes (23): 1.1 bis Lo que se configura en cada justificación (Configuración → Justificaciones) y qué efecto tiene en los bonos, 1.1 Lo que se configura en la pantalla (Configuración → Bonos), 1.2 Bonos configurados hoy, 1.3 Cómo se pierde hoy, 1.4 Dónde se ve, 1. Cómo funciona hoy, 2.1 Graves: afectan lo que se paga, 2.2 Configuración que falta (para no escribir reglas en el código) (+15 more)
 
-### Community 14 - "test_reabrir_un_periodo.py"
-Cohesion: 0.13
-Nodes (7): _base(), BaseSqlite, test_al_reabrir_solo_queda_vigente_el_periodo_reabierto(), test_con_un_periodo_ya_reabierto_no_se_reabre_otro(), test_el_mes_en_curso_no_impide_reabrir(), test_otra_area_del_mismo_periodo_si_se_puede_reabrir(), _vigentes()
-
-### Community 15 - "BonoCreate"
-Cohesion: 0.09
-Nodes (6): a_ids(), create_bono(), update_bono(), BonoCreate, test_el_beneficio_no_se_descuenta_en_proporcion_ni_se_elimina(), test_bono_nuevo_no_se_guarda_sin_inasistencia_ni_efectos()
+### Community 15 - "ConfiguracionService"
+Cohesion: 0.03
+Nodes (20): create_bono(), create_tipo_justificacion(), delete_bono(), delete_notificaciones_area(), delete_periodo_rrhh(), delete_tipo_justificacion(), get_bonos(), set_ajuste() (+12 more)
 
 ### Community 16 - "test_reloj_gana_y_marcas_futuras.py"
-Cohesion: 0.07
+Cohesion: 0.06
 Nodes (30): TensorMarkDeduplicator, _dia(), FakeDB, FakeEmpleados, FakeRepo, FakeService, FakeUser, _ingresar() (+22 more)
 
 ### Community 17 - "routers/whatsapp.py"
@@ -392,12 +376,12 @@ Cohesion: 0.15
 Nodes (21): agregar_destino(), _aviso_o_404(), AvisoIn, config(), desconectar(), DestinoIn, encender_aviso(), fijar_filtros() (+13 more)
 
 ### Community 18 - "test_libreta_en_orden.py"
-Cohesion: 0.15
-Nodes (24): mismos_tramos(), _error(), _fila(), _guardar(), test_al_abrir_la_ventana_recibe_el_bloqueo_los_enlazados_y_el_permiso(), test_al_editar_un_dia_validado_del_chofer_la_copia_solo_va_si_se_elige(), test_borrar_nunca_en_periodo_cerrado_y_avisa_los_dias_posteriores(), test_editar_un_dia_que_ya_tiene_libreta_no_se_frena_por_el_orden() (+16 more)
+Cohesion: 0.20
+Nodes (20): _error(), _fila(), _guardar(), test_al_editar_un_dia_validado_del_chofer_la_copia_solo_va_si_se_elige(), test_editar_un_dia_que_ya_tiene_libreta_no_se_frena_por_el_orden(), test_editar_un_dia_validado_antes_de_la_patente_no_la_pide(), test_el_acompanante_de_un_periodo_cerrado_no_se_toca(), test_el_chofer_edita_su_borrador_y_la_copia_igual_se_actualiza_pero_la_ajustada_no() (+12 more)
 
 ### Community 19 - "AreaRepository"
-Cohesion: 0.07
-Nodes (3): AreaRepository, delete_area(), patch_area_aplica_flota()
+Cohesion: 0.05
+Nodes (5): AreaRepository, cerrar_permiso(), create_area_manual(), delete_area(), patch_area_aplica_flota()
 
 ### Community 20 - "marcaciones_manuales"
 Cohesion: 0.07
@@ -408,8 +392,8 @@ Cohesion: 0.07
 Nodes (27): m(), s(), u(), Bt(), C(), D(), Dt(), f() (+19 more)
 
 ### Community 23 - "PostgresDatabase"
-Cohesion: 0.07
-Nodes (8): _coerce(), _norm_out(), PostgresDatabase, attempt(), go(), Result, _row(), _split_cached()
+Cohesion: 0.13
+Nodes (4): _norm_out(), PostgresDatabase, Result, _row()
 
 ### Community 24 - "tarjeta_dia + velocidades_ui"
 Cohesion: 0.14
@@ -424,16 +408,16 @@ Cohesion: 0.17
 Nodes (12): build, cap_drop, container_name, depends_on, env_file, ports, restart, security_opt (+4 more)
 
 ### Community 27 - "Any"
-Cohesion: 0.03
-Nodes (5): AsistenciaRepository, eliminar_jornada_especial_manual(), quitar_marcacion_manual(), test_selector_de_inasistencias_no_pide_columnas_que_no_existen(), test_cero_trae_todos_y_el_limite_se_sigue_respetando()
+Cohesion: 0.02
+Nodes (9): AsistenciaRepository, HoraExtraRepository, eliminar_jornada_especial_manual(), _ids_de_json(), _marcas_del_dia(), quitar_marcacion_manual(), _complete_job(), exportar_turnos_ciclo() (+1 more)
 
 ### Community 28 - "index.js"
 Cohesion: 0.10
 Nodes (23): pino, qrcode, @whiskeysockets/baileys, anotarChats(), anotarContactos(), ARCHIVO_CONTACTOS(), cargarContactos(), conectar() (+15 more)
 
 ### Community 29 - "seguridad_ui + index"
-Cohesion: 0.07
-Nodes (46): draw(), 1. Cómo se hizo, 2. Fallas encontradas (reales, comprobadas): 4, 3. Limpieza confirmada, 4. Copias que deberían hacer lo mismo y no lo hacen (simulación), 5. Riesgos estructurales (con su efecto dominó), 6. El plan, por etapas, 7. Lo que no promete este plan (+38 more)
+Cohesion: 0.06
+Nodes (47): draw(), 1. Cómo se hizo, 2. Fallas encontradas (reales, comprobadas): 4, 3. Limpieza confirmada, 4. Copias que deberían hacer lo mismo y no lo hacen (simulación), 5. Riesgos estructurales (con su efecto dominó), 6. El plan, por etapas, 7. Lo que no promete este plan (+39 more)
 
 ### Community 30 - "cuadre_ui"
 Cohesion: 0.13
@@ -443,17 +427,17 @@ Nodes (32): actualizarCuenta(), barrasDia(), base(), boton(), cargar(), cuenta()
 Cohesion: 0.09
 Nodes (18): FakeDB, FakeEmpleados, FakeRepo, FakeService, FakeUser, _horas(), _panel(), _reclasificar() (+10 more)
 
-### Community 32 - "Any"
-Cohesion: 0.09
-Nodes (4): _flag(), JustificationTensorResolver, libreta_es_inasistencia(), LibretaArt25BisResolver
+### Community 32 - "test_mapa_codigo.py"
+Cohesion: 0.12
+Nodes (8): estado_del_mapa(), _huella(), _md5(), test_dice_si_el_mapa_esta_al_dia(), test_sin_mapa_publicado(), actualizar(), huella(), main()
 
-### Community 33 - "EmpleadoService"
-Cohesion: 0.09
-Nodes (7): estadisticas_empleados(), get_cumpleanos(), get_empleados_lookup(), listar_areas(), obtener_empleado(), obtener_historial_areas(), obtener_metadatos()
+### Community 33 - "QuantumMatrixEngine"
+Cohesion: 0.15
+Nodes (14): QuantumMatrixEngine, _regimen(), test_cada_horario_cambia_a_libreta_en_su_propia_fecha(), test_el_calculo_del_dia_lee_la_fecha_del_horario(), test_la_fecha_del_horario_se_valida_al_guardar(), test_la_leyenda_de_la_linea_violeta_sobrevive_al_minificador(), test_un_horario_de_libreta_sin_fecha_es_libreta_siempre(), test_un_horario_de_reloj_nunca_es_libreta() (+6 more)
 
 ### Community 34 - "whatsapp_resumen.py"
-Cohesion: 0.12
-Nodes (19): armar_mensaje(), armar_mensaje_jefatura(), buscar_contacto(), construir(), _dm(), enviar_automaticos(), enviar_resumen(), _hhmm() (+11 more)
+Cohesion: 0.10
+Nodes (22): norm(), armar_mensaje(), armar_mensaje_jefatura(), buscar_contacto(), construir(), _dm(), enviar_automaticos(), enviar_resumen() (+14 more)
 
 ### Community 35 - "test_compensar_inasistencia.py"
 Cohesion: 0.10
@@ -464,44 +448,44 @@ Cohesion: 0.12
 Nodes (29): _aplicar_extremos(), _rebote_defecto(), _dia(), L(), _registro_limpio(), _regla(), test_bajo_el_minimo_con_pausa_marcada_se_descuenta_solo_la_pausa(), test_bolsa_flexible_no_cambia_con_el_minimo_con_pausa() (+21 more)
 
 ### Community 37 - "Any"
-Cohesion: 0.06
-Nodes (9): _ajuste_numero(), _bordes_ciclos(), _es_el_borde_mas_cercano(), _lo_trabajado_entra_en_el_ciclo(), _minutos_netos_jornada_aparte(), QuantumPhaseTopology, _cfg_cruza(), _cruza() (+1 more)
+Cohesion: 0.05
+Nodes (12): _ajuste_numero(), _bordes_ciclos(), _es_el_borde_mas_cercano(), _flag(), JustificationTensorResolver, libreta_es_inasistencia(), _lo_trabajado_entra_en_el_ciclo(), _minutos_netos_jornada_aparte() (+4 more)
 
 ### Community 38 - "pytest"
 Cohesion: 0.12
 Nodes (4): _leer(), test_el_rojo_intenso_se_puede_elegir_y_se_dibuja(), test_los_textos_de_la_grilla_sobreviven_al_minificador(), test_los_textos_de_la_ventana_sobreviven_al_minificador()
 
 ### Community 39 - "propuesta_tres_marcas"
-Cohesion: 0.13
-Nodes (8): _dist_reloj(), _min_reloj(), propuesta_tres_marcas(), propuesta_una_marca(), test_entrada_entrada_salida_falta_la_salida_a_colacion(), test_entrada_salida_salida_falta_la_vuelta_de_colacion(), test_propuesta_reglas_26_27_6_28_29(), test_propuesta_tres_marcas_con_el_horario()
+Cohesion: 0.14
+Nodes (7): _dist_reloj(), _min_reloj(), propuesta_tres_marcas(), test_entrada_entrada_salida_falta_la_salida_a_colacion(), test_entrada_salida_salida_falta_la_vuelta_de_colacion(), test_propuesta_reglas_26_27_6_28_29(), test_propuesta_tres_marcas_con_el_horario()
 
 ### Community 40 - "routers/productos_4.py"
-Cohesion: 0.07
-Nodes (19): finish_startup(), Productos4Repository, api_cerrar_periodo(), api_reabrir_periodo(), AsignacionGuardarRequest, _auditar(), CierrePeriodoRequest, crear_producto() (+11 more)
+Cohesion: 0.08
+Nodes (7): Productos4Repository, evaluar_periodo(), get_periodo_status(), listar_entregas(), listar_productos(), obtener_consolidado(), Productos4Service
 
 ### Community 41 - "test_gps_entregas"
-Cohesion: 0.14
-Nodes (28): cruzar_entregas(), _tokens_calle(), entrega(), estados(), paso(), test_calles_numeradas_se_comparan_por_numero_y_direccion(), test_con_coordenada_exacta_mide_la_distancia(), entrega_en() (+20 more)
+Cohesion: 0.15
+Nodes (25): cruzar_entregas(), paso_coherente(), entrega(), estados(), paso(), test_calles_numeradas_se_comparan_por_numero_y_direccion(), test_con_coordenada_exacta_mide_la_distancia(), entrega_en() (+17 more)
 
 ### Community 42 - "marcaciones_ui"
 Cohesion: 0.05
-Nodes (48): _auditoriaBloqueoCache, calcularMetricasEmpleado(), _calibContext, cargarPeriodosEnToolbar(), CARGO_ICONOS, CARGO_REGLAS, cargoIconoHtml(), categoriaCargo() (+40 more)
+Nodes (50): _auditoriaBloqueoCache, calcularMetricasEmpleado(), _calibContext, cargarPeriodosEnToolbar(), CARGO_ICONOS, CARGO_REGLAS, cargoIconoHtml(), categoriaCargo() (+42 more)
 
 ### Community 43 - "test_cuadre_al_validar_jornada.py"
-Cohesion: 0.19
-Nodes (8): _cuadre(), _RepoCuadre, test_el_recalculo_de_una_persona_reparte_el_cuadre_despues_de_guardar(), test_gonzalez_con_cero_y_un_mas_dos_validado_como_horas_extra(), test_se_reparte_una_sola_vez_por_tramo(), reaplicar_para(), test_sin_politica_no_se_reparte_nada(), test_validar_una_jornada_pasa_por_el_recalculo_de_la_persona()
+Cohesion: 0.17
+Nodes (9): _cuadre(), _RepoCuadre, test_el_recalculo_de_una_persona_reparte_el_cuadre_despues_de_guardar(), test_gonzalez_con_cero_y_un_mas_dos_validado_como_horas_extra(), test_los_dias_cerrados_no_entran_al_reparto(), test_se_reparte_una_sola_vez_por_tramo(), reaplicar_para(), test_sin_politica_no_se_reparte_nada() (+1 more)
 
 ### Community 44 - "typing"
-Cohesion: 0.04
-Nodes (11): get_db(), get_current_user(), RequirePermission(), get_job_status(), get_reproceso_status(), _init_job(), CalendarioService, segundos_para_deshacer() (+3 more)
+Cohesion: 0.05
+Nodes (13): get_db(), get_current_user(), RequirePermission(), JustificacionBase, JustificacionCreate, JustificacionResponse, Config, JustificacionTipoBase (+5 more)
 
 ### Community 45 - "ReportService"
 Cohesion: 0.10
-Nodes (5): _personas_del_area(), ReportService, test_el_informe_usa_lo_guardado_y_no_recalcula(), test_excel_muestra_el_monto_y_el_total_de_bonos(), test_excel_lee_las_columnas_del_libro()
+Nodes (8): export_asistencia_excel(), export_asistencia_excel_range(), get_stats_periodo(), ReportService, test_la_purga_del_registro_de_auditoria_usa_su_columna_de_fecha(), test_selector_de_inasistencias_no_pide_columnas_que_no_existen(), test_visitas_usa_la_hora_de_chile_con_cambio_de_horario(), test_excel_lee_las_columnas_del_libro()
 
-### Community 46 - "SecurityContext"
-Cohesion: 0.06
-Nodes (32): SecurityContext, get_job_progress(), get_reproceso_status(), procesar_asistencia(), reproceso_masivo_status(), ejecutar_cierre(), EjecutarCierreRequest, evaluar_cierre() (+24 more)
+### Community 46 - "AsistenciaService"
+Cohesion: 0.07
+Nodes (16): cerrar_periodo_rrhh(), get_historial_cierres_rrhh(), get_periodo_rrhh_resumen(), get_periodo_rrhh_resumen_global(), get_ultimo_cierre_rrhh(), ejecutar_cierre(), EjecutarCierreRequest, evaluar_cierre() (+8 more)
 
 ### Community 47 - "recalculo_service.py"
 Cohesion: 0.13
@@ -524,12 +508,12 @@ Cohesion: 0.13
 Nodes (21): area(), cabeza(), cambiados(), campo(), campos(), contar(), elegir(), esc() (+13 more)
 
 ### Community 54 - "Reglas de marcaciones configurables (tabla reglas_marcas)"
-Cohesion: 0.07
-Nodes (28): Ajustes de las reglas (tabla ajustes, nunca en el codigo), Bloque extra +2 (asistencia_emergencia_gap_horas), BOLSA_FLEXIBLE (tipo de horario), CICLO_INTELIGENTE (tipo de horario), services/cierre_service.py (bloqueo del cierre), Colacion automatica del turno (AutoMealOperator), MultiBlockTensorSolver.collapse_consecutive_same_type, Cruce de medianoche universal (+20 more)
+Cohesion: 0.13
+Nodes (15): Ajustes de las reglas (tabla ajustes, nunca en el codigo), CICLO_INTELIGENTE (tipo de horario), Colacion automatica del turno (AutoMealOperator), MultiBlockTensorSolver.collapse_consecutive_same_type, Cruce de medianoche universal, Aviso no calza con ningun ciclo (avisa_fuera_de_ciclo), Modos de lectura de marcas: RELOJ / EXTREMOS / ORDEN / ALTERNADA / NINGUNA, asistencias.marcas_consumidas_ids (+7 more)
 
-### Community 55 - "separar_informes"
-Cohesion: 0.11
-Nodes (20): columnas(), hms(), horas_txt(), nombre_archivo(), nombre_clase(), nombres_justif(), pct(), _quienes() (+12 more)
+### Community 55 - "Any"
+Cohesion: 0.17
+Nodes (4): evaluar_dia(), opciones_efectivas(), secuencia_en_revision(), test_confirmar_solo_con_el_dia_calculado()
 
 ### Community 56 - "sync_wizard + index"
 Cohesion: 0.14
@@ -537,15 +521,15 @@ Nodes (19): fetchAndRenderWizardStep3(), fetchAndRenderWizardStep3_Pagadores(), 
 
 ### Community 57 - "Any"
 Cohesion: 0.07
-Nodes (8): ReglasMarcasRepository, dias_de_la_regla(), dias_ejemplo_de_la_regla(), dias_por_revisar(), ensayar_la_regla(), evaluar_dia(), listar_reglas(), vigilante()
+Nodes (17): ReglasMarcasRepository, actualizar_regla(), apagar_regla(), confirmar_dia(), correr_regla(), crear_regla(), dias_de_la_regla(), dias_ejemplo_de_la_regla() (+9 more)
 
 ### Community 58 - "test_bonos_por_periodo.py"
 Cohesion: 0.15
 Nodes (16): test_un_bono_por_periodo_respeta_el_alcance(), _DB, _dias(), _dias_turno(), _evaluar(), _matriz(), _servicio(), test_dias_del_inicio_del_periodo_en_el_mes_anterior_se_revisan() (+8 more)
 
 ### Community 59 - "login_limiter.py"
-Cohesion: 0.09
-Nodes (11): _ahora(), _clave_usuario(), _es_ip(), ip_cliente(), limpiar(), LoginBloqueado, _podar(), registrar_fallo() (+3 more)
+Cohesion: 0.17
+Nodes (10): _ahora(), _clave_usuario(), _es_ip(), ip_cliente(), limpiar(), LoginBloqueado, _podar(), registrar_fallo() (+2 more)
 
 ### Community 60 - "test_rutas_con_sesion.py"
 Cohesion: 0.36
@@ -564,24 +548,24 @@ Cohesion: 0.18
 Nodes (23): causas_dia(), dia(), fila_he(), _plan(), test_aviso_cuando_perdonar_alcanzaria_para_compensar_una_inasistencia(), test_colacion_sin_horas_extra_queda_como_deuda_y_los_atrasos_se_perdonan(), test_con_tolerancia_cero_los_segundos_marcados_se_perdonan_con_la_marca(), test_el_perdon_del_cuadre_nunca_borra_colacion_ni_permisos() (+15 more)
 
 ### Community 65 - "CuadreRepository"
-Cohesion: 0.08
-Nodes (9): CuadreRepository, aviso_inasistencia(), calendario_tramo(), CuadreService, es_dia_especial(), _f(), mapa_guiados(), plan_perdonazo() (+1 more)
+Cohesion: 0.18
+Nodes (8): aviso_inasistencia(), calendario_tramo(), CuadreService, es_dia_especial(), _f(), mapa_guiados(), plan_perdonazo(), simular_sin_guia()
 
 ### Community 66 - "json"
-Cohesion: 0.14
-Nodes (11): contexto_revision(), descanso_final_minutos(), limites_desde_ajustes(), _DB, _Repo, test_contexto_con_libreta_del_dia_anterior(), test_contexto_sin_libreta_del_dia_anterior_informa_su_estado(), test_descanso_final_cuenta_solo_lo_ultimo_seguido() (+3 more)
+Cohesion: 0.13
+Nodes (12): get_libreta_180h(), contexto_revision(), descanso_final_minutos(), limites_desde_ajustes(), _DB, _Repo, test_contexto_con_libreta_del_dia_anterior(), test_contexto_sin_libreta_del_dia_anterior_informa_su_estado() (+4 more)
 
 ### Community 67 - "test_ciclo_sin_horas_fijas"
 Cohesion: 0.13
 Nodes (25): QuantumShiftWeekMatcher, _ciclo(), _dia(), _ganador(), _ganador_diario(), _marca(), test_con_rotacion_diaria_las_marcas_de_dia_en_domingo_son_dia_libre_trabajado(), test_con_rotacion_diaria_quien_hace_la_noche_queda_en_la_noche() (+17 more)
 
-### Community 68 - "Database"
-Cohesion: 0.08
-Nodes (13): actualizar_razon_nota_credito(), AreaCreateRequest, _auditar(), CargoRenombrarRequest, CargoUnirRequest, crear_razon_nota_credito(), create_area_manual(), delete_cargo_alias() (+5 more)
+### Community 68 - "routers/seguridad.py"
+Cohesion: 0.19
+Nodes (16): get_repo(), LogAuditoriaResponse, LoginRequest, PermisoBase, PermisoResponse, RolBase, RolCreate, RolResponse (+8 more)
 
 ### Community 69 - "EmpleadoRepository"
-Cohesion: 0.03
-Nodes (5): EmpleadoRepository, _cuando_cambio(), get_justificaciones(), Etapa 4: consultas SQL a su lugar, Etapa 6: repartir `routers/asistencia.py` por tema (#3 de la auditoría del grafo) (**hecha**)
+Cohesion: 0.02
+Nodes (12): Empleado, EmpleadoRepository, delete_compensacion(), delete_intercambio(), get_bolsa_he_disponible(), get_inasistencias_disponibles(), list_compensaciones(), aprobar_horas_extra() (+4 more)
 
 ### Community 70 - "test_marcas_manuales_turno_noche.py"
 Cohesion: 0.07
@@ -590,10 +574,6 @@ Nodes (31): _agregar(), _entrada_sin_cerrar(), FakeDB, FakeEmpleados, FakeRepo, 
 ### Community 71 - "test_cuadre_politica + cuadre_service"
 Cohesion: 0.12
 Nodes (26): asignar_minutos(), hhmmss(), plegar_libro(), dia(), por_fecha(), test_calendario_trae_todos_los_dias_del_tramo_con_los_minutos_del_libro(), test_con_politica_la_aprobacion_parcial_no_es_hallazgo(), test_horas_insuficientes_el_cero_dice_cuanto_falta() (+18 more)
-
-### Community 72 - "JustificacionTipoCreate"
-Cohesion: 0.14
-Nodes (5): create_tipo_justificacion(), update_tipo_justificacion(), JustificacionTipoCreate, _Repo, test_justificacion_nueva_no_se_guarda_sin_efecto_en_cada_bono()
 
 ### Community 73 - "test_salidas_seguidas_ultima"
 Cohesion: 0.22
@@ -608,12 +588,12 @@ Cohesion: 0.15
 Nodes (24): eliminarRegistroLibretaDia(), getLibretaAuthHeaders(), m180AttachCloseGuard(), m180GpsAuto(), m180GpsAviso(), m180GpsCargarVehiculos(), m180GpsEntregas(), m180GpsEntregasPintar() (+16 more)
 
 ### Community 76 - "pytest"
-Cohesion: 0.14
-Nodes (19): NotaCredito, _validar_notas(), notas_de(), _persona(), _Repo, test_el_chofer_tiene_sus_notas_y_el_peoneta_las_ve_como_acompanante(), test_el_valor_solo_cuenta_si_la_razon_descuenta(), test_hoja_con_semanas_notas_y_descuento_aparte() (+11 more)
+Cohesion: 0.15
+Nodes (15): MarcaNoCumple, NotaCredito, _validar_notas(), domingo_de(), _Repo, test_el_bloqueo_lo_decide_el_domingo_de_la_semana(), test_el_valor_solo_cuenta_si_la_razon_descuenta(), test_no_se_acepta_nota_en_un_dia_justificado() (+7 more)
 
-### Community 77 - "gps_nexacol.py"
-Cohesion: 0.11
-Nodes (18): uno(), calcular_slots(), clave_entrega(), entregas_dia(), exceso_dia(), _get(), GpsNexacolError, _hm() (+10 more)
+### Community 77 - "_get"
+Cohesion: 0.10
+Nodes (13): exceso_velocidad(), uno(), gps_vehiculos_libreta(), patente_propuesta_libreta(), ruta_velocidad(), exceso_dia(), _get(), GpsNexacolError (+5 more)
 
 ### Community 78 - "ui_dialogs"
 Cohesion: 0.19
@@ -624,40 +604,40 @@ Cohesion: 0.13
 Nodes (21): Acta de capacitacion, entrega de libreta y compromiso, actualizarVisuales(), alternarSlot(), Art. 160 N. 7 Codigo del Trabajo (incumplimiento grave), auditarReglas(), Bolsa mensual de 180 horas (Art. 25 bis inc. 1, al menos 21 dias), cargarEscenario(), Colacion legal de 30 minutos (Art. 34 Codigo del Trabajo) (+13 more)
 
 ### Community 80 - "ficha_persona.js"
-Cohesion: 0.24
-Nodes (11): ddmm(), abrir(), asegurar(), cargar(), corta(), duracion(), hms(), iniciales() (+3 more)
+Cohesion: 0.15
+Nodes (18): ddmm(), bonoSemanal(), chipSemana(), datos(), deSemanaSiguiente(), evalDe(), peonetasConBono(), puedeEditar() (+10 more)
 
 ### Community 81 - "buscador"
 Cohesion: 0.23
 Nodes (21): abrir(), abrirItem(), abrirTramo(), accionesConfig(), accionesQue(), armar(), boton(), cerrar() (+13 more)
 
-### Community 82 - "json"
-Cohesion: 0.06
-Nodes (23): Ensayo con dias reales (collect_only, REGLAS_MARCAS_ENSAYO), QuantumMatrixEngine (motor de calculo), services/reglas_marcas_corridas.py (ensayar_regla), actualizar_regla(), apagar_regla(), confirmar_dia(), correr_regla(), crear_regla() (+15 more)
+### Community 82 - "arana_consultas.py"
+Cohesion: 0.17
+Nodes (7): es_falla(), _pedir(), recorrer(), cargar(), domino(), endpoints(), pantallas_que_piden()
 
-### Community 83 - "asistencia_periodo.py"
-Cohesion: 0.12
-Nodes (6): get_asistencia_service(), cerrar_periodo_rrhh(), get_historial_cierres_rrhh(), get_periodo_rrhh_resumen(), get_periodo_rrhh_resumen_global(), get_ultimo_cierre_rrhh()
+### Community 83 - "MultiBlockTensorSolver"
+Cohesion: 0.14
+Nodes (8): MultiBlockTensorSolver, _dia(), test_dos_llamados_el_mismo_dia_se_suman(), test_el_llamado_queda_como_bloque_aparte(), test_en_un_dia_de_trabajo_sus_minutos_son_horas_extra(), test_en_un_dia_libre_queda_aparte_de_la_jornada_especial(), test_sin_marcas_no_hay_colacion(), test_una_marca_repetida_de_cero_minutos_no_suma()
 
 ### Community 84 - "CambioLaborService"
 Cohesion: 0.13
-Nodes (7): cambiar_labor(), CambioLaborService, _dia_antes(), tramos_con_cambio(), test_cambio_antes_de_un_cambio_futuro_dura_hasta_el(), test_cambio_en_el_primer_dia_de_un_tramo_lo_reemplaza(), test_corta_el_tramo_vigente_el_dia_antes()
+Nodes (6): CambioLaborService, _dia_antes(), tramos_con_cambio(), test_cambio_antes_de_un_cambio_futuro_dura_hasta_el(), test_cambio_en_el_primer_dia_de_un_tramo_lo_reemplaza(), test_corta_el_tramo_vigente_el_dia_antes()
 
 ### Community 85 - "test_bono_semanal_fill_rate.py"
-Cohesion: 0.13
-Nodes (18): evaluar_bono_semanal(), evaluar_persona(), semana_siguiente(), semanas_del_periodo(), _dias(), _evaluar(), test_a_quien_se_le_paga_areas_y_horarios(), test_descanso_operativo_deja_la_semana_proporcional() (+10 more)
+Cohesion: 0.21
+Nodes (16): semanas_del_periodo(), _dias(), _evaluar(), test_a_quien_se_le_paga_areas_y_horarios(), test_descanso_operativo_deja_la_semana_proporcional(), test_efecto_sin_configurar_no_paga_y_lo_dice(), test_justificacion_que_cuenta_como_cumplida_no_descuenta(), test_libres_feriados_y_justificados_no_se_evaluan() (+8 more)
 
 ### Community 86 - "whatsapp_service.py"
-Cohesion: 0.12
-Nodes (14): prueba(), activo(), contactos(), desconectar(), destino_valido(), enviar(), estado(), grupos() (+6 more)
+Cohesion: 0.16
+Nodes (10): contactos(), estado(), grupos(), activo(), contactos(), desconectar(), enviar(), estado() (+2 more)
 
 ### Community 87 - "quantum_matrix_engine.py"
-Cohesion: 0.08
-Nodes (16): _aplicar_alternada(), _aplicar_orden(), AutoMealOperator, _get_now_local(), _hhmm_to_minutes(), _marcas_como_las_lee_la_regla(), SpecialWorkdayClassifier, _ciclo() (+8 more)
+Cohesion: 0.07
+Nodes (14): _aplicar_alternada(), _aplicar_orden(), AutoMealOperator, _hhmm_to_minutes(), HumanDecisionMerger, LibretaArt25BisResolver, _marcas_como_las_lee_la_regla(), SpecialWorkdayClassifier (+6 more)
 
-### Community 88 - "services/__init__.py"
-Cohesion: 0.14
-Nodes (8): _dia(), test_bolsa_flexible_no_se_toca(), test_dos_entradas_y_salida_cierra_con_la_salida_real(), test_entrada_de_regreso_despues_de_la_colacion_sin_salida(), test_entrada_entrada_sin_salida_posterior_sigue_valiendo_como_salida_mal_rotulada(), test_jornada_normal_no_cambia(), test_salida_a_colacion_rotulada_como_entrada_se_mantiene(), test_la_esp_pasada_a_horas_extra_queda_por_aprobar()
+### Community 88 - "test_dos_entradas_y_salida.py"
+Cohesion: 0.39
+Nodes (7): _dia(), test_bolsa_flexible_no_se_toca(), test_dos_entradas_y_salida_cierra_con_la_salida_real(), test_entrada_de_regreso_despues_de_la_colacion_sin_salida(), test_entrada_entrada_sin_salida_posterior_sigue_valiendo_como_salida_mal_rotulada(), test_jornada_normal_no_cambia(), test_salida_a_colacion_rotulada_como_entrada_se_mantiene()
 
 ### Community 90 - "marcaciones_manuales"
 Cohesion: 0.16
@@ -675,6 +655,10 @@ Nodes (19): formatMinToHHMM(), formatSlotToHHMM(), initLibreta180hGrid(), libret
 Cohesion: 0.19
 Nodes (7): _correr(), _Db, _Repo, _servicio(), test_agrega_solo_el_periodo_cerrado(), test_fechas_y_tipo_validos(), test_no_se_cruza_con_otro_contrato()
 
+### Community 95 - "sync_monitor.py"
+Cohesion: 0.22
+Nodes (11): _ahora(), _cargar(), _condiciones(), _destinatarios(), _enviar(), estado_actual(), _fmt(), _fmt_vista() (+3 more)
+
 ### Community 96 - "test_sin_horario_no_se_anota"
 Cohesion: 0.20
 Nodes (9): _ctx(), _Ctx, _Repo, _servicio(), _SiguioDeLargo, test_al_guardar_de_a_uno_se_borra_el_feriado_que_habia(), test_con_marcas_el_dia_se_calcula_como_siempre(), test_sin_horario_ni_marcas_el_feriado_no_se_anota() (+1 more)
@@ -684,48 +668,48 @@ Cohesion: 0.25
 Nodes (16): c(), d(), e(), f(), g(), h(), h(), i() (+8 more)
 
 ### Community 98 - "reglas_marcas_corridas.py"
-Cohesion: 0.24
+Cohesion: 0.18
 Nodes (9): _candidatos(), _difiere(), _ejecutar(), ensayar_regla(), _foto(), _hay_corrida_en_curso(), iniciar_corrida(), _num() (+1 more)
 
 ### Community 99 - "FlotaRepository"
 Cohesion: 0.08
-Nodes (9): FlotaRepository, create_vehiculo(), delete_vehiculo(), get_estado_dia(), get_historial(), get_maestro(), marcar(), _now_chile() (+1 more)
+Nodes (10): FlotaRepository, _auditar(), create_vehiculo(), delete_vehiculo(), get_estado_dia(), get_historial(), get_maestro(), marcar() (+2 more)
 
-### Community 100 - "EmpleadoService"
-Cohesion: 0.07
-Nodes (5): Empleado, actualizar_empleado(), eliminar_empleado(), reactivar_empleado(), EmpleadoService
+### Community 100 - "BOLSA_FLEXIBLE (tipo de horario)"
+Cohesion: 0.12
+Nodes (13): Bloque extra +2 (asistencia_emergencia_gap_horas), BOLSA_FLEXIBLE (tipo de horario), services/cierre_service.py (bloqueo del cierre), Dashboard: definiciones de cada numero, services/dashboard_detalle.py (Ver detalle), services/dashboard_indicadores.py (Indicadores), services/dashboard_pendientes.py (Lo que falta hacer), Dias por revisar (MARCA_REVISION_REGLA, Confirmar que esta bien) (+5 more)
 
 ### Community 101 - "save_libreta_180h"
-Cohesion: 0.13
-Nodes (12): _nombres_personas(), _otro_borrador(), save_libreta_180h(), copiar(), fecha_legible(), mensaje_pendiente(), nombre_persona(), normalizar_patente() (+4 more)
+Cohesion: 0.11
+Nodes (15): _enlazados_libreta(), _nombres_personas(), _otro_borrador(), save_libreta_180h(), copiar(), fecha_legible(), mensaje_pendiente(), mismos_tramos() (+7 more)
 
 ### Community 102 - "test_marca_suelta_y_feriado_nocturno + quantum_matrix_engine"
-Cohesion: 0.10
-Nodes (19): fecha_feriado_de_la_jornada(), MultiBlockTensorSolver, _dia(), test_dos_llamados_el_mismo_dia_se_suman(), test_el_llamado_queda_como_bloque_aparte(), test_en_un_dia_de_trabajo_sus_minutos_son_horas_extra(), test_en_un_dia_libre_queda_aparte_de_la_jornada_especial(), test_sin_marcas_no_hay_colacion() (+11 more)
+Cohesion: 0.17
+Nodes (11): fecha_feriado_de_la_jornada(), _dia(), test_al_agregar_la_salida_la_segunda_jornada_es_un_mas_dos_por_aprobar(), test_con_la_regla_28_apagada_la_segunda_jornada_solo_queda_anotada(), test_en_un_dia_libre_la_segunda_jornada_queda_aparte_de_la_jornada_especial(), test_la_entrada_sola_queda_en_el_dia_y_no_se_pierde(), test_la_noche_del_domingo_antes_del_feriado_es_del_feriado(), test_la_salida_olvidada_despues_de_colacion_es_otro_caso_regla_26() (+3 more)
 
 ### Community 103 - "static_minify + static_files"
-Cohesion: 0.15
+Cohesion: 0.18
 Nodes (6): CachedStaticFiles, bundle_css(), contenido_minificado(), _es_minificable(), minificar_css(), minificar_js()
 
+### Community 104 - "LlavesRepository"
+Cohesion: 0.05
+Nodes (13): LlavesRepository, actualizar_llave(), crear_llave(), eliminar_llave(), estado_llaves(), historial_llaves(), listar_llaves(), LlaveCreate (+5 more)
+
 ### Community 105 - "informe_cierre_pdf.py"
-Cohesion: 0.12
-Nodes (16): Fuentes Barlow TTF para el informe de cierre PDF, armar_personas(), _check_flowable(), __init__(), dias_persona(), he_mas2_persona(), he_por_dia(), horas_ausencias() (+8 more)
+Cohesion: 0.09
+Nodes (30): Fuentes Barlow TTF para el informe de cierre PDF, armar_personas(), cierre_completo(), coberturas(), dias_persona(), generar_informes_cierre(), he_mas2_persona(), he_por_dia() (+22 more)
 
 ### Community 106 - "hallazgos_codigo.py"
 Cohesion: 0.26
 Nodes (6): test_hallazgos_se_calculan_sin_umbrales(), analizar(), archivos_propios(), _funciones_py(), _ignorados(), _se_ignora()
 
 ### Community 107 - "test_regla3_cual_pausa.py"
-Cohesion: 0.24
-Nodes (10): pausas_de(), _dia(), test_con_minimo_cero_decide_como_siempre(), test_corte_umbral_con_dos_pausas_despues_del_corte_elige_la_mas_parecida(), test_corte_umbral_descarta_la_pausa_que_termina_antes_de_las_13(), test_la_deuda_casi_no_cambia_solo_el_nombre_de_los_minutos(), test_parecida_toma_la_pausa_mas_parecida_en_minutos(), test_pausas_segun_la_lectura() (+2 more)
+Cohesion: 0.27
+Nodes (9): pausas_de(), _dia(), test_con_minimo_cero_decide_como_siempre(), test_corte_umbral_con_dos_pausas_despues_del_corte_elige_la_mas_parecida(), test_corte_umbral_descarta_la_pausa_que_termina_antes_de_las_13(), test_la_deuda_casi_no_cambia_solo_el_nombre_de_los_minutos(), test_parecida_toma_la_pausa_mas_parecida_en_minutos(), test_pausas_segun_la_lectura() (+1 more)
 
-### Community 108 - "TurnoCreate"
-Cohesion: 0.16
-Nodes (7): create_turno(), _exigir_colacion(), update_turno(), TurnoCreate, TurnoService, test_el_horario_ya_no_guarda_la_casilla_de_viajes(), test_un_horario_sin_colacion_no_se_guarda()
-
-### Community 109 - ".get_matrix_data_with_projections"
-Cohesion: 0.08
-Nodes (18): _default(), fast_json(), MultiBlockTensorSolver.segment_blocks, TensorMarkDeduplicator.apply_clock_priority, diagnostic_no_shift(), get_asistencia_calendar(), get_asistencia_matrix(), get_asistencia_stats() (+10 more)
+### Community 108 - "routers/productos_4.py"
+Cohesion: 0.28
+Nodes (11): api_cerrar_periodo(), api_reabrir_periodo(), AsignacionGuardarRequest, _auditar(), CierrePeriodoRequest, crear_producto(), editar_producto(), EntregaGuardarRequest (+3 more)
 
 ### Community 110 - "compensar_inasistencia + llaves_ui"
 Cohesion: 0.16
@@ -733,11 +717,11 @@ Nodes (17): Articulo22Module, actualizarSeleccion(), aLaVista(), animarCompensac
 
 ### Community 111 - "marcaciones_ui"
 Cohesion: 0.18
-Nodes (16): _analiticaCellBadge(), _analiticaCellContent(), _buildRichTooltipData(), _buildTooltipArt25bis(), cierreGetHEContextBadges(), _escComillas(), _fallbackEstadoColor(), _fmtMin() (+8 more)
+Nodes (16): Etapa 2: un solo ayudante por tarea (**hecha**), updateBulkSortIcons(), updateSortIcons(), _analiticaCellBadge(), _analiticaCellContent(), _buildRichTooltipData(), _buildTooltipArt25bis(), cierreGetHEContextBadges() (+8 more)
 
 ### Community 112 - "velocidades_choferes"
-Cohesion: 0.09
-Nodes (10): EntregaUbicacionesRepository, _aprender_historial(), exceso_velocidad(), gps_dia_libreta(), gps_entregas_libreta(), gps_vehiculos_libreta(), ruta_velocidad(), _velocidad_de_libreta() (+2 more)
+Cohesion: 0.12
+Nodes (7): _aprender_historial(), gps_entregas_libreta(), _velocidad_de_libreta(), uno(), velocidades_choferes(), consolidar_ubicacion(), test_ubicacion_aprendida_solo_con_dos_dias_que_coinciden()
 
 ### Community 113 - "requirements + REGLAS_ASISTENCIA"
 Cohesion: 0.14
@@ -748,12 +732,12 @@ Cohesion: 0.18
 Nodes (11): add_implicit_order(), fix_group_by(), _fix_one(), _item_expr_alias(), _literal_spans(), _mask(), _norm(), _split_top() (+3 more)
 
 ### Community 115 - "export_turnos_ciclo"
-Cohesion: 0.13
-Nodes (7): export_turnos_ciclo(), get_asistencia_service(), get_assignments_matrix(), get_turno_service(), get_turnos(), get_turnos_stats_por_area(), exportar_turnos_ciclo()
+Cohesion: 0.09
+Nodes (4): export_turnos_ciclo(), get_assignments_matrix(), get_turnos(), get_turnos_stats_por_area()
 
 ### Community 116 - "calzar_choferes"
-Cohesion: 0.22
-Nodes (14): decimar_ruta(), segundos_sobre_limite(), calzar_choferes(), dia(), test_calza_aunque_el_orden_de_apellidos_y_nombre_sea_distinto(), test_con_nombre_y_apellido_se_resuelve_la_ambiguedad(), test_decimar_ruta_conserva_extremos_y_el_punto_de_velocidad_maxima(), test_dos_camiones_el_mismo_dia_deja_la_velocidad_mas_alta() (+6 more)
+Cohesion: 0.13
+Nodes (20): decimar_ruta(), segundos_sobre_limite(), vel_max_de_puntos(), _buscador(), buscar(), calzar_choferes(), _palabras(), patentes_planificadas() (+12 more)
 
 ### Community 117 - "rut_visible"
 Cohesion: 0.33
@@ -764,16 +748,16 @@ Cohesion: 0.18
 Nodes (6): BorradoPermanenteBloqueado, BaseFalsa, correr(), test_borra_todas_las_tablas_la_ficha_y_deja_registro(), test_con_dias_en_tramo_cerrado_no_borra_nada(), test_si_una_tabla_no_se_puede_borrar_se_deshace_todo()
 
 ### Community 119 - "test_bolsa_prorrateo.py"
-Cohesion: 0.11
-Nodes (20): aplicar_prorrateo(), calcular_prorrateo_bolsa(), fecha_en_vigencia(), _leer_fecha(), salida_decidida(), bolsa_es_definitiva(), test_a_mitad_de_tramo_no_es_definitivo(), test_con_el_tramo_terminado_si_es_definitivo() (+12 more)
+Cohesion: 0.14
+Nodes (18): aplicar_prorrateo(), baja_del_periodo(), calcular_prorrateo_bolsa(), fecha_en_vigencia(), _leer_fecha(), salida_decidida(), test_egreso_el_13_de_octubre_caso_real_reyes(), test_empleado_antiguo_sin_egreso_no_se_prorratea() (+10 more)
 
 ### Community 120 - "asistencia"
 Cohesion: 0.25
 Nodes (12): currentReporteList, diaSemana(), getAreasCache(), initAsistencia(), loadChartData(), loadReporte(), _pollReprocesoPeriodo(), populateReportAreas() (+4 more)
 
 ### Community 121 - "test_dashboard_indicadores.py"
-Cohesion: 0.12
-Nodes (15): calcular(), comparar(), DashboardIndicadores, acc(), _div(), donde(), gravedad(), _area_de() (+7 more)
+Cohesion: 0.10
+Nodes (17): calcular(), comparar(), DashboardIndicadores, suma(), acc(), _div(), donde(), gravedad() (+9 more)
 
 ### Community 122 - "test_revision_conserva_he.py"
 Cohesion: 0.21
@@ -783,33 +767,25 @@ Nodes (8): _dia(), _reglas(), test_al_corregir_la_marca_la_aprobacion_vuelve_a_r
 Cohesion: 0.17
 Nodes (13): asistencia-autodeploy.timer (systemd, revisa GitHub cada minuto), backup-postgres.sh (pg_dump diario 02:00, 14 dias), deploy.sh (actualizar desde GitHub, rollback pre-deploy), Despliegue Docker + PostgreSQL (sin Turso), fast_json.py (orjson para respuestas grandes), App sin root (uid 1000), pg_stat_statements y parametros ajustados de Postgres, PostgresDatabase (asyncpg, backend/core/database.py) (+5 more)
 
-### Community 124 - "_BaseFalsa"
-Cohesion: 0.19
-Nodes (8): _BaseFalsa, _repo(), test_confirmar_acepta_un_dia_calculado_con_aviso(), test_confirmar_rechaza_si_el_dia_quedo_en_anomalia_aunque_la_regla_calcule(), test_confirmar_rechaza_un_dia_sin_calcular(), test_el_vigilante_ve_una_regla_guardada_que_no_pasaria_la_validacion(), test_evaluar_entrega_el_numero_y_las_opciones_que_de_verdad_sirven(), test_un_dia_confirmado_sin_horas_sigue_en_revision()
-
 ### Community 125 - "para_coordinar"
-Cohesion: 0.31
-Nodes (8): _cuantos(), para_coordinar(), _bolsa(), _ciclo(), test_bolsa_bajo_la_meta_y_sobre_la_meta(), test_ciclo_inasistencias_sin_justificar(), test_ciclo_quien_debe_horas_ordenado_de_mayor_a_menor(), test_inactivos_no_aparecen_y_el_corte_no_pasa_el_fin_del_periodo()
+Cohesion: 0.27
+Nodes (9): _cuantos(), para_coordinar(), _bolsa(), _ciclo(), test_bolsa_bajo_la_meta_y_sobre_la_meta(), test_ciclo_inasistencias_sin_justificar(), test_ciclo_quien_debe_horas_ordenado_de_mayor_a_menor(), test_inactivos_no_aparecen_y_el_corte_no_pasa_el_fin_del_periodo() (+1 more)
 
 ### Community 126 - "Any"
 Cohesion: 0.14
 Nodes (5): get_catalogo_hallazgos(), get_foto_ronda(), get_rondas_recientes(), get_ubicaciones(), ping_connection()
 
 ### Community 127 - "SeguridadRepository"
-Cohesion: 0.04
-Nodes (38): get_seguridad_repo(), RequireAnyPermission(), permission_checker(), permission_checker(), detalle_cambio_rol(), SeguridadRepository, get_my_permissions(), get_repo() (+30 more)
+Cohesion: 0.09
+Nodes (9): get_seguridad_repo(), SeguridadRepository, get_my_permissions(), get_repo(), read_users_me(), get_auditoria(), get_permisos(), get_roles() (+1 more)
 
 ### Community 128 - "test_pantallas.py"
 Cohesion: 0.22
 Nodes (10): _medir_pagina(), navegador(), _preparar(), _sembrar_sesion(), _sesion(), test_el_detector_si_detecta(), test_paginas_sin_contenido_inalcanzable(), test_pantallas_sin_errores_de_javascript() (+2 more)
 
 ### Community 129 - "test_informe_cierre_pdf.py"
-Cohesion: 0.10
-Nodes (9): coberturas(), horas_dias(), sin_descuento(), _dias(), test_ausencias_programadas_y_cubiertas_por_companeros(), test_horas_de_otros_dias_entran_al_balance(), test_horas_dias_redondea_cada_dia_a_segundos(), test_jornadas_programadas_menos_ausencias() (+1 more)
-
-### Community 130 - "_Repo"
-Cohesion: 0.09
-Nodes (4): _Db, entorno(), _Repo, _Servicio
+Cohesion: 0.08
+Nodes (13): columnas(), _dias(), _persona(), test_balance_de_horas_cuadra_al_segundo_sin_perdonazos(), test_bolsa_no_usadas_no_es_descuento(), test_el_mas_dos_se_muestra_aparte_dentro_de_las_horas_extra(), test_generar_un_solo_tipo_o_solo_la_lista(), run() (+5 more)
 
 ### Community 131 - "velocidades_ui.js"
 Cohesion: 0.23
@@ -819,9 +795,9 @@ Nodes (11): cargarLogo(), chip(), generarPdf(), interior(), nombreDe(), paginaCh
 Cohesion: 0.28
 Nodes (11): _dia(), test_con_espera_cero_la_inasistencia_aparece_a_la_hora_de_salida(), test_con_espera_cero_se_cierra_a_la_hora_de_salida(), test_con_minimo_cero_treinta_segundos_de_mas_son_hora_extra(), test_con_minimo_de_un_minuto_treinta_segundos_no_son_hora_extra(), test_dentro_de_la_espera_el_dia_sigue_en_curso(), test_jornada_exacta_no_genera_hora_extra(), test_pasada_la_espera_el_dia_queda_con_falta_de_salida() (+3 more)
 
-### Community 133 - "_repo"
-Cohesion: 0.20
-Nodes (6): eliminar_llave(), estado_llaves(), historial_llaves(), listar_autorizados(), listar_llaves(), _repo()
+### Community 133 - "_servicio"
+Cohesion: 0.23
+Nodes (10): decidir_politica(), guardar_tolerancia(), libro_empleado(), libro_periodo(), PoliticaRequest, quitar_politica(), _servicio(), ToleranciaRequest (+2 more)
 
 ### Community 134 - "acceso_olas"
 Cohesion: 0.35
@@ -851,21 +827,21 @@ Nodes (11): background_color, categories, description, display, icons, id, name,
 Cohesion: 0.21
 Nodes (7): BonoReglaCreate, _aplica(), _DB, test_guardar_una_regla_con_cargos_de_la_lista(), test_la_regla_compara_el_cargo_de_la_persona_no_su_nombre(), test_las_reglas_de_hoy_pasan_a_cargos_de_la_lista(), test_una_regla_con_nombres_escritos_se_convierte()
 
-### Community 141 - "pasos_por_direccion"
-Cohesion: 0.18
-Nodes (8): _coincide(), _comunas_cercanas(), _identificadores_calle(), _metros(), _palabras(), pasos_por_direccion(), test_comuna_grande_se_acepta_si_es_de_las_dos_mas_cercanas(), test_la_calle_de_otra_ciudad_no_cuenta()
+### Community 141 - "gps_nexacol.py"
+Cohesion: 0.11
+Nodes (21): gps_dia_libreta(), calcular_slots(), clave_entrega(), _coincide(), _comunas_cercanas(), entregas_dia(), _hm(), _identificadores_calle() (+13 more)
 
-### Community 143 - "ConfiguracionService"
+### Community 143 - "routers/configuracion.py"
 Cohesion: 0.03
-Nodes (63): calcular_fin_justificacion(), CargoCreateRequest, cerrar_permiso(), create_cargo_manual(), create_justificacion(), recalculate_attendance_job(), create_pagador(), create_periodo_rrhh() (+55 more)
+Nodes (44): CargoRepository, actualizar_razon_nota_credito(), add_feriado(), AreaCreateRequest, _auditar(), calcular_fin_justificacion(), CargoCreateRequest, CargoRenombrarRequest (+36 more)
 
 ### Community 144 - "inicio_continuo"
 Cohesion: 0.40
 Nodes (3): _fecha(), inicio_continuo(), test_inicio_del_turno_continuo()
 
-### Community 145 - "validar_regla"
-Cohesion: 0.12
-Nodes (14): firma_marcas(), grupo_de_secuencia(), secuencia_en_palabras(), secuencia_en_revision(), _base(), test_el_codigo_no_trae_reglas_ni_notas_escritas(), test_firma_de_marcas_estable_y_ordenada(), test_grupos_de_pantalla() (+6 more)
+### Community 145 - "reglas_marcas_def.py"
+Cohesion: 0.08
+Nodes (24): firma_marcas(), grupo_de_secuencia(), no_calcula(), numerar_sin_numero(), secuencias_alcanzables(), tiene_salida(), validar_orden(), validar_regla() (+16 more)
 
 ### Community 146 - "calendario_ui + index"
 Cohesion: 0.33
@@ -875,13 +851,13 @@ Nodes (9): changeCalendarYear(), currentYear, deleteFeriado(), feriadosList, ini
 Cohesion: 0.21
 Nodes (8): _cal(), _matriz(), test_bono_del_cargo_en_proporcion_a_los_dias_en_cada_labor(), test_dos_reglas_con_montos_distintos_en_el_mismo_bono(), test_la_ficha_o_bioalba_corrigen_el_tramo_vigente_sin_partir_el_periodo(), test_sin_cambio_de_labor_es_el_calculo_de_siempre(), test_un_bono_que_no_depende_del_cargo_no_cambia(), test_una_falta_en_la_labor_anterior_hace_perder_solo_ese_bono()
 
-### Community 148 - "velocidades_choferes.py"
-Cohesion: 0.22
-Nodes (7): patente_propuesta_libreta(), _norm(), _buscador(), buscar(), _palabras(), patentes_planificadas(), test_patentes_planificadas_calza_nombres_sin_orden_y_no_adivina()
+### Community 148 - "bono_semanal.py"
+Cohesion: 0.17
+Nodes (8): evaluar_bono_semanal(), evaluar_persona(), notas_de(), semana_siguiente(), test_el_chofer_tiene_sus_notas_y_el_peoneta_las_ve_como_acompanante(), test_la_semana_del_23_al_29_de_noviembre_es_la_que_sigue(), test_si_el_periodo_termina_en_domingo_no_hay_semana_que_siga(), test_una_marca_de_la_ventana_anterior_se_ve_sin_numero()
 
 ### Community 149 - "separar_informes"
-Cohesion: 0.19
-Nodes (11): baja_del_periodo(), _informe(), _persona(), test_conteo_aparte_y_totales_iguales(), test_en_el_pdf_las_bajas_van_al_final_de_su_horario(), __init__(), test_regla_de_la_baja_del_periodo(), test_sin_aviso_de_recuperar_horas_para_quien_se_va() (+3 more)
+Cohesion: 0.15
+Nodes (13): separar_informes(), _informe(), _persona(), test_conteo_aparte_y_totales_iguales(), test_en_el_pdf_las_bajas_van_al_final_de_su_horario(), __init__(), test_regla_de_la_baja_del_periodo(), test_sin_aviso_de_recuperar_horas_para_quien_se_va() (+5 more)
 
 ### Community 150 - "_rellena_un_hueco"
 Cohesion: 0.31
@@ -899,53 +875,45 @@ Nodes (8): closeModalJustify(), deleteJustificacionFromModal(), initJustifyModal
 Cohesion: 0.29
 Nodes (10): closeManualEntryModal(), _marcasAbs(), _marcasColacion(), _marcasMinutos(), _mmConfirmarClasificacion(), _mmLineaTiempo(), guardar(), quitarMarcaManual() (+2 more)
 
-### Community 155 - "construir_limites_comunas.py"
-Cohesion: 0.18
-Nodes (4): anillos(), norm(), simplificar(), _norm()
-
 ### Community 156 - "fichaTipoJ"
 Cohesion: 0.18
 Nodes (12): _asegurarBonos(), confirmDeleteBono(), confirmDeleteTipoJ(), deleteBono(), deleteTipoJ(), fichaTipoJ(), guardarFichaTipoJ(), loadBonos() (+4 more)
 
 ### Community 157 - "PorteriaRepository"
-Cohesion: 0.21
-Nodes (3): PorteriaRepository, delete_catalogo_hallazgo(), delete_ubicacion()
+Cohesion: 0.14
+Nodes (6): PorteriaRepository, _auditar(), create_ubicacion(), delete_catalogo_hallazgo(), delete_ubicacion(), update_ubicacion()
 
 ### Community 158 - "test_bono_productos_4.py"
-Cohesion: 0.08
-Nodes (11): _DB, _RepoV, test_antiguedad_de_4_productos_se_configura_en_el_bono(), test_no_se_vuelve_a_crear(), test_se_crea_con_lo_de_compromiso(), test_sin_compromiso_activo_queda_sin_uso_como_antes(), _DB, test_al_reabrir_se_borran() (+3 more)
+Cohesion: 0.11
+Nodes (6): _DB, _RepoV, test_antiguedad_de_4_productos_se_configura_en_el_bono(), test_no_se_vuelve_a_crear(), test_se_crea_con_lo_de_compromiso(), test_sin_compromiso_activo_queda_sin_uso_como_antes()
 
 ### Community 159 - "asignaciones_ui.js"
 Cohesion: 0.46
 Nodes (7): _asignacionesDataCache, initAsignacionesUI(), loadAsignacionesAreas(), loadAsignacionesMatrix(), loadAsignacionesTurnos(), onAsignacionesAreaChange(), renderAsignacionesMatrix()
 
-### Community 161 - "registrar_movimiento"
-Cohesion: 0.17
-Nodes (7): actualizar_llave(), crear_llave(), LlaveCreate, LlaveUpdate, _now_chile(), registrar_movimiento(), RegistroLlave
+### Community 160 - "create_pagador"
+Cohesion: 0.16
+Nodes (6): create_pagador(), update_pagador(), PagadorBase, PagadorCreate, PagadorResponse, Config
 
-### Community 162 - "test_libreta_por_horario.py"
-Cohesion: 0.11
-Nodes (13): es_horario_libreta(), fecha_libreta_del_horario(), normalizar_fecha_corte(), regimen_del_dia(), QuantumMatrixEngine, _regimen(), test_cada_horario_cambia_a_libreta_en_su_propia_fecha(), test_el_calculo_del_dia_lee_la_fecha_del_horario() (+5 more)
+### Community 162 - "reasignar_turno_acompanante_180h"
+Cohesion: 0.07
+Nodes (14): _exigir_libreta_ingresable(), Libreta180hInasistenciaRequest, Libreta180hReasignarRequest, _libreta_bloqueo(), LibretaOcrBase64Payload, marcar_inasistencia_libreta_180h(), ocr_libreta_180h_base64(), PurgaMarcasRelojRequest (+6 more)
 
-### Community 163 - "CatalogCache"
-Cohesion: 0.10
-Nodes (4): check_guardian_areas(), CatalogCache, _get_empleados_cache(), _set_empleados_cache()
-
-### Community 164 - "AsistenciaService"
-Cohesion: 0.05
-Nodes (7): AsistenciaService, _complete_job(), fechas_abiertas(), _get_now_local(), HumanDecisionMerger, test_una_jornada_gastada_es_una_decision_humana_que_el_recalculo_conserva(), test_los_dias_cerrados_no_entran_al_reparto()
+### Community 164 - "CalendarioService"
+Cohesion: 0.06
+Nodes (8): CalendarioRepository, post_batch_sync(), _batch_bg(), fechas_abiertas(), _get_now_local(), CalendarioService, _Repo, test_procesar_dia_con_force_deja_fuera_los_dias_cerrados()
 
 ### Community 165 - "test_bonos_montos_en_informe.py"
-Cohesion: 0.27
-Nodes (7): bonos_persona(), _inf(), test_columnas_de_bonos_en_pesos_con_su_total(), test_detalle_de_bonos_no_pagados_y_en_parte(), test_monto_y_detalle_de_cada_bono_de_la_persona(), test_pdf_con_bonos_se_dibuja(), test_resumen_de_arriba_suma_los_bonos_a_pagar()
+Cohesion: 0.17
+Nodes (10): bonos_persona(), detalle_bonos(), pesos(), _y(), _inf(), test_columnas_de_bonos_en_pesos_con_su_total(), test_detalle_de_bonos_no_pagados_y_en_parte(), test_monto_y_detalle_de_cada_bono_de_la_persona() (+2 more)
 
 ### Community 166 - "test_permiso_marcas_per"
 Cohesion: 0.36
 Nodes (5): _leer(), test_el_excel_cuenta_igual_que_la_grilla(), test_el_resumen_del_cierre_no_pasa_de_la_deuda_del_dia(), test_la_grilla_cuenta_el_permiso_de_las_marcas_sin_sumar_los_dos(), test_reparto_del_dia_de_becerra_no_duplica()
 
 ### Community 167 - "marcaciones_ui"
-Cohesion: 0.33
-Nodes (5): _leyendaEstadosHtml(), renderVistaAnalitica(), _positionFlyTip(), _showFlyTip(), vaToggleFilter()
+Cohesion: 0.29
+Nodes (6): _getCellTipHtml(), _leyendaEstadosHtml(), renderVistaAnalitica(), _positionFlyTip(), _showFlyTip(), vaToggleFilter()
 
 ### Community 169 - "deshacer_porteria.py"
 Cohesion: 0.24
@@ -953,11 +921,11 @@ Nodes (12): BaseFalsa, correr(), marca(), test_despues_del_plazo_ya_no_se_puede(
 
 ### Community 170 - "main.py"
 Cohesion: 0.04
-Nodes (28): lifespan(), ensure_single_instance(), force_kill_pid(), get_pids_using_port(), is_port_in_use(), kill_process_on_port(), test_port_binding(), app_version() (+20 more)
+Nodes (24): force_kill_pid(), get_pids_using_port(), is_port_in_use(), kill_process_on_port(), test_port_binding(), app_version(), cancion_pascua(), chrome_devtools_json() (+16 more)
 
-### Community 171 - "CalendarioRepository"
-Cohesion: 0.12
-Nodes (4): CalendarioRepository, add_feriado(), delete_feriado(), sync_feriados()
+### Community 171 - "RequireAnyPermission"
+Cohesion: 0.19
+Nodes (5): RequireAnyPermission(), permission_checker(), permission_checker(), create_rol(), create_usuario()
 
 ### Community 172 - "reincorporacion_ui + index"
 Cohesion: 0.40
@@ -980,16 +948,16 @@ Cohesion: 0.31
 Nodes (6): _Db, _dia(), _horarios(), _Repo, test_turno_con_varias_opciones_usa_lo_calculado_y_no_adivina_lo_demas(), test_turno_de_una_opcion_muestra_su_hora_y_los_libres()
 
 ### Community 178 - "visible"
-Cohesion: 0.21
+Cohesion: 0.29
 Nodes (4): DashboardPendientes, _pct(), resumir_contratos(), test_contratos_se_agrupan_por_fecha_sin_nombres()
 
 ### Community 179 - "test_dashboard_pendientes.py"
-Cohesion: 0.26
-Nodes (10): clasificar_area(), _leer(), test_cada_bloqueo_del_asistente_deja_el_area_pendiente(), test_dashboard_y_cierre_usan_la_misma_revision(), test_horas_extra_en_horas_con_un_decimal(), test_la_pantalla_usa_la_lectura_nueva_y_lleva_a_marcaciones(), test_lista_para_cerrar_igual_que_el_asistente(), test_logistica_octubre_libreta_y_dia_por_revisar() (+2 more)
+Cohesion: 0.16
+Nodes (15): clasificar_area(), _leer(), test_el_asistente_y_el_dashboard_las_muestran(), test_el_cierre_las_revisa_y_no_deja_cerrar(), test_el_dashboard_no_la_muestra_lista_para_cerrar(), test_el_mensaje_del_cierre_dice_si_se_envio_el_correo(), _leer(), test_cada_bloqueo_del_asistente_deja_el_area_pendiente() (+7 more)
 
 ### Community 180 - "routers/sync.py"
-Cohesion: 0.12
-Nodes (23): ejecutar_cron_sync(), get_sync_logs(), preview_empleados(), search_bioalba_empleado(), sincronizar_asistencia(), sincronizar_asistencia_empleado(), sincronizar_asistencia_sync(), sincronizar_empleados() (+15 more)
+Cohesion: 0.08
+Nodes (37): check_guardian_areas(), ejecutar_cron_sync(), ejecutar_sync_asistencia(), ejecutar_sync_empleados(), get_sync_logs(), preview_areas(), preview_empleados(), search_bioalba_empleado() (+29 more)
 
 ### Community 181 - "alerts_ui.js"
 Cohesion: 0.52
@@ -999,21 +967,21 @@ Nodes (6): checkContractAlerts(), hideMandatoryLock(), initAlertsUI(), renderVen
 Cohesion: 0.52
 Nodes (5): _js(), _paso3(), test_paso3_abre_el_cuadre_con_el_periodo_del_cierre(), test_paso3_lista_personas_y_no_aprueba_todo(), test_ventana_de_cuadre_acepta_tramo_y_avisa()
 
-### Community 183 - "routers/porteria.py"
-Cohesion: 0.29
-Nodes (3): _auditar(), deshacer_registro(), get_porteria_repository()
+### Community 183 - "huella_calculo.py"
+Cohesion: 0.31
+Nodes (6): _archivo(), archivos_del_calculo(), huella(), _importados(), test_la_huella_cambia_si_cambia_un_archivo(), test_la_huella_sigue_las_importaciones_desde_el_motor()
 
 ### Community 184 - "test_tolerancias_turno.py"
 Cohesion: 0.33
 Nodes (9): _dia(), test_atraso_de_segundos_con_tolerancia_cero_se_marca(), test_atraso_dentro_de_la_tolerancia_real_no_se_marca_y_la_deuda_se_cuenta(), test_con_rango_de_anticipacion_la_entrada_temprana_se_ajusta_a_la_hora(), test_con_tolerancia_de_salida_de_un_minuto_el_dia_queda_ok_pero_la_deuda_se_cuenta(), test_entrada_exacta_y_salida_exacta_no_marcan_nada(), test_hector_con_tolerancia_cero_queda_en_salida_adelantada(), test_sin_rango_de_anticipacion_cuenta_la_hora_real_de_entrada() (+1 more)
 
 ### Community 185 - "BonoService"
-Cohesion: 0.09
-Nodes (3): BonoService, _regla_con_cargo(), test_el_beneficio_no_sale_en_los_bonos_en_pesos()
+Cohesion: 0.08
+Nodes (7): get_bono_service(), BonoReglaBase, BonoService, _regla_con_cargo(), test_el_beneficio_no_sale_en_los_bonos_en_pesos(), test_bolsa_por_sus_dos_nombres(), test_sin_labor_requerida()
 
-### Community 186 - "test_orden_bonos_b6.py"
-Cohesion: 0.18
-Nodes (6): BonoReglaBase, BonoReglaResponse, Config, test_bolsa_por_sus_dos_nombres(), test_lista_de_bonos_por_persona_con_las_reglas_del_calculo(), test_sin_labor_requerida()
+### Community 186 - "bono.py"
+Cohesion: 0.25
+Nodes (9): BonoAsignacionBase, BonoAsignacionCreate, BonoAsignacionResponse, Config, BonoBase, BonoReglaResponse, Config, BonoResponse (+1 more)
 
 ### Community 187 - "test_jornadas_extra_en_informe.py"
 Cohesion: 0.47
@@ -1028,24 +996,28 @@ Cohesion: 0.80
 Nodes (4): buildBar(), check(), hide(), show()
 
 ### Community 191 - "test_guardian_valores_fijos.py"
-Cohesion: 0.31
+Cohesion: 0.29
 Nodes (6): actualizar(), cargar_lista(), estado_actual(), numeros_del_archivo(), test_la_lista_de_pendientes_se_informa(), test_no_aparecen_valores_fijos_nuevos_en_el_calculo()
 
 ### Community 192 - "test_dashboard_detalle.py"
-Cohesion: 0.16
+Cohesion: 0.15
 Nodes (11): agrupar(), _causa(), DashboardDetalle, val(), _h(), _prog(), _num(), _dia() (+3 more)
 
 ### Community 193 - "asistencia_marcas.py"
 Cohesion: 0.06
-Nodes (25): agregar_marcacion_manual(), _armar_salida_manual(), ciclo_para_marca_sola(), distancia(), minutos(), _colacion_tipica(), _duracion_texto(), fecha_de_la_salida() (+17 more)
+Nodes (21): agregar_marcacion_manual(), agregar_marcaciones_masivas(), _armar_salida_manual(), _colacion_tipica(), _duracion_texto(), fecha_de_la_salida(), _hora_con_segundos(), _hora_de_entrada_sin_cerrar() (+13 more)
 
 ### Community 195 - "revisar_sql.py"
 Cohesion: 0.21
 Nodes (6): _translate_cached(), convert_placeholders(), consultas(), main(), revisar(), url_local()
 
 ### Community 196 - "test_huella_y_en_curso_vencido.py"
-Cohesion: 0.05
-Nodes (32): _recalcular_hoy_si_cambio_el_calculo(), estado_del_mapa(), _huella(), espera_vencida(), _hora(), vencidos(), _archivo(), archivos_del_calculo() (+24 more)
+Cohesion: 0.12
+Nodes (16): espera_vencida(), _hora(), vencidos(), _arranque(), _Db, _fila(), _Servicio, test_dentro_de_la_espera_no_se_recalcula() (+8 more)
+
+### Community 197 - "deshacer_registro"
+Cohesion: 0.14
+Nodes (4): deshacer_registro(), get_porteria_repository(), sync_rondas(), upload_photo()
 
 ### Community 198 - "a11y_dialogs"
 Cohesion: 1.00
@@ -1055,9 +1027,9 @@ Nodes (3): barrer(), iniciar(), nombrar()
 Cohesion: 0.83
 Nodes (3): envget(), psql_(), restore-test.sh script
 
-### Community 200 - "update_justificacion"
-Cohesion: 0.09
-Nodes (3): update_justificacion(), recalc_job_put(), main()
+### Community 200 - "corregir_borradores_duplicados.py"
+Cohesion: 0.07
+Nodes (8): create_justificacion(), recalculate_attendance_job(), main(), _plan(), _update_job(), test_el_plan_solo_incluye_a_quien_tiene_mas_de_un_borrador_real(), _json_default(), main()
 
 ### Community 201 - "telegram_porteria.py"
 Cohesion: 0.25
@@ -1067,9 +1039,9 @@ Nodes (5): _avisar_tras_plazo(), avisar_marca(), _buscar_chat(), es_vigilado(), 
 Cohesion: 0.29
 Nodes (7): _doLoadMetadata(), initConfiguracionUI(), loadEmailSettings(), loadMetadata(), loadPagadores(), pagadoresFichaB(), renderPagadoresList()
 
-### Community 204 - "marcar_no_cumple"
-Cohesion: 0.17
-Nodes (5): acompanantes_del_dia(), MarcaNoCumple, marcar_no_cumple(), domingo_de(), test_el_bloqueo_lo_decide_el_domingo_de_la_semana()
+### Community 204 - "reproceso_masivo_async"
+Cohesion: 0.22
+Nodes (4): get_job_progress(), get_reproceso_status(), reproceso_masivo_async(), reproceso_masivo_status()
 
 ### Community 205 - "_TiempoPeticionMiddleware"
 Cohesion: 0.22
@@ -1079,49 +1051,45 @@ Nodes (3): _CabecerasSeguridadMiddleware, _TiempoPeticionMiddleware, send_wrap()
 Cohesion: 0.14
 Nodes (16): BaseQueAnota, _funcion(), test_alta_y_edicion_avisan_si_el_area_no_existe(), test_cambiar_un_turno_que_no_existe_no_toca_dias_ni_areas(), test_confirmar_cambio_de_area_lee_area_id_y_no_usa_update_empleado(), test_set_area_actual_solo_toca_la_ficha(), _turno_minimo(), ciclos_de_importacion() (+8 more)
 
-### Community 231 - "AsignacionCreate"
+### Community 231 - "destino_valido"
 Cohesion: 0.22
-Nodes (5): asignar_turno(), bulk_assign_turnos(), AsignacionCreate, AsignacionResponse, Config
+Nodes (6): prueba(), destino_valido(), normalizar_telefono(), test_destino_valido_acepta_contacto_del_telefono(), test_destino_valido_acepta_grupo_o_celular(), test_normalizar_telefono()
 
-### Community 232 - "generar_informes_cierre"
-Cohesion: 0.15
-Nodes (5): generar_informes_cierre(), informes_del_area(), test_generar_un_solo_tipo_o_solo_la_lista(), run(), test_preinforme_si_el_area_no_esta_cerrada()
+### Community 234 - "._run"
+Cohesion: 0.32
+Nodes (3): _coerce(), attempt(), go()
 
-### Community 233 - "get_libreta_180h"
-Cohesion: 0.18
-Nodes (5): _enlazados_libreta(), get_libreta_180h(), get_libreta_foto(), get_ocr_status(), _libreta_bloqueo()
+### Community 235 - "test_roles_auditoria.py"
+Cohesion: 0.36
+Nodes (4): detalle_cambio_rol(), test_el_caso_del_13_de_octubre_quedaria_retratado(), test_muchos_cambios_se_resumen_en_conteos(), test_sin_cambios_y_vuelta_a_por_areas()
 
-### Community 234 - "export_asistencia_excel"
-Cohesion: 0.28
-Nodes (4): export_asistencia_excel(), export_asistencia_excel_range(), get_stats_periodo(), reprocesar_desde_reportes()
-
-### Community 235 - "bono_semanal_ui.js"
-Cohesion: 0.42
-Nodes (6): bonoSemanal(), datos(), deSemanaSiguiente(), evalDe(), peonetasConBono(), puedeEditar()
+### Community 236 - "_solo_super"
+Cohesion: 0.36
+Nodes (6): estado(), grafo(), hallazgos(), informe(), _solo_super(), test_solo_super_administrador()
 
 ### Community 238 - "AsistenciaService"
-Cohesion: 0.05
-Nodes (33): _bolsa_despues_de_deuda(), compensar_inasistencia(), condonar_deuda(), create_compensacion(), create_intercambio(), delete_compensacion(), delete_intercambio(), _empleado_visible() (+25 more)
+Cohesion: 0.06
+Nodes (30): _bolsa_despues_de_deuda(), compensar_inasistencia(), condonar_deuda(), create_compensacion(), create_intercambio(), _empleado_visible(), opciones_compensar_inasistencia(), quitar_compensacion_inasistencia() (+22 more)
+
+### Community 239 - "test_bolsa_avance.py"
+Cohesion: 0.32
+Nodes (3): bolsa_es_definitiva(), test_a_mitad_de_tramo_no_es_definitivo(), test_con_el_tramo_terminado_si_es_definitivo()
 
 ### Community 245 - "test_modo_oscuro_casillas.py"
 Cohesion: 0.60
 Nodes (4): _bloque_oscuro(), _reglas(), test_el_fondo_forzado_no_alcanza_a_casillas_ni_botones_de_opcion(), test_las_etiquetas_conservan_su_color_de_texto()
 
-### Community 246 - "test_cierre_jornadas_por_validar.py"
-Cohesion: 0.43
-Nodes (5): _leer(), test_el_asistente_y_el_dashboard_las_muestran(), test_el_cierre_las_revisa_y_no_deja_cerrar(), test_el_dashboard_no_la_muestra_lista_para_cerrar(), test_el_mensaje_del_cierre_dice_si_se_envio_el_correo()
+### Community 246 - "hoja_fill_rate"
+Cohesion: 0.38
+Nodes (6): hoja_fill_rate(), _persona(), test_hoja_con_semanas_notas_y_descuento_aparte(), test_la_hoja_muestra_pendiente_la_semana_con_dias_sin_evaluar(), test_las_notas_sin_numero_se_cuentan_y_no_se_listan(), test_sin_bono_semanal_no_hay_hoja()
 
 ### Community 247 - "saveTipoJustificacion"
 Cohesion: 0.40
 Nodes (5): closeModalTipoJ(), _leerEfectos(), _leerFormularioBono(), _leerPickerCargos(), saveTipoJustificacion()
 
-### Community 248 - "EmpleadoCreate"
-Cohesion: 0.17
-Nodes (3): crear_empleado(), obtener_empleado_por_rut(), EmpleadoCreate
-
-### Community 249 - "CargoRepository"
-Cohesion: 0.07
-Nodes (3): CargoRepository, get_catalogo_cargos(), uso_del_cargo()
+### Community 250 - "events.py"
+Cohesion: 0.05
+Nodes (11): lifespan(), _recalcular_hoy_si_cambio_el_calculo(), _recalcular_periodo_activo(), ensure_single_instance(), EntregaUbicacionesRepository, _cuando_cambio(), get_startup_status(), _get_now_local() (+3 more)
 
 ### Community 251 - "test_cuadre_reparte_dias_libres.py"
 Cohesion: 0.19
@@ -1132,16 +1100,16 @@ Cohesion: 0.20
 Nodes (10): environment, environment, DATABASE_URL, PORT, POSTGRES_DB, POSTGRES_PASSWORD, POSTGRES_USER, TZ (+2 more)
 
 ### Community 253 - "test_historial_cierres_periodo.py"
-Cohesion: 0.28
-Nodes (3): _base(), BaseSqlite, test_cada_cierre_trae_el_nombre_de_su_periodo()
+Cohesion: 0.21
+Nodes (4): _base(), BaseSqlite, test_cada_cierre_trae_el_nombre_de_su_periodo(), test_cero_trae_todos_y_el_limite_se_sigue_respetando()
 
 ### Community 254 - "test_dashboard_se_actualiza.py"
 Cohesion: 0.60
 Nodes (3): _leer(), test_bundle_armado_y_avisos(), test_fuente_del_dashboard()
 
-### Community 255 - "numerar_sin_numero"
-Cohesion: 0.39
-Nodes (4): numerar_sin_numero(), _reglas(), test_la_numeracion_sigue_el_orden_de_la_pantalla(), test_las_que_ya_tienen_numero_no_se_mueven_y_una_nueva_toma_el_siguiente()
+### Community 255 - "ciclo_para_marca_sola"
+Cohesion: 0.40
+Nodes (4): ciclo_para_marca_sola(), distancia(), minutos(), test_con_una_marca_sola_se_propone_el_ciclo_que_calza_con_su_tipo()
 
 ### Community 256 - "test_ayudantes_unicos.py"
 Cohesion: 0.36
@@ -1151,17 +1119,21 @@ Nodes (4): _archivos_js(), test_ddmm_e_iniciales_delegan_en_ayuda(), test_no_hay
 Cohesion: 0.36
 Nodes (4): _archivos(), nombres_sin_definir(), revisar(), test_no_hay_nombres_sin_definir_en_el_servidor()
 
+### Community 263 - "update_justificacion"
+Cohesion: 0.10
+Nodes (4): delete_justificacion(), recalc_job(), update_justificacion(), recalc_job_put()
+
 ### Community 264 - "NotificationService"
-Cohesion: 0.05
-Nodes (32): adjuntos_html(), bloque_resumen(), boton(), caja(), correo(), destacados(), e(), fecha() (+24 more)
+Cohesion: 0.11
+Nodes (21): adjuntos_html(), bloque_resumen(), boton(), caja(), correo(), destacados(), e(), fecha() (+13 more)
 
 ### Community 265 - "os"
-Cohesion: 0.08
-Nodes (8): _leer(), test_el_acta_antigua_ya_no_existe(), test_una_sola_logica_para_la_previsualizacion(), test_ninguna_consulta_nombra_tablas_o_columnas_que_no_existen(), _leer(), test_el_resumen_entrega_otros_y_compensaciones(), test_la_pantalla_del_cierre_muestra_ambas_lineas(), test_los_textos_sobreviven_al_minificador()
+Cohesion: 0.09
+Nodes (9): _leer(), test_el_acta_antigua_ya_no_existe(), test_una_sola_logica_para_la_previsualizacion(), test_ninguna_consulta_nombra_tablas_o_columnas_que_no_existen(), _leer(), test_el_resumen_entrega_otros_y_compensaciones(), test_la_pantalla_del_cierre_muestra_ambas_lineas(), test_los_textos_sobreviven_al_minificador() (+1 more)
 
-### Community 268 - "asistencia_libreta.py"
-Cohesion: 0.17
-Nodes (11): _exigir_libreta_ingresable(), Libreta180hInasistenciaRequest, Libreta180hReasignarRequest, LibretaOcrBase64Payload, marcar_inasistencia_libreta_180h(), ocr_libreta_180h_base64(), ocr_libreta_180h_upload(), PurgaMarcasRelojRequest (+3 more)
+### Community 267 - "delete_libreta_180h"
+Cohesion: 0.20
+Nodes (5): delete_libreta_180h(), libretas_posteriores(), test_al_abrir_la_ventana_recibe_el_bloqueo_los_enlazados_y_el_permiso(), test_borrar_nunca_en_periodo_cerrado_y_avisa_los_dias_posteriores(), _Usuario
 
 ### Community 270 - "services"
 Cohesion: 0.29
@@ -1175,17 +1147,9 @@ Nodes (7): logging, logging, driver, options, max-file, max-size, logging
 Cohesion: 0.29
 Nodes (7): wa, build, cap_drop, container_name, restart, security_opt, volumes
 
-### Community 275 - "contactos"
-Cohesion: 0.33
-Nodes (3): contactos(), estado(), grupos()
-
 ### Community 279 - "db"
 Cohesion: 0.33
 Nodes (6): command, container_name, image, restart, volumes, db
-
-### Community 280 - "test_borradores_duplicados.py"
-Cohesion: 0.33
-Nodes (3): _plan(), test_el_plan_solo_incluye_a_quien_tiene_mas_de_un_borrador_real(), fetch_all()
 
 ### Community 281 - "test_envia_con_numero_normalizado_y_no_lanza_si_falla"
 Cohesion: 0.40
@@ -1195,9 +1159,9 @@ Nodes (3): test_envia_con_numero_normalizado_y_no_lanza_si_falla(), falso(), tes
 Cohesion: 0.40
 Nodes (5): healthcheck, interval, retries, test, timeout
 
-### Community 286 - "visible"
-Cohesion: 0.50
-Nodes (3): suma(), visible(), test_el_area_se_muestra_segun_filtro_y_alcance()
+### Community 287 - "asyncio"
+Cohesion: 0.08
+Nodes (9): test_excel_por_rango_recibe_la_matriz_del_periodo(), _DB, test_al_reabrir_se_borran(), test_el_informe_usa_lo_guardado_y_no_recalcula(), test_guarda_el_resultado_completo_de_cada_bono(), test_lee_lo_guardado_del_area_cerrada(), test_excel_muestra_el_monto_y_el_total_de_bonos(), test_tramos_un_boton_por_tipo_de_horario() (+1 more)
 
 ### Community 291 - "cargarPersonas"
 Cohesion: 0.24
@@ -1206,22 +1170,22 @@ Nodes (13): abrirPop(), api(), cargarAvisos(), cargarPersonas(), cerrarPop(), di
 ## Knowledge Gaps
 - **33 isolated node(s):** `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado`, `Destinatarios del correo del informe de cierre por cargar`, `Fuentes Barlow TTF para el informe de cierre PDF` (+28 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2159 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **79 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **75 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `SecurityContext` connect `SecurityContext` to `agregar_marcaciones_masivas`, `ConfiguracionRepository`, `empleados.py`, `_repo`, `.get_bioalba_areas`, `delete_libreta_180h`, `asistencia_libreta.py`, `SyncService`, `ConfiguracionService`, `BonoCreate`, `routers/whatsapp.py`, `AreaRepository`, `velocidades_choferes.py`, `delete_turno`, `contactos`, `Any`, `post_reprocesar_periodo_empleado`, `PorteriaRepository`, `EmpleadoService`, `registrar_movimiento`, `CatalogCache`, `routers/productos_4.py`, `main.py`, `CalendarioRepository`, `typing`, `listar_empleados`, `routers/sync.py`, `routers/porteria.py`, `Any`, `VisitasRepository`, `asistencia_marcas.py`, `update_ubicacion`, `Database`, `EmpleadoRepository`, `create_catalogo_hallazgo`, `JustificacionTipoCreate`, `update_justificacion`, `marcar_no_cumple`, `json`, `asistencia_periodo.py`, `CambioLaborService`, `whatsapp_service.py`, `marcar_presencia`, `._dict_to_empleado`, `FlotaRepository`, `EmpleadoService`, `save_libreta_180h`, `AsignacionCreate`, `get_libreta_180h`, `export_asistencia_excel`, `TurnoCreate`, `.get_matrix_data_with_projections`, `AsistenciaService`, `buscar_empleados`, `velocidades_choferes`, `update_assignment_date`, `update_catalogo_hallazgo`, `export_turnos_ciclo`, `EmpleadoCreate`, `CargoRepository`, `Any`, `SeguridadRepository`?**
-  _High betweenness centrality (0.087) - this node is a cross-community bridge._
+- **Why does `SecurityContext` connect `SecurityContext` to `ConfiguracionRepository`, `TurnoRepository`, `_servicio`, `update_justificacion`, `delete_libreta_180h`, `ocr_libreta_180h_upload`, `gps_nexacol.py`, `TurnoRepository`, `routers/configuracion.py`, `ConfiguracionService`, `.sync_marcaciones`, `routers/whatsapp.py`, `AreaRepository`, `Any`, `PorteriaRepository`, `create_pagador`, `reasignar_turno_acompanante_180h`, `CalendarioService`, `routers/productos_4.py`, `RequireAnyPermission`, `typing`, `ReportService`, `AsistenciaService`, `routers/sync.py`, `Any`, `Any`, `VisitasRepository`, `asistencia_marcas.py`, `json`, `update_rol`, `routers/seguridad.py`, `EmpleadoRepository`, `deshacer_registro`, `corregir_borradores_duplicados.py`, `reproceso_masivo_async`, `_get`, `whatsapp_service.py`, `marcar_presencia`, `FlotaRepository`, `save_libreta_180h`, `destino_valido`, `LlavesRepository`, `get_libreta_foto`, `_solo_super`, `routers/productos_4.py`, `AsistenciaService`, `update_assignment_date`, `velocidades_choferes`, `delete_rol`, `update_catalogo_hallazgo`, `export_turnos_ciclo`, `Any`, `SeguridadRepository`?**
+  _High betweenness centrality (0.086) - this node is a cross-community bridge._
 - **Are the 292 inferred relationships involving `SecurityContext` (e.g. with `exportar_excel()` and `get_empleados_art22()`) actually correct?**
   _`SecurityContext` has 292 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Lo que el grafo no ve (URLs, onclick, llamadas dinamicas)`, `Sin bucles de imports en el backend`, `Mapa del codigo graphify desactualizado` to the rest of the system?**
   _33 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Articulo22Repository` be split into smaller, more focused modules?**
-  _Cohesion score 0.14761904761904762 - nodes in this community are weakly interconnected._
-- **Why does `Etapa 2: un solo ayudante por tarea (**hecha**)` connect `main` to `configuracion_ui.js`, `marcaciones_manuales`, `seguridad_ui + index`, `marcaciones_ui`?**
+- **Should `Recomendaciones #1 a #9 ordenadas por ganancia/costo` be split into smaller, more focused modules?**
+  _Cohesion score 0.13725490196078433 - nodes in this community are weakly interconnected._
+- **Why does `AsistenciaRepository` connect `Any` to `ConfiguracionRepository`, `TurnoRepository`, `SecurityContext`, `_servicio`, `update_justificacion`, `.sync_marcaciones`, `test_reglas_salida.py`, `Etapa 4: consultas SQL a su lugar`, `routers/configuracion.py`, `ConfiguracionService`, `routers/whatsapp.py`, `AreaRepository`, `asyncio`, `reasignar_turno_acompanante_180h`, `routers/productos_4.py`, `typing`, `ReportService`, `AsistenciaService`, `recalculo_service.py`, `routers/sync.py`, `BonoService`, `asistencia_marcas.py`, `corregir_borradores_duplicados.py`, `reproceso_masivo_async`, `CambioLaborService`, `reglas_marcas_corridas.py`, `update_assignment_date`, `AsistenciaService`, `velocidades_choferes`, `events.py`, `test_historial_cierres_periodo.py`?**
   _High betweenness centrality (0.068) - this node is a cross-community bridge._
 - **Are the 40 inferred relationships involving `AsistenciaRepository` (e.g. with `acompanantes_del_dia()` and `marcar_no_cumple()`) actually correct?**
   _`AsistenciaRepository` has 40 INFERRED edges - model-reasoned connections that need verification._
-- **Should `ConfiguracionRepository` be split into smaller, more focused modules?**
-  _Cohesion score 0.03964194373401535 - nodes in this community are weakly interconnected._
+- **Should `Articulo22Repository` be split into smaller, more focused modules?**
+  _Cohesion score 0.14761904761904762 - nodes in this community are weakly interconnected._
