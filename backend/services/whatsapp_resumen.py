@@ -16,7 +16,7 @@ from backend.services import whatsapp_service
 PAUSA_ENTRE_ENVIOS_SEG = 3  # no ráfagas: un número nuevo que dispara muchos mensajes seguidos arriesga bloqueo
 MAX_LINEAS_JEFATURA = 50    # el mensaje de WhatsApp se corta en 4000 caracteres
 
-# Catálogo de avisos automáticos (todos los días 08:00). `usa_chats`: van a los chats asignados; si no, a cada persona.
+# Catálogo de avisos automáticos (lunes a viernes 08:00). `usa_chats`: van a los chats asignados; si no, a cada persona.
 AVISOS = {
     "resumen_personal": {
         "nombre": "Resumen semanal a cada persona",

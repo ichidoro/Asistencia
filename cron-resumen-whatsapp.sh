@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Resumen semanal de horas (Bolsa vs meta) por WhatsApp. Llama a POST /api/whatsapp/resumen-semanal/cron.
-# cron sugerido (todos los días 08:00):  0 8 * * * bash /ruta/asistencia/cron-resumen-whatsapp.sh >> /ruta/asistencia/logs/cron_whatsapp.log 2>&1
+# cron sugerido (lunes a viernes 08:00):  0 8 * * 1-5 bash /ruta/asistencia/cron-resumen-whatsapp.sh >> /ruta/asistencia/logs/cron_whatsapp.log 2>&1
 set -euo pipefail
 cd "$(dirname "$0")"
 envget() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }

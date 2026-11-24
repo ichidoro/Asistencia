@@ -2941,7 +2941,7 @@ window.cargarMapaCodigo = async function () {
         const c = document.getElementById('wa-avisos');
         if (!c) return;
         opciones = cfg.opciones || opciones;
-        c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(todos los días 08:00, si el cron está instalado en el servidor)</span></h6>'
+        c.innerHTML = '<h6 class="mt-4 mb-2">Avisos automáticos <span class="text-muted fw-normal" style="font-size:0.85rem;">(lunes a viernes 08:00, si el cron está instalado en el servidor)</span></h6>'
             + cfg.avisos.map(function (a) {
                 const usaChats = !!a.usa_chats, sel = selecciones[a.aviso] = { areas: (a.filtros && a.filtros.areas || []).slice(), cargos: (a.filtros && a.filtros.cargos || []).slice() };
                 let h = '<div class="border rounded p-3 mb-3" data-aviso="' + esc(a.aviso) + '">'
