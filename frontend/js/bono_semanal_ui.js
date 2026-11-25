@@ -161,15 +161,14 @@
             + (puedeEditar() ? '<span class="text-muted">Clic en un día: «Cumple» o «No cumple»</span>' : '');
     };
 
-    // Razones de nota de crédito (Configuración › Notas de crédito), leídas una vez
-    let RAZONES = null;
+    // Razones de nota de crédito (Configuración › Notas de crédito), leídas cada vez que se abre un día: si alguien cambia
+    // una razón (por ejemplo, la enciende para «descontar los productos») la ventana lo sabe sin recargar la página
+    // (dueño, 25-11-2026: una razón que descuenta no pedía el monto)
     async function razones() {
-        if (RAZONES) return RAZONES;
         try {
             const r = await fetch('/api/configuracion/razones-nota-credito/', { headers: authHead() });
-            RAZONES = r.ok ? await r.json() : [];
-        } catch (e) { RAZONES = []; }
-        return RAZONES;
+            return r.ok ? await r.json() : [];
+        } catch (e) { return []; }
     }
 
     // Peonetas de la grilla que tienen el bono (para elegir con quién iba el chofer ese día)
@@ -181,7 +180,7 @@
     }
 
     // Clic en un día de la vista (dueño, 23-11-2026): «Cumple» o «No cumple», con las notas de crédito del día (cada una
-    // con su número y su razón; si alguna es culpa del chofer, no cumple; si no, cumple; si la razón descuenta los
+    // con su número y su razón; si alguna es responsabilidad del chofer, no cumple; si no, cumple; si la razón descuenta los
     // productos, pide su valor), comentario y, para un chofer, los peonetas que iban con él ese día (reciben la misma
     // marca). Se abre con lo que ya estaba, para corregirlo.
     window.mxBsMarcar = async function (empId, fecha) {
@@ -284,8 +283,8 @@
                         const culpa = conRazon.some(n => n.culpa);
                         const desc = conRazon.filter(n => n.descuenta).reduce((s, n) => s + (n.monto || 0), 0);
                         efecto.className = 'bs-efecto' + (conRazon.length ? ' ver ' + (culpa ? 'mal' : 'ok') : '');
-                        efecto.textContent = !conRazon.length ? '' : (culpa ? 'Hay una nota por culpa del chofer: el día queda «No cumple» y la semana no se paga.'
-                            : 'Ninguna nota es culpa del chofer: el día queda «Cumple».') + (desc > 0 ? ' Valor a descontar al chofer: ' + pesos(desc) + '.' : '');
+                        efecto.textContent = !conRazon.length ? '' : (culpa ? 'Hay una nota por responsabilidad del chofer: el día queda «No cumple» y la semana no se paga.'
+                            : 'Ninguna nota es responsabilidad del chofer: el día queda «Cumple».') + (desc > 0 ? ' Valor a descontar al chofer: ' + pesos(desc) + '.' : '');
                     } else {
                         deny.style.display = '';
                         conf.textContent = 'No cumple';

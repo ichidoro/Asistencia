@@ -187,7 +187,7 @@
             ariaLabel: 'Razón de la nota de crédito', placeholder: 'Elija la razón…',
             valor: razonPrevia ? razonPrevia.id : '',
             opciones: razones.map(x => ({ valor: x.id, etiqueta: x.nombre,
-                tags: [x.culpa_chofer ? { t: 'Culpa del chofer', tono: 'mal' } : { t: 'No es culpa', tono: 'ok' }].concat(x.descuenta_productos ? [{ t: 'Descuenta', tono: 'warn' }] : []) })),
+                tags: [x.culpa_chofer ? { t: 'Responsabilidad del chofer', tono: 'mal' } : { t: 'No es responsabilidad', tono: 'ok' }].concat(x.descuenta_productos ? [{ t: 'Descuenta', tono: 'warn' }] : []) })),
             onCambio: () => { sync(); }
         });
         el.querySelector('.bs-nc-razon').appendChild(razonSel.el);

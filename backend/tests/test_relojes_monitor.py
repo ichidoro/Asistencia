@@ -25,8 +25,12 @@ def _preparar(monkeypatch, guardado):
     async def guardar(estado):
         caja["valor"] = dict(estado)
 
+    async def sin_umbral():
+        return 0.0
+
     monkeypatch.setattr(mon, "_cargar", cargar)
     monkeypatch.setattr(mon, "_guardar", guardar)
+    monkeypatch.setattr(mon, "_minutos_sin_actividad", sin_umbral)   # sin base: con 0 manda el estado de EasyTime
     monkeypatch.setattr(mon, "_ahora", lambda: AHORA)
     monkeypatch.setattr(mon.settings, "EASYTIME_URL", "https://easytime.prueba")
     monkeypatch.setattr(mon.settings, "EASYTIME_PASSWORD", "x")
@@ -92,3 +96,41 @@ def test_lo_guardado_hace_mas_de_tres_ciclos_ya_no_se_muestra_como_vigente(monke
 def test_sin_consulta_previa_no_se_muestra_nada(monkeypatch):
     _preparar(monkeypatch, {})
     assert asyncio.run(mon.estado_para_pantalla()) is None
+
+
+# ── Sin actividad aunque EasyTime diga «En línea» (dueño, 25-11-2026) ─────────
+
+def _umbral(monkeypatch, minutos):
+    async def m():
+        return minutos
+    monkeypatch.setattr(mon, "_minutos_sin_actividad", m)
+
+
+ACTIVO_VIEJO = [{"alias": "AGUACOL", "estado": 1, "ultima_actividad": "2026-11-25 09:06:37"},
+                {"alias": "AGUACOL 2", "estado": 1, "ultima_actividad": "2026-11-25 09:15:43"}]
+
+
+def test_reloj_en_linea_sin_actividad_pasa_a_sin_conexion(monkeypatch):
+    _preparar(monkeypatch, {"ok": True, "consultado": "2026-11-25 09:17:51", "ultimo_ok": "2026-11-25 09:17:51",
+                            "relojes": ACTIVO_VIEJO})
+    monkeypatch.setattr(mon, "_ahora", lambda: datetime(2026, 11, 25, 9, 18, 0))
+    _umbral(monkeypatch, 5)
+    r = asyncio.run(mon.estado_para_pantalla())
+    assert [(x["alias"], x["grupo"], x["texto"]) for x in r["relojes"]] == [
+        ("AGUACOL", "sin_conexion", "Sin actividad"), ("AGUACOL 2", "conectado", "En línea")]
+
+
+def test_con_el_ajuste_en_cero_manda_el_estado_de_easytime(monkeypatch):
+    _preparar(monkeypatch, {"ok": True, "consultado": "2026-11-25 09:17:51", "ultimo_ok": "2026-11-25 09:17:51",
+                            "relojes": ACTIVO_VIEJO})
+    monkeypatch.setattr(mon, "_ahora", lambda: datetime(2026, 11, 25, 9, 18, 0))
+    _umbral(monkeypatch, 0)
+    r = asyncio.run(mon.estado_para_pantalla())
+    assert [x["grupo"] for x in r["relojes"]] == ["conectado", "conectado"]
+
+
+def test_el_umbral_sale_del_ajuste():
+    ahora = datetime(2026, 11, 25, 9, 17, 51)
+    assert mon.sin_actividad("2026-11-25 09:06:37", ahora, 10)       # 11 min sin actividad
+    assert not mon.sin_actividad("2026-11-25 09:06:37", ahora, 15)
+    assert not mon.sin_actividad(None, ahora, 5)

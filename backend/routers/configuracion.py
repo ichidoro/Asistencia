@@ -1121,7 +1121,7 @@ async def get_razones_nota_credito(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.ver", "marcaciones.ver"]))
 ):
-    """Las razones de nota de crédito: cada una dice si es culpa del chofer (entonces el día no cumple el Fill Rate)."""
+    """Las razones de nota de crédito: cada una dice si es responsabilidad del chofer (entonces el día no cumple el Fill Rate)."""
     return await ConfiguracionRepository(db).get_razones_nota_credito()
 
 

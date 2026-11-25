@@ -1571,6 +1571,8 @@
                                                     <div class="fcB-fh"><h3>Sincronización con BioAlba</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>
                                                     <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-dias-volatilidad">Días para volver a descargar</label><p>Días después del fin de un mes en que todavía se descargan sus marcas. Con 0 no se vuelven a descargar.</p></div>
                                                         <div class="fcB-ctl"><input type="number" class="fcB-inp num" id="ajuste-dias-volatilidad" data-clave="bioalba_dias_volatilidad" min="0" max="60"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-relojes-sin-actividad">Reloj sin conexión después de (minutos sin actividad)</label><p>Si un reloj pasa más minutos que estos sin comunicarse con EasyTime, la barra lateral lo muestra «Sin conexión», aunque EasyTime siga diciendo «En línea». Con 0 se usa solo el estado que informa EasyTime.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="1" class="fcB-inp num" id="ajuste-relojes-sin-actividad" data-clave="relojes_minutos_sin_actividad" min="0" max="1440"></div></div>
                                                 </div>
                                                 <div data-grupo-sis-panel="extras" class="d-none">
                                                     <div class="fcB-fh"><h3>Horas extra y emergencias</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>

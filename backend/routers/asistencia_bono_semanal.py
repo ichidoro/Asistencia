@@ -37,7 +37,7 @@ class MarcaNoCumple(BaseModel):
     fecha: str = Field(..., description="AAAA-MM-DD")
     no_cumple: bool = True
     comentario: Optional[str] = Field(None, max_length=300)
-    # Notas de crédito del día (23-11-2026), cada una con su número y su razón: si alguna es culpa del chofer, no
+    # Notas de crédito del día (23-11-2026), cada una con su número y su razón: si alguna es responsabilidad del chofer, no
     # cumple; si no, cumple. tiene_nc/razon_nc_id son de la ventana anterior (una sola nota sin número): se rechazan
     notas: List[NotaCredito] = Field(default_factory=list, max_length=20)
     tiene_nc: bool = False

@@ -7,6 +7,11 @@ las marcas, y se guarda en la tabla `ajustes`. La barra lateral lo muestra bajo 
 Códigos de estado de EasyTime (filtro «Estado» de su lista de dispositivos, leído el 31-10-2026):
   0 No autorizado · 1 En línea · 2 Comunicado · 3 Desconectado
 Nunca debe romper la sincronización: todo está envuelto en try/except.
+
+25-11-2026 (dueño: «la aplicación detecta ambos relojes activos y en realidad uno no está activo»): la API de EasyTime
+deja el estado en «En línea» aunque el reloj deje de comunicarse; su propia pantalla lo pone en rojo según el tiempo
+desde su última actividad. Por eso, si pasan más minutos sin actividad que el ajuste `relojes_minutos_sin_actividad`
+(Configuración → Ajustes → Sincronización), el reloj se muestra «Sin conexión». Con 0 se usa solo el estado de EasyTime.
 """
 
 import asyncio
@@ -78,9 +83,24 @@ async def actualizar() -> None:
         logger.warning(f"[Relojes] fallo interno (ignorado): {e}")
 
 
+async def _minutos_sin_actividad() -> float:
+    try:
+        row = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'relojes_minutos_sin_actividad'")
+        return max(0.0, float(row["valor"])) if row and row["valor"] not in (None, "") else 0.0
+    except Exception:
+        return 0.0
+
+
+def sin_actividad(ultima_actividad: Optional[str], ahora: datetime, umbral_min: float) -> bool:
+    """True si el reloj lleva más de umbral_min minutos sin actividad. Con umbral 0 o sin fecha, no se decide aquí."""
+    ult = _parse(ultima_actividad)
+    return bool(umbral_min > 0 and ult is not None and (ahora - ult).total_seconds() > umbral_min * 60)
+
+
 async def estado_para_pantalla() -> Optional[Dict[str, Any]]:
     """Lo que muestra la barra lateral. None si nunca se consultó."""
     est = await _cargar()
+    umbral = await _minutos_sin_actividad()
     if not est.get("relojes"):
         return None
     ultimo_ok = _parse(est.get("ultimo_ok"))
@@ -88,10 +108,15 @@ async def estado_para_pantalla() -> Optional[Dict[str, Any]]:
     relojes = []
     for r in est["relojes"]:
         codigo = r.get("estado")
+        grupo = GRUPO_POR_ESTADO.get(codigo, "sin_dato") if vigente else "sin_dato"
+        texto = ESTADOS_EASYTIME.get(codigo, f"Estado {codigo}")
+        # La última actividad se compara con la hora de la consulta (lo que EasyTime respondió en ese momento)
+        if vigente and grupo == "conectado" and sin_actividad(r.get("ultima_actividad"), _parse(est.get("consultado")) or _ahora(), umbral):
+            grupo, texto = "sin_conexion", "Sin actividad"
         relojes.append({
             "alias": r.get("alias") or "",
-            "grupo": GRUPO_POR_ESTADO.get(codigo, "sin_dato") if vigente else "sin_dato",
-            "texto": ESTADOS_EASYTIME.get(codigo, f"Estado {codigo}"),
+            "grupo": grupo,
+            "texto": texto,
             "ultima_actividad": r.get("ultima_actividad"),
         })
     return {"vigente": vigente, "ultimo_ok": est.get("ultimo_ok"), "relojes": relojes}

@@ -229,6 +229,7 @@ class ConfiguracionRepository:
                 ("asistencia_emergencia_jornada_limite_horas", "3.0", "Horas límite para calificar bloque como jornada especial en vez de horas extras directas"),
                 ("asistencia_max_extras_ordinarias_dia_habil", "0", "Minutos límite de horas extra en un día hábil: lo que pase se llama +2 y va igual a horas extra por aprobar (0 = sin límite, todo es hora extra)"),
                 ("asistencia_minimo_horas_extra_minutos", "0", "Minutos mínimos de tiempo trabajado de más para contarlo como hora extra (0 = cuenta todo, aunque sean segundos)"),
+                ("relojes_minutos_sin_actividad", "0", "Minutos sin actividad de un reloj (según EasyTime) para mostrarlo «Sin conexión», aunque EasyTime siga diciendo «En línea» (0 = solo el estado que informa EasyTime)"),
                 ("porteria_deshacer_segundos", "10", "Segundos en que el aviso «Listo» de Portería ofrece Deshacer el registro recién hecho (0 = sin Deshacer)"),
             ]
             from backend.services.libreta_revision import SEMILLAS_REVISION   # límites de la revisión de la libreta (05-11-2026)
