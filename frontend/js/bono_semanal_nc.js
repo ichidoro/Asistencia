@@ -180,7 +180,7 @@
             + '<div class="bs-nc-abajo"><div class="bs-nc-razon"><span class="bs-mini">Razón</span></div>'
             + '<label class="bs-nc-monto"><span class="bs-mini">Valor a descontar</span><span class="bs-nc-peso"><b>$</b>'
             + '<input type="number" class="bs-nota-monto" min="1" step="1" inputmode="numeric" aria-label="Valor de los productos a descontar" value="' + (previa && previa.monto ? Math.round(previa.monto) : '') + '"></span>'
-            + '<button type="button" class="bs-nc-total" hidden>Usar el total de la nota</button></label></div>';
+            + '<button type="button" class="bs-nc-total" hidden>Usar el subtotal de la nota</button></label></div>';
         const cab = el.querySelector('.bs-nc-cab'), det = el.querySelector('.bs-nc-det'), detIn = el.querySelector('.bs-nc-det-in');
         const montoWrap = el.querySelector('.bs-nc-monto'), monto = el.querySelector('.bs-nota-monto'), btnTotal = el.querySelector('.bs-nc-total');
         const razonSel = crearSelect({
@@ -192,6 +192,8 @@
         });
         el.querySelector('.bs-nc-razon').appendChild(razonSel.el);
 
+        // El valor a descontar es el subtotal de las líneas de productos de la nota (no el monto total de la nota)
+        const subtotal = () => nc ? Math.round((nc.items || []).reduce((t, i) => t + (Number(i.subtotal) || 0), 0)) : 0;
         const razonActual = () => { const v = razonSel.get(); return v ? razones.find(r => String(r.id) === v) : null; };
         const nota = () => {
             const r = razonActual();
@@ -203,8 +205,8 @@
             const r = razonActual();
             const desc = !!(r && r.descuenta_productos);
             montoWrap.classList.toggle('ver', desc);
-            btnTotal.hidden = !(desc && nc && nc.monto);
-            if (desc && nc && nc.monto && !Number(monto.value)) monto.value = Math.round(nc.monto);
+            btnTotal.hidden = !(desc && subtotal());
+            if (desc && subtotal() && !Number(monto.value)) monto.value = subtotal();
             if (alCambiar) alCambiar();
         };
 
@@ -300,7 +302,7 @@
             det.classList.toggle('abierto', !!html);
         }
 
-        btnTotal.addEventListener('click', () => { if (nc && nc.monto) { monto.value = Math.round(nc.monto); sync(); } });
+        btnTotal.addEventListener('click', () => { if (subtotal()) { monto.value = subtotal(); sync(); } });
         monto.addEventListener('input', () => { if (alCambiar) alCambiar(); });
         el.querySelector('.bs-nota-quitar').addEventListener('click', () => {
             el.classList.add('sale');
