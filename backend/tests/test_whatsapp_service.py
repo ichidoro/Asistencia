@@ -130,10 +130,10 @@ def _camion(pat, v, edad=1, chofer="Juan Pérez", lugar="Ruta 5 Sur, Curicó", f
     return {"patente": pat, "grupo": grupo, "chofer": chofer, "edadMin": edad, "ultimo": {"v": v, "lugar": lugar, "f": f}}
 
 
-def test_alerta_velocidad_detecta_desde_95_y_con_reporte_reciente():
+def test_alerta_velocidad_detecta_sobre_100_y_con_reporte_reciente():
     from backend.services.alerta_velocidad import detectar
-    flota = [_camion("AA11", 95), _camion("BB22", 96.4), _camion("CC33", 120, edad=10), _camion("DD44", 101), _camion("FF66", 94), {"patente": "EE55", "ultimo": None}]
-    assert [e["patente"] for e in detectar(flota)] == ["DD44", "BB22", "AA11"]
+    flota = [_camion("AA11", 100), _camion("BB22", 101.4), _camion("CC33", 120, edad=10), _camion("DD44", 130), _camion("FF66", 99), {"patente": "EE55", "ultimo": None}]
+    assert [e["patente"] for e in detectar(flota)] == ["DD44", "BB22"]
 
 
 def test_alerta_velocidad_no_repite_dentro_de_15_min_y_olvida_al_que_baja():
@@ -151,6 +151,15 @@ def test_alerta_velocidad_mensaje():
     from backend.services.alerta_velocidad import armar_mensaje, detectar
     m = armar_mensaje(detectar([_camion("AA11", 102.6)])[0])
     assert "*AA11*" in m and "Juan Pérez" in m and "*103 km/h* (límite 90 km/h)" in m and "10:32" in m and "Curicó" in m
+    assert "*13 km/h* sobre el límite" in m
+
+
+def test_alerta_velocidad_solo_pasados_los_100():
+    from backend.services.alerta_velocidad import armar_mensaje, detectar
+    assert detectar([_camion("A1", 95.0), _camion("A2", 99.4), _camion("A3", 100.0), _camion("A4", 100.4)]) == []   # 95, 99 y 100: no avisa
+    sobre = detectar([_camion("B1", 100.6), _camion("B2", 120.0)])
+    assert [x["patente"] for x in sobre] == ["B2", "B1"] and sobre[1]["vel"] == 101                               # desde 101 km/h
+    assert "límite 90 km/h" in armar_mensaje(sobre[0]) and "*30 km/h* sobre el límite" in armar_mensaje(sobre[0])  # siempre dice 90
 
 
 def test_el_aviso_en_vivo_no_entra_al_cron_semanal():
@@ -244,7 +253,7 @@ def test_revisar_velocidad_responde_con_el_nombre_del_aviso(monkeypatch):
 
 def test_alerta_velocidad_solo_camiones_tradicional():
     from backend.services.alerta_velocidad import detectar
-    flota = [_camion("TCKK47", 98, grupo="OTROS"), _camion("SKBH17", 98), _camion("RR11", 120, grupo="RETAIL"), _camion("PL22", 99, grupo="PLASTICOS"), _camion("SG33", 101, grupo=None), _camion("TR44", 97, grupo=" tradicional ")]
+    flota = [_camion("TCKK47", 108, grupo="OTROS"), _camion("SKBH17", 108), _camion("RR11", 120, grupo="RETAIL"), _camion("PL22", 109, grupo="PLASTICOS"), _camion("SG33", 111, grupo=None), _camion("TR44", 107, grupo=" tradicional ")]
     assert sorted(e["patente"] for e in detectar(flota)) == ["SKBH17", "TR44"]
 
 

@@ -13,8 +13,8 @@ from backend.services import gps_nexacol, whatsapp_service
 from backend.services.velocidades_choferes import _buscador
 from backend.services.whatsapp_resumen import resolver_destino
 
-LIMITE_KMH = 95        # velocidad real a partir de la cual se avisa (el medidor se dispara al marcar 95)
-LIMITE_MOSTRADO_KMH = 90  # el límite que dicen todos los mensajes y pantallas: se muestra 90 pero se avisa recién desde LIMITE_KMH
+LIMITE_KMH = 100       # se avisa solo cuando el camión PASA de esta velocidad (101 km/h o más; 100 no avisa), 25-11-2026
+LIMITE_MOSTRADO_KMH = 90  # el límite que dicen siempre todos los mensajes y pantallas: 90 km/h, aunque el aviso se dispare recién sobre LIMITE_KMH
 EDAD_MAX_MIN = 3       # un reporte más viejo no es "en vivo": su velocidad ya no dice dónde va el camión
 GRUPO = "TRADICIONAL"  # por ahora solo se avisa de camiones del grupo Tradicional (el grupo que Nexacol trae de la plataforma de GPS; sin grupo cuenta como otro)
 REPETIR_MIN = 15       # mientras siga el exceso, se vuelve a avisar del mismo camión solo pasado este tiempo
@@ -25,13 +25,13 @@ _avisado: Dict[str, float] = {}
 
 
 def detectar(flota: List[Dict[str, Any]], limite: float = LIMITE_KMH) -> List[Dict[str, Any]]:
-    """Camiones del grupo Tradicional con reporte reciente sobre el límite, del más rápido al más lento."""
+    """Camiones del grupo Tradicional con reporte reciente que PASAN de `limite` (la velocidad que se muestra, redondeada, mayor que el límite), del más rápido al más lento."""
     out = []
     for c in flota:
         u = c.get("ultimo") or {}
         v = u.get("v")
         edad = c.get("edadMin")
-        if str(c.get("grupo") or "").strip().upper() != GRUPO or not isinstance(v, (int, float)) or v < limite or edad is None or edad > EDAD_MAX_MIN or not c.get("patente"):
+        if str(c.get("grupo") or "").strip().upper() != GRUPO or not isinstance(v, (int, float)) or int(round(v)) <= limite or edad is None or edad > EDAD_MAX_MIN or not c.get("patente"):
             continue
         out.append({"patente": c["patente"], "chofer": c.get("chofer") or "", "vel": int(round(v)), "lugar": (u.get("lugar") or "").strip(), "f": str(u.get("f") or "")})
     return sorted(out, key=lambda e: -e["vel"])
@@ -49,7 +49,7 @@ def nuevos(excesos: List[Dict[str, Any]], ahora: float, memoria: Dict[str, float
 def armar_mensaje(e: Dict[str, Any], limite: float = LIMITE_MOSTRADO_KMH) -> str:
     hora = e["f"][11:16] if len(e["f"]) >= 16 else ""
     lineas = ["🚨 *ALERTA DE EXCESO DE VELOCIDAD*", "", f"▪ Camión: *{e['patente']}*", f"▪ Chofer: {e['chofer'] or 'sin asignar en Despacho Diario'}",
-              f"▪ Velocidad: *{e['vel']} km/h* (límite {int(limite)} km/h)"]
+              f"▪ Velocidad: *{e['vel']} km/h* (límite {int(limite)} km/h)", f"▪ Exceso: *{e['vel'] - int(limite)} km/h* sobre el límite"]
     if hora:
         lineas.append(f"▪ Hora del reporte: {hora}")
     if e["lugar"]:
@@ -65,7 +65,8 @@ def armar_mensaje_chofer(e: Dict[str, Any], limite: float = LIMITE_MOSTRADO_KMH)
     nombre = (e["chofer"].split() or [""])[0].capitalize()
     hora = e["f"][11:16] if len(e["f"]) >= 16 else ""
     lineas = ["⚠️ *AVISO DE VELOCIDAD*", "", f"Estimado/a {nombre}," if nombre else "Estimado/a,",
-              f"El camión *{e['patente']}* registró *{e['vel']} km/h*" + (f" a las {hora}" if hora else "") + f", sobre el límite de {int(limite)} km/h."]
+              f"El camión *{e['patente']}* registró *{e['vel']} km/h*" + (f" a las {hora}" if hora else "")
+              + f", {e['vel'] - int(limite)} km/h sobre el límite de {int(limite)} km/h."]
     if e["lugar"]:
         lineas.append(f"▪ Ubicación: {e['lugar']}")
     lineas += ["", "Le pedimos reducir la velocidad y conducir con precaución. Su jefatura también recibió este aviso.", "", "_Aviso automático de Asistencia Aguacol._"]

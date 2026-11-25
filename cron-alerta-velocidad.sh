@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Alerta en vivo de exceso de velocidad (Flota en vivo de Nexacol, > 95 km/h) por WhatsApp. Llama a POST /api/whatsapp/alerta-velocidad/cron.
+# Alerta en vivo de exceso de velocidad (Flota en vivo de Nexacol, cuando pasa de 100 km/h; el mensaje dice límite 90 km/h) por WhatsApp. Llama a POST /api/whatsapp/alerta-velocidad/cron.
 # cron sugerido (cada minuto):  * * * * * bash /ruta/asistencia/cron-alerta-velocidad.sh >> /ruta/asistencia/logs/cron_alerta_velocidad.log 2>&1
 set -euo pipefail
 cd "$(dirname "$0")"

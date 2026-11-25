@@ -38,7 +38,7 @@ AVISOS = {
     },
     "exceso_velocidad": {
         "nombre": "Alerta de exceso de velocidad (en vivo)",
-        "descripcion": "A los chats que se asignen y también a la jefatura ya configurada en el resumen a jefatura: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta una velocidad sobre el límite de 90 km/h (se avisa desde que el medidor marca 95), con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
+        "descripcion": "A los chats que se asignen y también a la jefatura ya configurada en el resumen a jefatura: apenas un camión del grupo Tradicional de la Flota en vivo de Nexacol reporta una velocidad que pasa de 100 km/h (el mensaje siempre dice límite 90 km/h), con patente, chofer, velocidad y ubicación. También le llega al propio chofer (el que Despacho Diario puso en el camión), a su WhatsApp: el contacto fijado a mano, igual que el resumen personal. Se revisa cada minuto y no repite el aviso del mismo camión durante 15 minutos.",
         "usa_chats": True,
         "tambien_a": "resumen_jefatura",  # además de sus propios chats, le llega a la jefatura ya configurada en el resumen a jefatura
         "tiempo_real": True,  # no va en el cron de las 08:00: lo dispara cron-alerta-velocidad.sh
