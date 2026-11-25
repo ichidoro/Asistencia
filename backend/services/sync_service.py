@@ -1574,6 +1574,7 @@ class SyncService:
                     
             # Empleado existe, verificar si hay cambios
             cambios = self._detectar_cambios(empleado_existente, emp_data)
+            await self._respetar_cargo_local(db, empleado_existente.id, cambios)
             
             if cambios:
                 # Detectar específicamente cambio de área para historial
@@ -1758,6 +1759,7 @@ class SyncService:
                         if emp_existente:
                             # Actualizar con la lógica existente
                             cambios = self._detectar_cambios(emp_existente, emp_data)
+                            await self._respetar_cargo_local(service.repository.db, emp_existente.id, cambios)
                             if cambios:
                                 for campo, valor in cambios.items():
                                     setattr(emp_existente, campo, valor)
@@ -1773,6 +1775,18 @@ class SyncService:
                         self.stats['errores'] += 1
                 else:
                     raise e
+
+    async def _respetar_cargo_local(self, db, empleado_id: int, cambios: Dict[str, Any]) -> None:
+        """Un cargo cambiado a mano (ficha o cambio de labor) no se devuelve al de BioAlba. Si BioAlba ya trae el mismo
+        cargo que la ficha, la marca se apaga y vuelve a mandar BioAlba."""
+        fila = await db.fetch_one("SELECT cargo_local FROM empleados WHERE id = ?", (empleado_id,))
+        if not fila or not fila["cargo_local"]:
+            return
+        if "cargo" in cambios or "cargo_id" in cambios:
+            cambios.pop("cargo", None)
+            cambios.pop("cargo_id", None)
+        else:
+            await db.execute("UPDATE empleados SET cargo_local = 0 WHERE id = ?", (empleado_id,))
 
     def _detectar_cambios(self, empleado_existente, emp_data: Dict[str, Any]) -> Dict[str, Any]:
         """

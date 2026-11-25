@@ -361,6 +361,7 @@ class EmpleadoService:
         old_fecha_salida = empleado.fecha_salida
         old_activo = empleado.activo
         old_area_id = empleado.area_id
+        old_cargo_id = empleado.cargo_id
         
         # Actualizar solo campos que vienen en el request
         update_data = empleado_data.model_dump(exclude_unset=True)
@@ -377,6 +378,9 @@ class EmpleadoService:
         
         # Guardar en DB
         empleado_updated = await self.repository.update(empleado_id, empleado)
+        if empleado.cargo_id and empleado.cargo_id != old_cargo_id:
+            # Cargo cambiado a mano: la sincronización con BioAlba ya no lo devuelve al de BioAlba
+            await self.repository.db.execute("UPDATE empleados SET cargo_local = 1 WHERE id = ?", (empleado_id,))
         
         if not empleado_updated:
             logger.error(f"❌ Falló actualización de empleado {empleado_id} (Repo retornó None)")

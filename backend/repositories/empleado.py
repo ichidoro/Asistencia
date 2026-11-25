@@ -185,7 +185,9 @@ class EmpleadoRepository:
                 "cargo_id": "INTEGER REFERENCES cargos(id)",
                 "es_manual": "INTEGER DEFAULT 0",
                 "excluido_asistencia": "INTEGER DEFAULT 0",
-                "autorizado_llaves": "INTEGER DEFAULT 0"
+                "autorizado_llaves": "INTEGER DEFAULT 0",
+                # 1 = el cargo se cambió a mano (ficha o cambio de labor): la sincronización con BioAlba no lo pisa (25-11-2026)
+                "cargo_local": "INTEGER DEFAULT 0"
             }
 
             for col_name, col_def in new_columns.items():

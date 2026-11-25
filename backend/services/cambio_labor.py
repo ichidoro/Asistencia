@@ -200,7 +200,7 @@ class CambioLaborService:
             f"JOIN empleados e ON e.id = h.empleado_id WHERE h.fecha_desde <= ? AND (h.fecha_hasta IS NULL OR h.fecha_hasta >= ?) {filtro} "
             "AND e.cargo_id <> h.cargo_id", params)
         for f in filas:
-            await self.db.execute("UPDATE empleados SET cargo_id = ?, cargo = ? WHERE id = ?", (f["cargo_id"], f["nombre"], f["empleado_id"]))
+            await self.db.execute("UPDATE empleados SET cargo_id = ?, cargo = ?, cargo_local = 1 WHERE id = ?", (f["cargo_id"], f["nombre"], f["empleado_id"]))
         if filas:
             logger.info(f"🔁 Cargo de la ficha puesto al día con el historial de cargos: {len(filas)} personas")
         return len(filas)
