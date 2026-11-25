@@ -843,7 +843,8 @@ def _check_flowable(size: float = 8.5):
 
 
 def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Dict[str, Any],
-               justif: List[Dict[str, Any]], bonos: List[str], preinforme: bool = False) -> bytes:
+               justif: List[Dict[str, Any]], bonos: List[str], preinforme: bool = False,
+               fill_rate_en: Optional[List[str]] = None) -> bytes:
     """Un informe (área × tipo de horario) en A4 horizontal. Con preinforme=True es el del período aún sin cerrar:
     lo dice el título y un aviso, «Cerró» queda «Sin cerrar» y no lleva firmas."""
     from reportlab.lib import colors
@@ -1300,6 +1301,16 @@ def render_pdf(area: str, fecha_inicio: str, fecha_fin: str, cerro: str, inf: Di
             t_n.setStyle(TableStyle(est_n))
             historia += [Spacer(1, 12), KeepTogether([Paragraph('Notas de crédito del tramo', st_fr_h), Spacer(1, 4), t_n])]
 
+    # Fill Rate (25-11-2026): la hoja va solo en el informe del tipo de horario donde están las personas con el bono. Si este informe
+    # no la tiene pero el otro sí, se avisa aquí en vez de dejar un silencio que parece un error.
+    if fill_rate_en and not hoja_fill_rate(inf):
+        otros = ' y '.join('de bolsa (libreta)' if t == 'BOLSA' else 'de ciclo' for t in fill_rate_en)
+        st_frn = ParagraphStyle('frn2', fontName=_f('Barlow'), fontSize=8.3, leading=11, textColor=H(C_INK))
+        historia += [Spacer(1, 12), Paragraph('Fill Rate', ParagraphStyle('frt2', fontName=_f('BarlowSC-Bold'), fontSize=10.5, leading=13,
+                                                                          textColor=H(C_NAVY))), Spacer(1, 3),
+                     Paragraph(f'Nadie de este informe tiene el bono Fill Rate. Sus personas están en el informe {otros} de esta misma área: '
+                               f'su hoja, con las semanas, las notas de crédito y el valor a descontar, va en ese archivo.', st_frn, bulletText='•')]
+
     def pie(canvas, doc):
         canvas.saveState()
         canvas.setFont(_f('Barlow'), 7)
@@ -1346,8 +1357,10 @@ async def cierre_completo(db, asistencia_service, fecha_inicio: str, fecha_fin: 
     """Para el correo de cierre, con un solo cálculo: los PDF y el resumen de cada tipo de horario."""
     personas, justif, bonos = await _personas_del_area(db, asistencia_service, fecha_inicio, fecha_fin, area)
     infs = separar_informes(personas)
+    con_hoja = [i['tipo'] for i in infs if hoja_fill_rate(i)]
     return {'archivos': [{'tipo': inf['tipo'], 'filename': nombre_archivo(area, inf, fecha_inicio, fecha_fin), 'titulo': inf['titulo_horas'],
-                          'content': render_pdf(area, fecha_inicio, fecha_fin, cerro, inf, justif, bonos)} for inf in infs],
+                          'content': render_pdf(area, fecha_inicio, fecha_fin, cerro, inf, justif, bonos, False,
+                                                [t for t in con_hoja if t != inf['tipo']])} for inf in infs],
             'resumen': [resumen_tipo(inf, justif) for inf in infs]}
 
 
@@ -1358,12 +1371,15 @@ async def generar_informes_cierre(db, asistencia_service, fecha_inicio: str, fec
     tipo ('CICLO' | 'BOLSA') deja solo ese informe; solo_lista no dibuja los PDF (content None)."""
     personas, justif, bonos = await _personas_del_area(db, asistencia_service, fecha_inicio, fecha_fin, area)
     out = []
-    for inf in separar_informes(personas):
+    infs = separar_informes(personas)
+    con_hoja = [i['tipo'] for i in infs if hoja_fill_rate(i)]
+    for inf in infs:
         if tipo and inf['tipo'] != tipo:
             continue
         out.append({'tipo': inf['tipo'], 'filename': nombre_archivo(area, inf, fecha_inicio, fecha_fin, preinforme),
                     'titulo': inf['titulo_horas'],
-                    'content': None if solo_lista else render_pdf(area, fecha_inicio, fecha_fin, cerro, inf, justif, bonos, preinforme)})
+                    'content': None if solo_lista else render_pdf(area, fecha_inicio, fecha_fin, cerro, inf, justif, bonos, preinforme,
+                                                                       [t for t in con_hoja if t != inf['tipo']])})
     return out
 
 
