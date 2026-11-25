@@ -221,45 +221,31 @@
             }
         }
         const nombreDe = p => (window.nombreTitulo ? window.nombreTitulo(p.nombre_completo) : p.nombre_completo);
-        const opsPeon = sel => '<option value="">Ninguno</option>' + peon.map(p => '<option value="' + p.id + '"'
-            + (Number(sel) === Number(p.id) ? ' selected' : '') + '>' + esc(nombreDe(p)) + '</option>').join('');
-        const opsRazon = nombreSel => '<option value="">Elija la razón…</option>' + lista.map(x => '<option value="' + x.id + '" data-culpa="' + (x.culpa_chofer ? 1 : 0) + '" data-desc="' + (x.descuenta_productos ? 1 : 0) + '"'
-            + (nombreSel && x.nombre === nombreSel ? ' selected' : '') + '>' + esc(x.nombre) + (x.culpa_chofer ? ' · culpa del chofer' : ' · no es culpa del chofer')
-            + (x.descuenta_productos ? ' · descuenta productos' : '') + '</option>').join('');
-        // Una fila por nota de crédito: número, razón y, si la razón descuenta los productos, su valor
-        const filaNota = (n) => '<div class="bs-nota">'
-            + '<input type="text" class="bs-nota-num" maxlength="40" placeholder="N° de la nota" aria-label="Número de la nota de crédito" value="' + esc((n && n.numero) || '') + '">'
-            + '<select class="bs-nota-razon" aria-label="Razón de la nota de crédito">' + opsRazon(n && n.razon) + '</select>'
-            + '<input type="number" class="bs-nota-monto" min="1" step="1" placeholder="Valor $" aria-label="Valor de los productos a descontar" value="' + (n && n.monto ? Math.round(n.monto) : '') + '">'
-            + '<button type="button" class="bs-nota-quitar" aria-label="Quitar esta nota de crédito" title="Quitar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>'
-            + '</div>';
+        const UI = window.mxBsUi;
         // Encabezado: el nombre de la persona; debajo, el bono y el día (dueño, 23-11-2026)
         const yaMarcado = !!previa.marca;
         const html = '<div class="av-quien">' + esc(b.nombre + ' · ' + window.formatFechaDDMMYYYY(fecha) + (yaMarcado ? ' · editar evaluación' : '')) + '</div>'
             + '<div class="av-tx">' + (yaMarcado ? 'Hoy está marcado <b>«' + (previa.marca === 'cumple' ? 'Cumple' : 'No cumple') + '»</b>' + (previa.usuario ? ' por ' + esc(previa.usuario) : '')
                 + (notasPrevias.length ? ', con ' + (notasPrevias.length === 1 ? '1 nota de crédito' : notasPrevias.length + ' notas de crédito') : '') + '. Cambie lo que necesite y guarde, o elimine la marca.'
                 : 'Marque «Cumple» o «No cumple». Si un día no cumple, la semana no se paga.') + '</div>'
-            + '<div class="av-campos">'
-            + '<div class="bs-notas-wrap"><span class="bs-notas-tit">Notas de crédito del día</span>'
-            + '<div id="bs-notas">' + notasPrevias.map(filaNota).join('') + '</div>'
-            + '<button type="button" id="bs-nota-mas" class="bs-nota-mas"><i class="bi bi-plus-lg" aria-hidden="true"></i> Agregar nota de crédito</button>'
-            + (lista.length ? '' : '<small>No hay razones: créelas en Configuración › Notas de crédito.</small>') + '</div>'
-            + '<div id="bs-efecto" class="av-tx" style="display:none"></div>'
-            + '<label for="bs-coment">Comentario<input id="bs-coment" type="text" placeholder="Por ejemplo: no completó la carga" value="' + esc(previa.comentario || '') + '"></label>'
-            + (esChofer ? '<label for="bs-p1">Peonetas que iban con el chofer (reciben la misma marca)<select id="bs-p1">' + opsPeon(propuestos[0]) + '</select>'
-                + '<select id="bs-p2" style="margin-top:6px">' + opsPeon(propuestos[1]) + '</select>'
-                + (propuestos.length ? '<small>' + (notasPrevias.length ? 'Los que se guardaron ese día' : 'Propuestos desde la libreta de ese día') + '; se pueden cambiar.</small>' : '') + '</label>' : '')
+            + '<div class="av-campos bs-campos">'
+            + '<section class="bs-seccion"><div class="bs-seccion-cab"><span class="bs-notas-tit">Notas de crédito del día</span>'
+            + '<button type="button" id="bs-nota-mas" class="bs-nota-mas"><i class="bi bi-plus-lg" aria-hidden="true"></i> Agregar nota de crédito</button></div>'
+            + '<div id="bs-notas" class="bs-notas"></div>'
+            + '<div id="bs-notas-vacio" class="bs-vacio">Sin notas de crédito: el día se marca a mano con «Cumple» o «No cumple».</div>'
+            + (lista.length ? '' : '<small>No hay razones: créelas en Configuración › Notas de crédito.</small>') + '</section>'
+            + '<div id="bs-efecto" class="bs-efecto" role="status"></div>'
+            + '<label for="bs-coment" class="bs-etq">Comentario<input id="bs-coment" type="text" placeholder="Por ejemplo: no completó la carga" value="' + esc(previa.comentario || '') + '"></label>'
+            + (esChofer ? '<section class="bs-seccion"><span class="bs-notas-tit">Peonetas que iban con el chofer <i>(reciben la misma marca)</i></span>'
+                + '<div id="bs-peon" class="bs-peon"></div>'
+                + (propuestos.length ? '<small>' + (notasPrevias.length ? 'Los que se guardaron ese día' : 'Propuestos desde la libreta de ese día') + '; se pueden cambiar.</small>' : '') + '</section>' : '')
             + '</div>'
             + (yaMarcado ? '<div style="margin-top:12px;text-align:left"><button type="button" id="bs-eliminar" class="bs-eliminar">'
                 + '<i class="bi bi-trash3" aria-hidden="true"></i> Eliminar marca y sus notas (el día queda sin marcar)</button></div>' : '');
         if (!window.Swal) { if (window.Avisos) window.Avisos.error('No se pudo abrir la ventana.'); return; }
         let eliminar = false;
-        const leerNotas = () => Array.from(document.querySelectorAll('#bs-notas .bs-nota')).map(f => {
-            const op = f.querySelector('.bs-nota-razon').selectedOptions[0];
-            return { numero: (f.querySelector('.bs-nota-num').value || '').trim(), razon_id: op && op.value ? Number(op.value) : null,
-                culpa: !!(op && op.dataset.culpa === '1'), descuenta: !!(op && op.dataset.desc === '1'),
-                monto: Number(f.querySelector('.bs-nota-monto').value || 0) };
-        });
+        const notasUi = [];
+        const leerNotas = () => notasUi.filter(n => n.el.isConnected).map(n => n.leer());
         const validar = (notas) => {
             const vistos = new Set();
             for (const n of notas) {
@@ -271,52 +257,66 @@
             }
             return '';
         };
-        const peonetasElegidos = () => esChofer ? [...new Set(['bs-p1', 'bs-p2'].map(id => Number(document.getElementById(id).value || 0)).filter(Boolean))] : [];
+        let selP = [];
+        const peonetasElegidos = () => esChofer ? [...new Set(selP.map(s => Number(s.get() || 0)).filter(Boolean))] : [];
         const res = await window.Swal.fire({
             title: (window.nombreTitulo ? window.nombreTitulo(quien) : quien),
-            html: html, width: 'min(680px, calc(100vw - 32px))',
+            html: html, width: 'min(720px, calc(100vw - 32px))',
             showDenyButton: true, showCancelButton: true, reverseButtons: true, focusConfirm: false,
+            // Con una lista abierta, Escape la cierra a ella y no a toda la ventana
+            allowEscapeKey: () => !document.querySelector('.bs-lista:not(.sale)'),
             confirmButtonText: 'No cumple', denyButtonText: 'Cumple', cancelButtonText: 'Cancelar',
             customClass: { confirmButton: 'av-btn av-btn-borra', denyButton: 'av-btn av-btn-pri', title: 'bs-titulo' },
+            didClose: () => { if (UI) UI.cerrarListas(); },
             didOpen: () => {
-                // Con notas de crédito, sus razones deciden: se oculta «Cumple» / «No cumple» y queda un solo «Guardar»
                 const cont = document.getElementById('bs-notas');
+                const vacio = document.getElementById('bs-notas-vacio');
+                // Con notas de crédito, sus razones deciden: se oculta «Cumple» / «No cumple» y queda un solo «Guardar»
                 const pintar = () => {
-                    cont.querySelectorAll('.bs-nota').forEach(f => {
-                        const op = f.querySelector('.bs-nota-razon').selectedOptions[0];
-                        f.querySelector('.bs-nota-monto').style.display = op && op.dataset.desc === '1' ? '' : 'none';
-                    });
                     const notas = leerNotas();
+                    vacio.style.display = notas.length ? 'none' : '';
                     const efecto = document.getElementById('bs-efecto');
                     const deny = window.Swal.getDenyButton(), conf = window.Swal.getConfirmButton();
+                    const conRazon = notas.filter(n => n.razon_id);
                     if (notas.length) {
                         deny.style.display = 'none';
                         conf.textContent = 'Guardar';
-                        const conRazon = notas.filter(n => n.razon_id);
                         const culpa = conRazon.some(n => n.culpa);
                         const desc = conRazon.filter(n => n.descuenta).reduce((s, n) => s + (n.monto || 0), 0);
-                        efecto.style.display = conRazon.length ? '' : 'none';
+                        efecto.className = 'bs-efecto' + (conRazon.length ? ' ver ' + (culpa ? 'mal' : 'ok') : '');
                         efecto.textContent = !conRazon.length ? '' : (culpa ? 'Hay una nota por culpa del chofer: el día queda «No cumple» y la semana no se paga.'
                             : 'Ninguna nota es culpa del chofer: el día queda «Cumple».') + (desc > 0 ? ' Valor a descontar al chofer: ' + pesos(desc) + '.' : '');
                     } else {
                         deny.style.display = '';
                         conf.textContent = 'No cumple';
-                        efecto.style.display = 'none';
+                        efecto.className = 'bs-efecto';
+                        efecto.textContent = '';
                     }
                 };
-                document.getElementById('bs-nota-mas').addEventListener('click', () => {
-                    cont.insertAdjacentHTML('beforeend', filaNota(null));
+                const agregar = (previaNota) => {
+                    const n = UI.crearNota({ razones: lista, previa: previaNota, alCambiar: pintar, alQuitar: pintar });
+                    notasUi.push(n);
+                    cont.appendChild(n.el);
                     pintar();
-                    const ult = cont.querySelector('.bs-nota:last-child .bs-nota-num');
-                    if (ult) ult.focus();
-                });
-                cont.addEventListener('click', e => {
-                    const q = e.target.closest('.bs-nota-quitar');
-                    if (q) { q.closest('.bs-nota').remove(); pintar(); }
-                });
-                cont.addEventListener('change', pintar);
-                cont.addEventListener('input', pintar);
-                pintar();
+                    return n;
+                };
+                notasPrevias.forEach(p => agregar(p));
+                document.getElementById('bs-nota-mas').addEventListener('click', () => { agregar(null).foco(); });
+                // Peonetas: el segundo aparece cuando hay un primero, y nadie se puede elegir dos veces
+                const peonEl = document.getElementById('bs-peon');
+                if (peonEl) {
+                    const opciones = (i) => peon.map(p => ({ valor: p.id, etiqueta: nombreDe(p),
+                        off: selP.some((x, j) => j !== i && x.get() === String(p.id)), extra: 'ya elegido' }));
+                    const refrescar = () => {
+                        selP.forEach((s, i) => s.poner(opciones(i)));
+                        selP[1].el.classList.toggle('ver', !!selP[0].get());
+                        if (!selP[0].get()) selP[1].set('');
+                    };
+                    selP = [0, 1].map(i => UI.crearSelect({ opciones: opciones(i), valor: propuestos[i] || '', vacio: 'Ninguno', buscar: true,
+                        ariaLabel: i ? 'Segundo peoneta' : 'Primer peoneta', aviso: 'Ningún peoneta coincide', onCambio: refrescar }));
+                    selP.forEach(s => peonEl.appendChild(s.el));
+                    refrescar();
+                }
                 const del = document.getElementById('bs-eliminar');
                 if (del) del.addEventListener('click', () => { eliminar = true; window.Swal.close(); });
             },
@@ -349,7 +349,7 @@
         }
         if (res.isDismissed) return;
         const v = res.value || {};
-        const notas = (v.notas || []).map(n => ({ numero: n.numero, razon_id: n.razon_id, monto: n.descuenta ? n.monto : null }));
+        const notas = (v.notas || []).map(n => ({ numero: n.numero, razon_id: n.razon_id, monto: n.descuenta ? n.monto : null, desde_nexacol: !!n.desde_nexacol }));
         const cuerpo = { bono_id: r.bono_id, empleado_id: Number(empId), fecha, no_cumple: !!res.isConfirmed && !notas.length,
             comentario: v.comentario || null, notas, peonetas_ids: v.peonetas || [] };
         try {

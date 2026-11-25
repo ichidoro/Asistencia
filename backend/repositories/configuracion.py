@@ -585,6 +585,10 @@ class ConfiguracionRepository:
             """)
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_bono_notas_fecha ON bono_notas_credito(bono_id, fecha)")
             logger.info("✨ Tabla bono_notas_credito creada")
+        # Detalle de la nota traído de Nexacol al registrarla (cliente, factura, productos), tal como estaba ese día
+        if get_cols and "detalle" not in await get_cols("bono_notas_credito"):
+            await self.db.execute("ALTER TABLE bono_notas_credito ADD COLUMN detalle TEXT")
+            logger.info("✨ Migración: columna 'detalle' agregada a bono_notas_credito")
 
     async def get_dias_no_cumple(self, bono_ids: List[int], desde: str, hasta: str) -> List[Dict]:
         """Los días marcados («no_cumple» o «cumple») de esos bonos semanales entre dos fechas."""
@@ -632,9 +636,10 @@ class ConfiguracionRepository:
             descuenta = bool(r.get("descuenta_productos"))
             await self.db.execute(
                 "INSERT INTO bono_notas_credito (bono_id, empleado_id, fecha, numero, razon_id, razon_nombre, culpa_chofer, "
-                "descuenta, monto, peonetas_ids, usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "descuenta, monto, peonetas_ids, usuario, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (bono_id, empleado_id, fecha, n["numero"], r["id"], r["nombre"], 1 if r.get("culpa_chofer") else 0,
-                 1 if descuenta else 0, float(n.get("monto") or 0) if descuenta else 0, peon, usuario))
+                 1 if descuenta else 0, float(n.get("monto") or 0) if descuenta else 0, peon, usuario,
+                 json.dumps(n["detalle"], ensure_ascii=False) if n.get("detalle") else None))
 
     async def justificacion_del_dia(self, empleado_id: int, fecha: str) -> Optional[Dict]:
         """La justificación que cubre ese día de la persona (su nombre), o None."""
@@ -650,10 +655,14 @@ class ConfiguracionRepository:
         out = []
         for r in await self.db.fetch_all(
                 f"SELECT id, bono_id, empleado_id, fecha, numero, razon_id, razon_nombre, culpa_chofer, descuenta, monto, "
-                f"peonetas_ids, usuario FROM bono_notas_credito WHERE bono_id IN ({ph}) AND fecha BETWEEN ? AND ? "
+                f"peonetas_ids, usuario, detalle FROM bono_notas_credito WHERE bono_id IN ({ph}) AND fecha BETWEEN ? AND ? "
                 f"ORDER BY fecha, id", (*bono_ids, desde, hasta)):
             d = dict(r)
             d["peonetas_ids"] = [int(x) for x in str(d.get("peonetas_ids") or "").split(",") if x.strip().isdigit()]
+            try:
+                d["detalle"] = json.loads(d["detalle"]) if d.get("detalle") else None
+            except ValueError:
+                d["detalle"] = None
             out.append(d)
         return out
 

@@ -200,7 +200,7 @@ def notas_de(emp_id: int, notas: List[Dict[str, Any]], marcas: Dict[str, Dict[st
         out.append({"fecha": str(n["fecha"])[:10], "numero": n.get("numero"), "razon": n.get("razon_nombre"),
                     "culpa": bool(n.get("culpa_chofer")), "descuenta": bool(n.get("descuenta")),
                     "monto": float(n.get("monto") or 0), "rol": rol, "chofer_id": int(n["empleado_id"]),
-                    "peonetas_ids": list(n.get("peonetas_ids") or [])})
+                    "peonetas_ids": list(n.get("peonetas_ids") or []), "detalle": n.get("detalle")})
     con_notas = {x["fecha"] for x in out}
     for f, m in sorted(marcas.items()):
         if m.get("tiene_nc") and m.get("razon_nc") and f not in con_notas:

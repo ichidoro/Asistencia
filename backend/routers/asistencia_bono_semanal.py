@@ -3,6 +3,7 @@ Router - Asistencia: bonos semanales (Fill Rate, pedido de la persona dueña, 23
 «Fill Rate», se marca o se quita el «no cumple» de un día de una persona. Dirección bajo /api/asistencia (asistencia.py
 incluye este router).
 """
+import asyncio
 import json
 from datetime import date
 from typing import List, Optional
@@ -16,13 +17,16 @@ from backend.core.security import RequirePermission, SecurityContext
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.configuracion import ConfiguracionRepository
 from backend.repositories.turno import TurnoRepository
+from backend.services import nc_nexacol
 
 router = APIRouter()
 
 
 class NotaCredito(BaseModel):
-    numero: str = Field(..., min_length=1, max_length=40)
+    numero: str = Field(..., min_length=1, max_length=60)
     razon_id: int
+    # El número viene de una nota de Nexacol: se guarda con el detalle de sus productos (25-11-2026)
+    desde_nexacol: bool = False
     # Solo si la razón descuenta el valor de los productos (por ejemplo, extravío de la carga)
     monto: Optional[float] = Field(None, ge=0)
 
@@ -72,8 +76,36 @@ async def _validar_notas(repo, notas: List[NotaCredito], personas: List[int], fe
         monto = float(n.monto or 0)
         if r.get("descuenta_productos") and monto <= 0:
             raise HTTPException(status_code=400, detail=f"La nota de crédito {numero} descuenta los productos: indique su valor.")
-        out.append({"numero": numero, "razon": r, "monto": monto if r.get("descuenta_productos") else 0})
+        out.append({"numero": numero, "razon": r, "monto": monto if r.get("descuenta_productos") else 0,
+                    "desde_nexacol": n.desde_nexacol})
     return out
+
+
+@router.get("/bono-semanal/nc/buscar/")
+async def buscar_nc(
+    q: str,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Busca notas de crédito de Nexacol por su número (parcial)."""
+    q = q.strip()
+    if len(q) < 2:
+        return {"resultados": []}
+    try:
+        return {"resultados": await nc_nexacol.buscar(q)}
+    except nc_nexacol.GpsNexacolError as e:
+        raise HTTPException(status_code=e.status, detail=e.mensaje)
+
+
+@router.get("/bono-semanal/nc/detalle/")
+async def detalle_nc(
+    folio: str,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """La nota de crédito exacta de Nexacol con el detalle completo de sus productos."""
+    try:
+        return {"nc": await nc_nexacol.detalle(folio.strip())}
+    except nc_nexacol.GpsNexacolError as e:
+        raise HTTPException(status_code=e.status, detail=e.mensaje)
 
 
 @router.get("/bono-semanal/acompanantes/")
@@ -133,6 +165,15 @@ async def marcar_no_cumple(
     if req.tiene_nc and not req.notas:
         raise HTTPException(status_code=400, detail="Recargue la página: ahora cada nota de crédito pide su número.")
     notas = await _validar_notas(repo, req.notas, personas, fecha, req.empleado_id)
+
+    async def _con_detalle(n: dict) -> None:
+        if not n.get("desde_nexacol"):
+            return
+        try:
+            n["detalle"] = await nc_nexacol.detalle(n["numero"])
+        except Exception as e:   # Nexacol caído: la nota se guarda igual, sin detalle
+            logger.warning(f"[BonoSemanal] Detalle de la NC {n['numero']} no obtenido: {e}")
+    await asyncio.gather(*(_con_detalle(n) for n in notas))
     no_cumple = any(n["razon"]["culpa_chofer"] for n in notas) if notas else req.no_cumple
     # La razón que se ve en la celda: la que hace perder el día, o la primera
     razon = next((n["razon"] for n in notas if n["razon"]["culpa_chofer"]), notas[0]["razon"] if notas else None)
