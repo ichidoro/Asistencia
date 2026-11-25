@@ -310,6 +310,17 @@
             reducido() ? fin() : setTimeout(fin, 150);
         });
         pintarCab(); pintarDet(); sync();
+        // Nota ya guardada sin el detalle de Nexacol (guardada antes o cuando falló la consulta): se vuelve a traer al abrir,
+        // para que la ficha completa siempre se vea abierta y no solo la razón.
+        if (!nc && previa && manual && /^[A-Za-z0-9-]+$/.test(manual)) {
+            const folio = manual;
+            cargando = true; pintarCab(); pintarDet();
+            fetch('/api/asistencia/bono-semanal/nc/detalle/?folio=' + encodeURIComponent(folio), { headers: authHead() })
+                .then(r => r.json().catch(() => ({})).then(out => ({ ok: r.ok, out })))
+                .then(({ ok, out }) => { if (ok && out.nc && out.nc.folio) { nc = out.nc; manual = ''; } })
+                .catch(() => {})
+                .finally(() => { cargando = false; if (!el.isConnected && !el.parentNode) return; pintarCab(); pintarDet(); sync(); });
+        }
         return { el, leer: nota, foco: () => { const q = el.querySelector('.bs-nc-q'); if (q) q.focus(); } };
     }
 
