@@ -14,6 +14,19 @@ router = APIRouter(
     tags=["Cierre"]
 )
 
+async def fechas_del_periodo(db: Database, fecha_inicio: str, fecha_fin: str) -> tuple:
+    """Siempre las fechas del período configurado (dueño, 26-11-2026): si hay un período en Configuración que empieza ese
+    día, el cierre, su revisión y sus informes usan su fecha de fin, aunque la pantalla envíe otra (un PDF de diciembre
+    salió «al 26-12» con el período configurado hasta el domingo 27-12 y le faltó la quinta semana del Fill Rate). Sin
+    período configurado con ese inicio, se usan las fechas recibidas."""
+    p = await ConfiguracionRepository(db).periodo_rrhh_que_empieza(fecha_inicio)
+    fin = str(p["fecha_fin"])[:10] if p and p.get("fecha_fin") else ""
+    if fin and fin != fecha_fin:
+        logger.info(f"Cierre: se usa el fin del período configurado {fin} en vez de {fecha_fin} (inicio {fecha_inicio})")
+        return fecha_inicio, fin
+    return fecha_inicio, fecha_fin
+
+
 class EjecutarCierreRequest(BaseModel):
     fecha_inicio: str
     fecha_fin: str
@@ -35,6 +48,7 @@ async def evaluar_cierre(
         if not area or area == 'Todas' or area.strip() == '':
             raise HTTPException(status_code=400, detail="Debe seleccionar un área específica.")
             
+        fecha_inicio, fecha_fin = await fechas_del_periodo(db, fecha_inicio, fecha_fin)
         d_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
         d_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
         diff_days = (d_fin - d_ini).days + 1
@@ -64,6 +78,7 @@ async def ejecutar_cierre(
         if not req.area or req.area == 'Todas' or req.area.strip() == '':
             raise HTTPException(status_code=400, detail="Debe seleccionar un área específica.")
             
+        req.fecha_inicio, req.fecha_fin = await fechas_del_periodo(db, req.fecha_inicio, req.fecha_fin)
         d_ini = datetime.strptime(req.fecha_inicio, "%Y-%m-%d")
         d_fin = datetime.strptime(req.fecha_fin, "%Y-%m-%d")
         diff_days = (d_fin - d_ini).days + 1
@@ -176,6 +191,7 @@ async def informe_pdf(
     from backend.services.asistencia_service import AsistenciaService
     from backend.services.informe_cierre_pdf import informes_del_area
     try:
+        fecha_inicio, fecha_fin = await fechas_del_periodo(db, fecha_inicio, fecha_fin)
         _validar_informe(fecha_inicio, fecha_fin, area, current_user)
         res = await informes_del_area(db, AsistenciaService(AsistenciaRepository(db)), fecha_inicio, fecha_fin, area,
                                       solo_lista=True)
@@ -208,6 +224,7 @@ async def informe_pdf_archivo(
     from backend.services.asistencia_service import AsistenciaService
     from backend.services.informe_cierre_pdf import informes_del_area
     try:
+        fecha_inicio, fecha_fin = await fechas_del_periodo(db, fecha_inicio, fecha_fin)
         _validar_informe(fecha_inicio, fecha_fin, area, current_user)
         if tipo not in ('CICLO', 'BOLSA'):
             raise HTTPException(status_code=400, detail="Tipo de horario no válido.")
@@ -240,6 +257,7 @@ async def resumen_cierre(
     from backend.services.asistencia_service import AsistenciaService
     from backend.services.informe_cierre_pdf import resumen_del_area
     try:
+        fecha_inicio, fecha_fin = await fechas_del_periodo(db, fecha_inicio, fecha_fin)
         _validar_informe(fecha_inicio, fecha_fin, area, current_user)
         return {"tipos": await resumen_del_area(db, AsistenciaService(AsistenciaRepository(db)), fecha_inicio, fecha_fin, area)}
     except HTTPException:

@@ -656,10 +656,20 @@ window.syncPeriodoDropdownConFechas = function() {
             break;
         }
     }
+    if (!found && !stateMarcacionesApp.usuarioModificoFechas) {
+        // Siempre las fechas del período configurado (dueño, 26-11-2026): si las fechas recordadas empiezan el mismo día
+        // que un período de Configuración pero terminan en otro (el período se corrigió después), se toma el período.
+        const op = [...select.options].find(o => o.value.startsWith(stateMarcacionesApp.fechaInicioRRHH + '|'));
+        if (op && window.cambiarPeriodoFiltro) {
+            select.value = op.value;
+            window.cambiarPeriodoFiltro(op.value);
+            return;
+        }
+    }
     if (!found) {
         select.value = 'custom';
     }
-    
+
     const inputInicio = document.getElementById('rrhh-fecha-inicio');
     const inputFin = document.getElementById('rrhh-fecha-fin');
     if (inputInicio && inputFin) {

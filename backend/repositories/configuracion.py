@@ -1440,6 +1440,10 @@ class ConfiguracionRepository:
             
         return results
 
+    async def periodo_rrhh_que_empieza(self, fecha_inicio: str) -> Optional[Dict[str, Any]]:
+        """El período configurado que empieza ese día (para que el cierre y sus informes usen su fecha de fin)."""
+        return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE fecha_inicio = ? LIMIT 1", (fecha_inicio,))
+
     async def get_periodo_rrhh_activo(self) -> Optional[Dict[str, Any]]:
         await self._auto_heal_periodos()
         return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE activo = 1 LIMIT 1")

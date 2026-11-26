@@ -139,7 +139,7 @@
   ]
  },
  "funciones_largas": {
-  "total": 1664,
+  "total": 1667,
   "top": [
    {
     "funcion": "sync_marcaciones",
@@ -196,7 +196,7 @@
  "archivos_grandes": [
   {
    "archivo": "frontend/js/marcaciones_ui.js",
-   "lineas": 10065
+   "lineas": 10075
   },
   {
    "archivo": "frontend/js/marcaciones_manuales.js",
@@ -228,7 +228,7 @@
   },
   {
    "archivo": "backend/services/sync_service.py",
-   "lineas": 1862
+   "lineas": 1876
   },
   {
    "archivo": "frontend/js/horarios.js",
