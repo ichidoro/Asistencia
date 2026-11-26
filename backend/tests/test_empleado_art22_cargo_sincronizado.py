@@ -22,3 +22,8 @@ def test_update_empleado_sin_import_local_de_date():
     import inspect
     src = inspect.getsource(EmpleadoService.update_empleado)
     assert "from datetime import date" not in src  # volvía 'date' local y rompía el cambio de área
+
+
+def test_empleado_update_acepta_cargo_id():
+    from backend.schemas.empleado import EmpleadoUpdate
+    assert EmpleadoUpdate(cargo_id=49).model_dump(exclude_unset=True) == {"cargo_id": 49}

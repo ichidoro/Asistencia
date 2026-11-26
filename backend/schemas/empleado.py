@@ -105,6 +105,7 @@ class EmpleadoUpdate(_ValidateDatesMixin, BaseModel):
     apellido_paterno: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido_materno: Optional[str] = Field(None, min_length=1, max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
+    cargo_id: Optional[int] = None  # sin este campo el cargo elegido en la ficha se descartaba al guardar
     area_id: Optional[int] = None
     area: Optional[str] = Field(None, max_length=100)
     compania: Optional[str] = Field(None, max_length=100)
