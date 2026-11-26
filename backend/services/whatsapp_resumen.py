@@ -351,8 +351,10 @@ _DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "do
 
 
 def armar_mensaje_general(momento: str, items: List[Dict[str, Any]], hoy: str) -> str | None:
-    """None si no hay novedades (en ese caso no se envía nada)."""
+    """None si no hay novedades en las horas extras (no se envía nada). Los atrasos del mediodía SIEMPRE se informan: sin atrasos, el mensaje lo dice."""
     if not items:
+        if momento == "atrasos":
+            return "\n".join(["*ATRASOS DE HOY · BODEGA*", f"Marcajes hasta las 12:00 del {_dm(hoy)}", "", "✅ Hoy no hubo atrasos.", "", "_Mensaje automático de Asistencia Aguacol._"])
         return None
     if momento == "atrasos":
         lineas = ["*ATRASOS DE HOY · BODEGA*", f"Marcajes hasta las 12:00 del {_dm(hoy)}", ""]
@@ -371,7 +373,7 @@ def armar_mensaje_general(momento: str, items: List[Dict[str, Any]], hoy: str) -
 
 
 async def enviar_general(asistencia_service, hoy: str, simular: bool, destinos: List[str] | None, filtro: Dict[str, List[str]] | None, momento: str) -> Dict[str, Any]:
-    """Resumen general de bodega. `momento`: atrasos | extras | ambos (a mano). Solo se envía lo que tiene novedades."""
+    """Resumen general de bodega. `momento`: atrasos | extras | ambos (a mano). Los atrasos se envían siempre (también «sin atrasos»); las horas extras, solo si las hubo."""
     momentos = ["extras", "atrasos"] if momento == "ambos" else [momento]
     chats = destinos or []
     mensajes = []

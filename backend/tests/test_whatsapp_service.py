@@ -414,7 +414,7 @@ def test_resumen_general_horas_extras_del_dia_anterior_y_lunes_revisa_el_fin_de_
     assert "HORAS EXTRAS" in m and "Lunes 23/11" in m and "Perez Juan" in m and "1:30 h" in m and "Diaz" not in m
 
 
-def test_resumen_general_sin_novedades_no_envia_nada(monkeypatch):
+def test_resumen_general_sin_novedades_avisa_solo_que_no_hubo_atrasos(monkeypatch):
     import asyncio
     from backend.services import whatsapp_resumen as wr
     enviados = []
@@ -425,8 +425,9 @@ def test_resumen_general_sin_novedades_no_envia_nada(monkeypatch):
     monkeypatch.setattr(wr, "novedades_general", novedades)
     monkeypatch.setattr(wr.whatsapp_service, "enviar", enviar)
     r = asyncio.run(wr.enviar_general(None, "2026-11-24", False, ["120@g.us"], None, "ambos"))
-    assert r["con_novedades"] == 0 and enviados == []
-    assert wr.armar_mensaje_general("atrasos", [], "2026-11-24") is None
+    # horas extras sin novedades: nada; atrasos sin novedades: un mensaje que dice que no hubo (pedido 26-11-2026)
+    assert r["con_novedades"] == 1 and len(enviados) == 1 and "no hubo atrasos" in enviados[0] and "ATRASOS DE HOY" in enviados[0]
+    assert wr.armar_mensaje_general("extras", [], "2026-11-24") is None
 
 
 def test_resumen_general_cada_franja_hace_lo_suyo(monkeypatch):
