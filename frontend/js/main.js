@@ -1526,7 +1526,7 @@ async function loadEmpleadoData(id) {
     document.getElementById('input-nombre').disabled = !isManual;
     document.getElementById('input-apellido-paterno').disabled = !isManual;
     document.getElementById('input-apellido-materno').disabled = !isManual;
-    document.getElementById('input-cargo').disabled = !isManual;
+    document.getElementById('input-cargo').disabled = false; // el cargo y el Artículo 22 se editan también en personas de BioAlba (26-11-2026)
     document.getElementById('input-area').disabled = !isManual;
     document.getElementById('input-genero').disabled = !isManual;
     

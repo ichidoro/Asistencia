@@ -54,10 +54,6 @@ class EmpleadoService:
                 if empleado.excluido_asistencia is None:
                     empleado.excluido_asistencia = bool(res_cargo["excluido_asistencia"]) if empleado.es_manual else False
                 
-        # Forzar excluido_asistencia = False para empleados sincronizados de BioAlba
-        if not empleado.es_manual:
-            empleado.excluido_asistencia = False
-
         # Resolver género
         if empleado.genero_id and not empleado.genero:
             res_gen = await db.fetch_one("SELECT nombre FROM cat_generos WHERE id = ?", (empleado.genero_id,))
@@ -415,7 +411,6 @@ class EmpleadoService:
             await self._clean_ghost_data(empleado_id, empleado_updated.fecha_salida)
         elif not empleado_updated.activo:
             # Si no hay fecha_salida pero se desactivó, usar hoy como fecha de corte
-            from datetime import date
             await self._clean_ghost_data(empleado_id, date.today().isoformat())
         
         # Trigger Recálculo de Asignaciones (solo empleados activos)
@@ -427,7 +422,6 @@ class EmpleadoService:
             
         # [AUTO-HEALING] Solo para empleados activos con cambios críticos en el contrato
         if self.asis_service and empleado_updated.activo and (empleado_updated.fecha_salida != old_fecha_salida or empleado_updated.activo != old_activo):
-            from datetime import date
             hoy = date.today().strftime("%Y-%m-%d")
             # Si se extendió o activó, reprocesamos desde el mes pasado hasta fin de mes actual para cubrir gaps
             fecha_inicio = old_fecha_salida or empleado_updated.fecha_ingreso or hoy
