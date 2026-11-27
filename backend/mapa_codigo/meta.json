@@ -1,7 +1,7 @@
 {
- "armado": "2026-11-27T19:27:59+00:00",
- "publicado": "2026-11-27T19:28:00+00:00",
- "commit": "9f2d4d2",
+ "armado": "2026-11-27T20:38:38+00:00",
+ "publicado": "2026-11-27T20:38:38+00:00",
+ "commit": "ae033bb",
  "archivos_leidos": 319,
  "archivos": {
   "backend/__init__.py": "15b872549425a46322d2a58126618299",
@@ -18,7 +18,7 @@
   "backend/core/sql_groupby.py": "e82aaa921250d41c716f4ed50a17443f",
   "backend/core/startup_manager.py": "d958165129af30fa1a2260e46e6846e1",
   "backend/core/sys_utils.py": "63d1509bb7d79ea8a26d540c5d2c8e9b",
-  "backend/docs/REGLAS_ASISTENCIA.md": "35674fd2186491b30501836f785395c5",
+  "backend/docs/REGLAS_ASISTENCIA.md": "ee30bd1b082d4c41810795e4ea427261",
   "backend/main.py": "e29b5001477c893195378685aeb1f6f0",
   "backend/models/__init__.py": "50a6d42a551d46abb100bb78ca63be9c",
   "backend/models/empleado.py": "36f63ea97bffb63fa66a61e10030911f",
@@ -270,7 +270,7 @@
   "frontend/js/llaves_ui.js": "6f822ef42d8d1883e7c830ce125941dc",
   "frontend/js/main.js": "d3c323b16daa60bb1c7b21821903f170",
   "frontend/js/marcaciones_manuales.js": "20554361f8a3506d80690870cd603794",
-  "frontend/js/marcaciones_ui.js": "4df34395e34204fe248ec61ecf531ab0",
+  "frontend/js/marcaciones_ui.js": "9c81752c2742b3d211ab2a76ef94b17c",
   "frontend/js/modal_stack.js": "c036f1bfe31f5fa95fa170296d036451",
   "frontend/js/perdonazo_panel.js": "df07b5348c7358cc07247d337d6a089d",
   "frontend/js/personas_hd.js": "59be2e41b1095615ba90a64e29544313",

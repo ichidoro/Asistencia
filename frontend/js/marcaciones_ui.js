@@ -7359,6 +7359,58 @@ window.mxSemanasCalendario = function (dates) {
     return out;
 };
 
+// Reparto de la meta de la Bolsa en las semanas (dueño, 27-11-2026). Cada semana recibe la meta base (con el prorrateo
+// de vigencia ya aplicado) en proporción a sus días corridos en vigencia, y se le resta el descuento de SUS días
+// justificados (el mismo valor por día que usa calcularStatsEmpleado). Lo que falte para llegar a la meta del tramo
+// (otros ajustes, redondeos) se reparte por días. Se redondea sobre el acumulado: las semanas suman exacto la meta.
+window.mxRepartoMetaSemanas = function (semanas, o) {
+    const enVig = o.enVigencia || (() => true);
+    const vig = semanas.map(s => s.dias.filter(enVig).length);
+    const totVig = vig.reduce((a, b) => a + b, 0);
+    const desc = semanas.map(s => (o.valorDia || 0) * s.dias.filter(d => enVig(d) && o.esJustificado(d)).length);
+    const bruto = semanas.map((s, k) => (totVig > 0 ? (o.metaBase || 0) * vig[k] / totVig : 0) - desc[k]);
+    const resto = (o.metaMin || 0) - bruto.reduce((a, b) => a + b, 0);
+    let acum = 0, previo = 0, acumD = 0, previoD = 0;
+    return semanas.map((s, k) => {
+        acum += bruto[k] + (totVig > 0 ? resto * vig[k] / totVig : 0);
+        acumD += desc[k];
+        const meta = Math.round(acum) - previo; previo = Math.round(acum);
+        const d = Math.round(acumD) - previoD; previoD = Math.round(acumD);
+        return { meta, desc: d };
+    });
+};
+
+// Notas de lo que pasó en la semana: justificaciones (descuentan de la meta), descanso operativo, inasistencias,
+// jornadas especiales (sus horas no entran a la bolsa) y feriados. Agrupa los días por motivo: «Licencia comun 26 y 27».
+window.mxNotasSemanaBolsa = function (dias, empData, feriadoDe, enVigencia) {
+    const enVig = enVigencia || (() => true);
+    const ESP = ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'];
+    const grupos = [];
+    const sumar = (tipo, texto, d) => { let g = grupos.find(x => x.tipo === tipo && x.texto === texto); if (!g) { g = { tipo, texto, dias: [] }; grupos.push(g); } g.dias.push(d); };
+    const sentencia = (t) => { const x = String(t || '').trim().replace(/_/g, ' ').toLowerCase(); return x.charAt(0).toUpperCase() + x.slice(1); };
+    dias.forEach(d => {
+        if (!enVig(d)) return;
+        const di = empData[d] || {};
+        const est = String(di.estado || '').toUpperCase();
+        const nom = String(di.nomenclatura || '').trim().toUpperCase();
+        const horas = Number(di.horas_trabajadas || 0) > 0;
+        if (di._esDiaJustificadoBolsa) sumar('just', sentencia(di.estado) + (horas ? ' (con horas)' : ''), d);
+        else if (nom === 'DEOP' || est.includes('DESCANSO OPERATIVO')) sumar('otro', 'Descanso operativo' + (horas ? ' (con horas)' : ''), d);
+        else if (est === 'INASISTENCIA') sumar('ina', 'Inasistencia', d);
+        else if (ESP.includes(est)) sumar('otro', 'Jornada especial, no suma a la bolsa', d);
+        const fer = feriadoDe ? feriadoDe(d) : null;
+        if (fer) sumar('fer', 'Feriado: ' + fer, d);
+    });
+    const dia = (iso) => String(Number(iso.slice(8, 10)));
+    const lista = (ds) => {
+        const tramos = [];
+        ds.forEach(d => { const t = tramos[tramos.length - 1]; if (t && window.mxDiaAnterior(d) === t[t.length - 1]) t.push(d); else tramos.push([d]); });
+        const partes = tramos.map(t => (t.length > 2 ? dia(t[0]) + ' al ' + dia(t[t.length - 1]) : t.map(dia).join(' y ')));
+        return partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0];
+    };
+    return grupos.map(g => ({ tipo: g.tipo, texto: g.texto + ' ' + lista(g.dias) }));
+};
+
 // ── Horas por semana de un chofer en Bolsa: la meta del tramo repartida en sus semanas de lunes a domingo ──
 // Clic en la celda «Meta» de la grilla. La meta de cada semana es proporcional a sus días dentro del período.
 // Los textos van con comillas y concatenación: el minificador del servidor (rjsmin) come los espacios de las plantillas anidadas.
@@ -7383,37 +7435,55 @@ window.mxSemanasBolsa = function (empId) {
     const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
     const esc = (t) => window.Ayuda.esc(t);
     const semanas = window.mxSemanasCalendario(dates);
+    const prorB = r.emp && r.emp._prorrateoBolsa;
+    const enVig = (d) => !prorB || (d >= prorB.desde && d <= prorB.hasta);
+    const reparto = window.mxRepartoMetaSemanas(semanas, {
+        metaMin: r.metaMin,
+        metaBase: (r.emp && r.emp._metaOriginalBolsa) || r.metaMin,
+        valorDia: (r.emp && r.emp._valorTurnoMinBolsa) || 0,
+        esJustificado: (d) => Boolean((empData[d] || {})._esDiaJustificadoBolsa),
+        enVigencia: enVig
+    });
+    const feriadoDe = (d) => { const f = (data.feriados || []).find(x => (x.fecha || x) === d); return f ? (f.descripcion || 'Feriado') : null; };
     const filas = semanas.map((sem, k) => {
         const ds = sem.dias;
         const trab = ds.reduce((s, d) => { const di = empData[d] || {}; return s + Math.max(0, (di._acumuladoBolsaSnap || 0) - (di._acumuladoBolsaSnapPrev || 0)); }, 0);
-        const meta = Math.round(r.metaMin * ds.length / dates.length);
-        const pct = meta > 0 ? Math.round(trab / meta * 100) : 0;
-        return { n: k + 1, lunes: sem.lunes, domingo: sem.domingo, desde: ds[0], hasta: ds[ds.length - 1], dias: ds.length, trab, meta, pct, dif: trab - meta };
+        const rp = reparto[k];
+        const pct = rp.meta > 0 ? Math.round(trab / rp.meta * 100) : 0;
+        return { n: k + 1, lunes: sem.lunes, domingo: sem.domingo, desde: ds[0], hasta: ds[ds.length - 1], dias: ds.length, trab, meta: rp.meta, desc: rp.desc, pct, dif: trab - rp.meta,
+            notas: window.mxNotasSemanaBolsa(ds, empData, feriadoDe, enVig) };
     });
     // Nota de la semana cortada: al inicio, sus días del período anterior ya se contaron allá; al final, sigue en el siguiente
-    const notaCorte = (f) => (f.desde !== f.lunes ? 'Cuenta del ' + dm(f.desde) + '; del ' + dm(f.lunes) + ' al ' + dm(window.mxDiaAnterior(f.desde)) + ' se contó en el período anterior'
+    const notaCorte = (f) => (f.desde !== f.lunes ? 'Del ' + dm(f.lunes) + ' al ' + dm(window.mxDiaAnterior(f.desde)) + ': en el período anterior'
         : f.hasta !== f.domingo ? 'Semana cortada: sigue en el período siguiente' : '');
+    const COLOR_NOTA = { just: 'background:#fef3c7;color:#92400e;', fer: 'background:#e0f2fe;color:#075985;', ina: 'background:#fee2e2;color:#991b1b;', otro: 'background:#eff1f6;color:#3c4767;' };
+    const etiqueta = (tipo, texto) => '<span style="display:inline-block;font-size:0.68rem;line-height:1.3;padding:1px 8px;border-radius:999px;margin:3px 4px 0 0;' + COLOR_NOTA[tipo] + '">' + esc(texto) + '</span>';
     const color = (p) => (p >= 100 ? '#059669' : p >= 75 ? '#d97706' : '#7c3aed');
     const tabla = filas.map(f => {
         const dif = (f.dif > 0 ? '+' : f.dif < 0 ? '−' : '') + fmt(f.dif);
+        const corte = notaCorte(f);
+        const notas = (corte ? etiqueta('otro', corte) : '') + f.notas.map(n => etiqueta(n.tipo, n.texto)).join('');
         return '<tr>'
-            + '<td class="text-start"><b>Semana ' + f.n + '</b><div class="text-muted" style="font-size:0.72rem;">' + dm(f.lunes) + ' al ' + dm(f.hasta !== f.domingo ? f.hasta : f.domingo) + '</div>'
-            + (notaCorte(f) ? '<div class="text-muted" style="font-size:0.68rem;font-style:italic;">' + esc(notaCorte(f)) + '</div>' : '') + '</td>'
-            + '<td class="text-end tabular-nums"><b>' + fmt(f.trab) + '</b></td>'
-            + '<td class="text-end tabular-nums text-muted">' + fmt(f.meta) + '</td>'
+            + '<td class="text-start"><b>Semana ' + f.n + '</b> <span class="text-muted" style="font-size:0.72rem;">' + dm(f.lunes) + ' al ' + dm(f.hasta !== f.domingo ? f.hasta : f.domingo) + '</span>'
+            + (notas ? '<div>' + notas + '</div>' : '') + '</td>'
+            + '<td class="text-end tabular-nums" style="white-space:nowrap;"><b>' + fmt(f.trab) + '</b></td>'
+            + '<td class="text-end tabular-nums text-muted" style="white-space:nowrap;">' + fmt(f.meta)
+            + (f.desc > 0 ? '<div style="font-size:0.68rem;" title="Meta de la semana menos el descuento por días justificados">' + fmt(f.meta + f.desc) + ' − ' + fmt(f.desc) + '</div>' : '') + '</td>'
             + '<td style="min-width:120px;"><div style="height:8px;background:#ede9fe;border-radius:6px;overflow:hidden;"><div class="mx-sem-barra" data-w="' + Math.min(100, f.pct) + '" style="height:100%;width:0;background:' + color(f.pct) + ';border-radius:6px;transition:width 600ms cubic-bezier(.22,1,.36,1);"></div></div>'
-            + '<div class="text-end" style="font-size:0.72rem;color:' + color(f.pct) + ';font-weight:700;">' + f.pct + ' % · ' + dif + '</div></td>'
+            + '<div class="text-end" style="font-size:0.72rem;white-space:nowrap;color:' + color(f.pct) + ';font-weight:700;">' + f.pct + ' % · ' + dif + '</div></td>'
             + '</tr>';
     }).join('');
+    const descTotal = filas.reduce((s, f) => s + f.desc, 0);
     const sm = r.saldoMeta || 0;
     const html = '<div class="text-start">'
-        + '<table class="table table-sm align-middle mb-2" style="font-size:0.85rem;"><thead><tr class="text-muted" style="font-size:0.72rem;text-transform:uppercase;"><th>Semana</th><th class="text-end">Horas</th><th class="text-end">Meta</th><th>Avance</th></tr></thead><tbody>' + tabla + '</tbody></table>'
+        + '<table class="table table-sm align-middle mb-2" style="font-size:0.85rem;"><thead><tr class="text-muted" style="font-size:0.72rem;text-transform:uppercase;white-space:nowrap;"><th>Semana</th><th class="text-end">Horas</th><th class="text-end">Meta</th><th>Avance</th></tr></thead><tbody>' + tabla + '</tbody></table>'
         + '<div class="d-flex justify-content-between align-items-center rounded-3 px-3 py-2" style="background:#faf5ff;border:1px solid #e9d5ff;">'
-        + '<span><b>Tramo completo</b> <span class="text-muted">' + fmt(r.acumBolsa) + ' de ' + fmt(r.metaMin) + ' h</span></span>'
+        + '<span><b>Tramo completo</b> <span class="text-muted">' + fmt(r.acumBolsa) + ' de ' + fmt(r.metaMin) + ' h'
+        + (descTotal > 0 ? ' (' + fmt(r.metaMin + descTotal) + ' − ' + fmt(descTotal) + ' por días justificados)' : '') + '</span></span>'
         + '<b style="color:' + (sm >= 0 ? '#059669' : '#dc2626') + ';">' + (sm > 0 ? '+' : sm < 0 ? '−' : '') + fmt(sm) + '</b></div></div>';
     Swal.fire({
         title: esc(window.nombreTitulo ? window.nombreTitulo(nombre) : nombre) || 'Horas por semana',
-        html: html, width: 560, confirmButtonText: 'Cerrar', confirmButtonColor: '#7c3aed',
+        html: html, width: 600, confirmButtonText: 'Cerrar', confirmButtonColor: '#7c3aed',
         didOpen: (el) => { requestAnimationFrame(() => setTimeout(() => el.querySelectorAll('.mx-sem-barra').forEach(b => { b.style.width = b.getAttribute('data-w') + '%'; }), 40)); }
     });
 };
