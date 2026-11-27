@@ -7337,8 +7337,30 @@ window.reloadSingleEmployeeRow = async function(empId) {
     }
 };
 
-// ── Horas por semana de un chofer en Bolsa: la meta (180 h) repartida en las 4 o 5 semanas del tramo (del 26 al 25) ──
-// Clic en la celda «Meta» de la grilla. Cada semana trae 7 días desde el inicio del tramo; la última puede ser más corta (5.ª semana).
+// Semanas de calendario (lunes a domingo) de los días del período, como el cierre (bono_semanal.semanas_del_periodo): cada
+// una trae solo sus días dentro del período. Si el período empieza a mitad de semana, la primera trae menos días (los
+// anteriores ya se contaron en el período pasado); si termina a mitad de semana, la última queda cortada.
+window.mxDiaAnterior = function (iso) {
+    const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() - 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+};
+window.mxSemanasCalendario = function (dates) {
+    const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const out = [];
+    (dates || []).forEach(f => {
+        const d = new Date(f + 'T12:00:00');
+        const lun = new Date(d); lun.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        const dom = new Date(lun); dom.setDate(lun.getDate() + 6);
+        const lunes = iso(lun);
+        const ult = out[out.length - 1];
+        if (ult && ult.lunes === lunes) ult.dias.push(f);
+        else out.push({ lunes, domingo: iso(dom), dias: [f] });
+    });
+    return out;
+};
+
+// ── Horas por semana de un chofer en Bolsa: la meta del tramo repartida en sus semanas de lunes a domingo ──
+// Clic en la celda «Meta» de la grilla. La meta de cada semana es proporcional a sus días dentro del período.
 // Los textos van con comillas y concatenación: el minificador del servidor (rjsmin) come los espacios de las plantillas anidadas.
 window.mxSemanasBolsa = function (empId) {
     const st = window.stateMarcacionesApp;
@@ -7360,19 +7382,23 @@ window.mxSemanasBolsa = function (empId) {
     const fmt = (min) => { const a = Math.round(Math.abs(min)); return String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0'); };
     const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
     const esc = (t) => window.Ayuda.esc(t);
-    const semanas = [];
-    for (let i = 0; i < dates.length; i += 7) semanas.push(dates.slice(i, i + 7));
-    const filas = semanas.map((ds, k) => {
+    const semanas = window.mxSemanasCalendario(dates);
+    const filas = semanas.map((sem, k) => {
+        const ds = sem.dias;
         const trab = ds.reduce((s, d) => { const di = empData[d] || {}; return s + Math.max(0, (di._acumuladoBolsaSnap || 0) - (di._acumuladoBolsaSnapPrev || 0)); }, 0);
         const meta = Math.round(r.metaMin * ds.length / dates.length);
         const pct = meta > 0 ? Math.round(trab / meta * 100) : 0;
-        return { n: k + 1, desde: ds[0], hasta: ds[ds.length - 1], dias: ds.length, trab, meta, pct, dif: trab - meta };
+        return { n: k + 1, lunes: sem.lunes, domingo: sem.domingo, desde: ds[0], hasta: ds[ds.length - 1], dias: ds.length, trab, meta, pct, dif: trab - meta };
     });
+    // Nota de la semana cortada: al inicio, sus días del período anterior ya se contaron allá; al final, sigue en el siguiente
+    const notaCorte = (f) => (f.desde !== f.lunes ? 'Cuenta del ' + dm(f.desde) + '; del ' + dm(f.lunes) + ' al ' + dm(window.mxDiaAnterior(f.desde)) + ' se contó en el período anterior'
+        : f.hasta !== f.domingo ? 'Semana cortada: sigue en el período siguiente' : '');
     const color = (p) => (p >= 100 ? '#059669' : p >= 75 ? '#d97706' : '#7c3aed');
     const tabla = filas.map(f => {
         const dif = (f.dif > 0 ? '+' : f.dif < 0 ? '−' : '') + fmt(f.dif);
         return '<tr>'
-            + '<td class="text-start"><b>Semana ' + f.n + '</b><div class="text-muted" style="font-size:0.72rem;">' + dm(f.desde) + ' al ' + dm(f.hasta) + '</div></td>'
+            + '<td class="text-start"><b>Semana ' + f.n + '</b><div class="text-muted" style="font-size:0.72rem;">' + dm(f.lunes) + ' al ' + dm(f.hasta !== f.domingo ? f.hasta : f.domingo) + '</div>'
+            + (notaCorte(f) ? '<div class="text-muted" style="font-size:0.68rem;font-style:italic;">' + esc(notaCorte(f)) + '</div>' : '') + '</td>'
             + '<td class="text-end tabular-nums"><b>' + fmt(f.trab) + '</b></td>'
             + '<td class="text-end tabular-nums text-muted">' + fmt(f.meta) + '</td>'
             + '<td style="min-width:120px;"><div style="height:8px;background:#ede9fe;border-radius:6px;overflow:hidden;"><div class="mx-sem-barra" data-w="' + Math.min(100, f.pct) + '" style="height:100%;width:0;background:' + color(f.pct) + ';border-radius:6px;transition:width 600ms cubic-bezier(.22,1,.36,1);"></div></div>'

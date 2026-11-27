@@ -1,7 +1,7 @@
 {
  "archivos_revisados": 191,
  "repetidas": {
-  "total": 159,
+  "total": 160,
   "top": [
    {
     "nombre": "esc",
@@ -196,7 +196,7 @@
  "archivos_grandes": [
   {
    "archivo": "frontend/js/marcaciones_ui.js",
-   "lineas": 10075
+   "lineas": 10101
   },
   {
    "archivo": "frontend/js/marcaciones_manuales.js",
